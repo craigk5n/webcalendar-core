@@ -1,0 +1,16 @@
+/vendor/
+/legacy/
+/composer.lock
+/.phpunit.result.cache
+/.php-cs-fixer.cache
+/phpstan.neon
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+/coverage/
+/build/
+/phpunit.xml.dist.bak

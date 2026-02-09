@@ -1,0 +1,52 @@
+{
+  "name": "craigk5n/webcalendar-core",
+  "description": "WebCalendar Core - PHP 8.1+ business logic library for calendar management",
+  "type": "library",
+  "keywords": ["calendar", "icalendar", "scheduling", "events", "webcalendar"],
+  "homepage": "https://github.com/craigk5n/webcalendar-core",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Craig Knudsen",
+      "email": "craig@k5n.us",
+      "homepage": "https://www.k5n.us"
+    },
+    {
+      "name": "WebCalendar Contributors",
+      "homepage": "https://github.com/craigk5n/webcalendar-core/graphs/contributors"
+    }
+  ],
+  "require": {
+    "php": ">=8.1",
+    "craigk5n/php-icalendar-core": "^1.0",
+    "psr/log": "^3.0"
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^9.0|^10.0",
+    "phpstan/phpstan": "^1.10",
+    "squizlabs/php_codesniffer": "^3.7",
+    "friendsofphp/php-cs-fixer": "^3.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "WebCalendar\\Core\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "WebCalendar\\Core\\Tests\\": "tests/"
+    }
+  },
+  "scripts": {
+    "test": "phpunit",
+    "phpstan": "phpstan analyse src tests --level=8",
+    "cs-check": "phpcs",
+    "cs-fix": "php-cs-fixer fix"
+  },
+  "config": {
+    "sort-packages": true,
+    "optimize-autoloader": true
+  },
+  "minimum-stability": "stable",
+  "prefer-stable": true
+}
