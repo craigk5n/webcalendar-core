@@ -628,33 +628,64 @@ POST   /api/v2/journals
 | `cal_last_login` | INT | Last login date YYYYMMDD |
 | `cal_api_token` | VARCHAR(64) | API token for MCP/REST access |
 
-### 8.2 Authentication Methods (CURRENT)
+### 8.2 TARGET: Interface-Based Authentication (Inversion of Control)
 
-Pluggable authentication via `user_inc` setting in `includes/settings.php`:
+**TARGET:** `webcalendar-core` adopts a stateless, interface-driven authentication strategy. The core library defines the **contracts** for authentication and user retrieval, while the **host application** (WordPress, standalone web app, etc.) provides the concrete implementation.
 
-| File | Method | Description |
-|------|--------|-------------|
-| `user.php` | Database | Default. Passwords in `webcal_user` table. Bcrypt with auto MD5 upgrade. |
-| `user-ldap.php` | LDAP/AD | Authenticate against LDAP or Active Directory server |
-| `user-imap.php` | IMAP | Authenticate against IMAP mail server |
-| `user-nis.php` | NIS | Authenticate against NIS/YP directory |
-| `user-app-joomla.php` | Joomla | Bridge to Joomla CMS user system |
+#### 8.2.1 Core Interfaces
 
-**Each auth module implements:**
-- `user_valid_login($login, $password)` — Validate credentials
-- `user_valid_crypt($login, $crypt)` — Validate pre-hashed password
-- `user_load_variables($login, $prefix)` — Load user profile into global variables
-- `user_update_user($user, $firstname, $lastname, $email, ...)` — Update user profile
-- `user_delete_user($user)` — Delete a user account
-- `user_get_users()` — List all users
+The library defines these primary interfaces in `Application\Contract\`:
 
-### 8.3 Password Security (CURRENT)
+```php
+interface AuthServiceInterface {
+    /**
+     * Validate user credentials.
+     */
+    public function authenticate(string $username, string $password): bool;
 
-- New passwords hashed with `password_hash()` (bcrypt, cost 10)
-- Legacy MD5 passwords auto-upgraded to bcrypt on successful login
-- `password_verify()` used for all authentication checks
+    /**
+     * Verify a pre-hashed password (for session/cookie validation).
+     */
+    public function verifyHash(string $username, string $hash): bool;
+}
 
-### 8.4 User Preferences
+interface UserRepositoryInterface {
+    public function findByUsername(string $username): ?User;
+    public function getAllUsers(): array;
+    public function save(User $user): void;
+    public function delete(string $username): void;
+}
+```
+
+#### 8.2.2 Host Application Implementations
+
+| Implementation | Deployment Target | Description |
+|----------------|-------------------|-------------|
+| `WordPressAuthService` | WordPress Plugin | Wraps `wp_authenticate()` and `get_user_by()`. Core logic remains agnostic of WP internals. |
+| `LocalDatabaseAuthService` | Standalone Web App | Default implementation using the `webcal_user` table and PHP `password_hash()`. |
+| `LdapAuthService` | Enterprise | Authenticates against LDAP/AD using PHP's `ldap_` extension. |
+| `ImapAuthService` | Legacy | Authenticates against an IMAP server (replaces legacy `user-imap.php`). |
+
+### 8.3 Stateless Service Execution
+
+All core services (e.g., `EventService`) are stateless. The host application is responsible for:
+1.  **Identifying the Current User** (via Session, Cookie, or Token).
+2.  **Mapping the external user** to a `WebCalendar\Core\Domain\Entity\User` object.
+3.  **Passing the User object** into service methods that require authorization or ownership context.
+
+**Example Service Method:**
+```php
+// In EventService.php
+public function getEventsForUser(User $currentUser, DateRange $range): array;
+```
+
+### 8.4 Password Security
+
+- **Standalone Implementation:** Uses Argon2id via `password_hash()` (PHP 8.1+).
+- **Legacy Migration:** MD5 passwords in `webcal_user` are auto-upgraded to modern hashes upon the first successful login.
+- **WordPress Implementation:** Defers all hashing and security to the WordPress core.
+
+### 8.5 User Preferences
 
 **CURRENT Table:** `webcal_user_pref`
 
@@ -666,27 +697,16 @@ Pluggable authentication via `user_inc` setting in `includes/settings.php`:
 
 **Common Preference Keys:** `STARTVIEW`, `DATE_FORMAT`, `TIME_FORMAT`, `LANGUAGE`, `TIMEZONE`, `WEEK_START`, `WORK_DAY_START_HOUR`, `WORK_DAY_END_HOUR`, `DISPLAY_UNAPPROVED`, `PUBLISH_ENABLED`, `FREEBUSY_ENABLED`
 
-### 8.5 Key Functions (CURRENT)
+### 8.6 Acceptance Criteria
 
-- `user_load_variables($login, $prefix)` — Load user data into `${prefix}login`, `${prefix}firstname`, etc.
-- `get_my_users($user, $reason)` — Get list of users the current user can see (respects groups and admin settings)
-- `load_user_preferences($user)` — Load user prefs from `webcal_user_pref`
-
-### 8.6 TARGET Enhancements
-
-- **PASSWORD:** Argon2id via `password_hash()` (PHP 8.1+)
-- **WordPress Bridge:** `WpAuthenticationProvider` wraps `wp_get_current_user()`
-- **API Auth:** JWT or scoped Bearer tokens for stateless REST authentication
-
-### 8.7 Acceptance Criteria
-
-- [ ] Users can register, login, and logout
-- [ ] Password hashing uses bcrypt (current) or Argon2id (target)
-- [ ] Legacy MD5 passwords auto-upgrade on login
+- [ ] Core library defines `AuthServiceInterface` and `UserRepositoryInterface`
+- [ ] Services accept `User` entities as arguments for context-aware operations
+- [ ] Authentication is decoupled from business logic via constructor injection
+- [ ] Standalone implementation supports bcrypt and Argon2id
+- [ ] Legacy MD5 passwords auto-upgrade on successful login
 - [ ] Admin can enable/disable user accounts
-- [ ] User preferences persist across sessions
-- [ ] All pluggable auth methods (LDAP, IMAP, NIS) continue to work
-- [ ] API token generation works for MCP/REST access
+- [ ] User preferences persist across sessions and implementations
+- [ ] API token generation works for MCP/REST access regardless of auth backend
 
 ---
 

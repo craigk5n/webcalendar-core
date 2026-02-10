@@ -369,19 +369,36 @@ so that people can access the calendar.
 - src/Application/Service/UserService.php
 - src/Domain/Repository/UserRepositoryInterface.php
 
-#### Task 5.2: Authentication Provider Interface
+#### Task 5.2: Authentication Provider & Interface
 **Status: TODO**  
-**Task:** Abstract authentication behind a provider interface
+**Task:** Implement interface-based authentication strategy
 
 **As a developer,**  
 I want a pluggable authentication mechanism  
-so that I can support local DB, LDAP, or WordPress auth.
+so that I can support local DB, LDAP, or WordPress auth without changing core logic.
 
-**One-sentence goal:** Create `AuthenticationProvider` interface and a default implementation.
+**One-sentence goal:** Define core authentication interfaces and provide a default database implementation.
+
+**Desired outcome:** `AuthServiceInterface` and `UserRepositoryInterface` defined with a working `DatabaseAuthService`.
 
 **Key files to change:**
-- src/Application/Contract/AuthenticationProvider.php
-- src/Infrastructure/Security/DatabaseAuthenticationProvider.php
+- src/Application/Contract/AuthServiceInterface.php
+- src/Domain/Repository/UserRepositoryInterface.php
+- src/Infrastructure/Security/DatabaseAuthService.php
+- src/Infrastructure/Persistence/PdoUserRepository.php
+
+**Acceptance Criteria:**
+**Scenario: WordPress integration**  
+Given a WordPress plugin environment  
+When `WordPressAuthService` implements `AuthServiceInterface`  
+Then core services can verify users using WP's native auth.
+
+**Definition of Done:**
+- [ ] `AuthServiceInterface` defined in Application layer
+- [ ] `UserRepositoryInterface` defined in Domain layer
+- [ ] `DatabaseAuthService` implemented for standalone use
+- [ ] Core services injected with these interfaces
+- [ ] Unit tests for interface compliance
 
 ### Epic 6: Access Control & Security
 **Status: TODO**  
