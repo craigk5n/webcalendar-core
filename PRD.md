@@ -3166,4 +3166,177 @@ final class EventId {
 
 ---
 
+## 32. Implementation Recommendations
+
+This section provides architectural and implementation recommendations to ensure long-term maintainability, scalability, and API usability.
+
+### 32.1 API Versioning Strategy
+
+**CURRENT:** Single version (`/api/v2`) with no documented migration path.
+
+**TARGET:** Implement a clear versioning strategy for API evolution:
+
+1. **URL-based versioning:** Continue using `/api/v{major}` for breaking changes
+2. **Deprecation headers:** Include `Deprecation: true` and `Sunset: <date>` headers in responses for deprecated endpoints
+3. **Breaking vs. non-breaking changes:**
+   - **Breaking:** Require new major version (e.g., removing fields, changing types)
+   - **Non-breaking:** Additive changes only (new fields, new endpoints, new query params)
+4. **Version compatibility:** Support at least one previous major version during transition periods
+
+**Acceptance Criteria:**
+- [ ] Version strategy documented in API.md
+- [ ] Response headers include API version information
+- [ ] Breaking changes trigger major version bump
+- [ ] Migration guide published for each major version
+
+### 32.2 Rate Limiting
+
+**CURRENT:** No rate limiting documentation exists.
+
+**TARGET:** Implement API rate limiting to prevent abuse and ensure fair resource usage:
+
+1. **Per-endpoint limits:** Different limits for read vs. write operations
+   - Read operations: 1000 requests/minute
+   - Write operations: 100 requests/minute
+   - Authentication endpoints: 10 requests/minute (brute force protection)
+2. **Rate limit headers:** Standard headers in all responses:
+   - `X-RateLimit-Limit`: Maximum requests allowed
+   - `X-RateLimit-Remaining`: Remaining requests in window
+   - `X-RateLimit-Reset`: Unix timestamp when limit resets
+3. **Response when exceeded:** HTTP 429 Too Many Requests with retry-after header
+
+**Acceptance Criteria:**
+- [ ] Rate limits documented in API.md
+- [ ] Rate limit headers returned on all requests
+- [ ] HTTP 429 response with retry information
+- [ ] Different limits for different endpoint categories
+
+### 32.3 Caching Strategy
+
+**CURRENT:** No caching strategy documented.
+
+**TARGET:** Implement HTTP caching for improved performance:
+
+1. **ETag support:** Generate ETags for resources based on content hash
+2. **Cache-Control headers:**
+   - `GET /events/{id}` - `Cache-Control: private, max-age=60` (1 minute)
+   - `GET /users/{login}` - `Cache-Control: private, max-age=300` (5 minutes)
+   - `GET /categories` - `Cache-Control: public, max-age=3600` (1 hour)
+   - `GET /reports/{id}/execute` - `Cache-Control: no-cache` (always fresh)
+3. **Conditional requests:** Support `If-None-Match` header for 304 Not Modified responses
+4. **Cache invalidation:** Webhook or SSE notifications for cache-aware clients
+
+**Acceptance Criteria:**
+- [ ] ETag generation for all GET endpoints
+- [ ] Appropriate Cache-Control headers per resource type
+- [ ] 304 Not Modified support for conditional requests
+- [ ] Cache invalidation mechanism documented
+
+### 32.4 WebSocket Support (Future Enhancement)
+
+**CURRENT:** All interactions require client polling.
+
+**TARGET:** Add WebSocket support for real-time updates:
+
+1. **Connection endpoint:** `wss://api.webcalendar.io/v2/stream`
+2. **Authentication:** JWT token in connection query parameter
+3. **Event types:**
+   - `event.created` - New event created
+   - `event.updated` - Event modified
+   - `event.deleted` - Event removed
+   - `reminder.due` - Reminder triggered
+4. **Subscription model:** Clients subscribe to specific calendars/users
+5. **Fallback:** Long-polling endpoint for clients without WebSocket support
+
+**Acceptance Criteria:**
+- [ ] WebSocket endpoint established
+- [ ] Real-time event notifications working
+- [ ] Subscription filtering by calendar/user
+- [ ] Fallback polling mechanism for compatibility
+
+### 32.5 Testing Strategy Enhancement
+
+**CURRENT:** Basic unit and integration tests mentioned.
+
+**TARGET:** Comprehensive testing pyramid:
+
+1. **Contract tests:** Validate API responses match OpenAPI spec using tools like Schemathesis
+2. **Performance tests:** Load testing with k6 or Artillery for critical paths
+   - 1000 concurrent users
+   - 95th percentile response time < 200ms
+3. **Security tests:**
+   - OWASP ZAP automated scanning
+   - JWT token expiration verification
+   - SQL injection and XSS prevention tests
+4. **Mutation testing:** Verify test quality using Infection PHP
+
+**Acceptance Criteria:**
+- [ ] Contract testing integrated in CI
+- [ ] Performance benchmarks established
+- [ ] Security scan automation in CI
+- [ ] Mutation testing score > 80%
+
+### 32.6 Documentation Standards
+
+**TARGET:** API documentation best practices:
+
+1. **OpenAPI specification:** Maintain `Contract/openapi.yaml` as single source of truth
+2. **Request/response examples:** Every endpoint must have realistic examples
+3. **Error catalog:** Document all possible error codes and their meanings
+4. **Changelog:** Keep detailed changelog for API consumers
+5. **Interactive docs:** Host Swagger UI or ReDoc for interactive exploration
+
+**Acceptance Criteria:**
+- [ ] OpenAPI spec validates without errors
+- [ ] Every endpoint has request/response examples
+- [ ] Error codes fully documented
+- [ ] Interactive documentation available
+
+### 32.7 Monitoring and Observability
+
+**TARGET:** Production monitoring requirements:
+
+1. **Metrics collection:**
+   - Response times (p50, p95, p99)
+   - Error rates by endpoint
+   - Request volume
+   - Database query performance
+2. **Structured logging:** JSON format with correlation IDs
+3. **Tracing:** Distributed tracing for multi-service calls
+4. **Alerting:** PagerDuty/Slack integration for error rate spikes
+
+**Acceptance Criteria:**
+- [ ] Metrics dashboard established
+- [ ] Structured logging implemented
+- [ ] Distributed tracing configured
+- [ ] Alerting rules defined and tested
+
+### 32.8 Security Hardening
+
+**TARGET:** Production security requirements:
+
+1. **Input validation:**
+   - Strict type checking on all inputs
+   - Sanitization of HTML in descriptions (if ALLOW_HTML_DESCRIPTION)
+   - File upload restrictions (type, size, malware scanning)
+2. **Output encoding:**
+   - JSON encoding with proper escaping
+   - Content Security Policy headers
+3. **Secrets management:**
+   - No secrets in code or logs
+   - Environment-based configuration
+   - Key rotation support
+4. **Audit logging:**
+   - Log all admin actions
+   - Log authentication events
+   - Log permission changes
+
+**Acceptance Criteria:**
+- [ ] Input validation on all endpoints
+- [ ] Secrets management system implemented
+- [ ] Comprehensive audit logging
+- [ ] Security headers (CSP, HSTS, X-Frame-Options)
+
+---
+
 **End of WebCalendar-Core PRD v4.0**
