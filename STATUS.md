@@ -163,33 +163,312 @@ Then user is authenticated
 **Status: TODO**  
 **Goal:** Implement calendar views and core event management functionality
 
+#### Task 2.1: Event Retrieval & Date Range Querying
+**Status: TODO**  
+**Task:** Implement querying logic for standard calendar views (Month, Week, Day)
+
+**As a frontend developer,**  
+I want to retrieve events within a specific date range  
+so that I can populate the Month, Week, and Day views.
+
+**One-sentence goal:** Implement robust event retrieval by date range, handling single events.
+
+**Current situation:** Logic trapped in `month.php`, `week.php`, `day.php`.
+
+**Desired outcome:** `EventService::getEvents(DateRange $range, User $user)` returns correct events.
+
+**Out of scope:** Recurring event expansion (handled in Epic 3).
+
+**Technical constraints:**
+- Must use `DateRange` value object
+- Must return typed `EventCollection` or array of `Event` entities
+- Performance optimized for month-long ranges
+
+**Key files to change:**
+- src/Application/Service/EventService.php
+- src/Infrastructure/Persistence/InMemoryEventRepository.php (for testing)
+
+**Acceptance Criteria:**
+**Scenario: Fetch month events**  
+Given a date range of "2023-10-01" to "2023-10-31"  
+When `getEvents` is called  
+Then all single events falling within that range are returned
+
+**Definition of Done:**
+- [ ] `getEvents` method implemented
+- [ ] Unit tests for boundary conditions (starts before/ends after)
+- [ ] Mock repository implementation available
+
+#### Task 2.2: Event CRUD Operations
+**Status: TODO**  
+**Task:** Implement Create, Update, and Delete operations for Events
+
+**As a user,**  
+I want to create, edit, and delete calendar events  
+so that I can manage my schedule.
+
+**One-sentence goal:** Implement full CRUD capabilities for the Event entity with validation.
+
+**Current situation:** Logic in `edit_entry_handler.php`, `del_entry.php`.
+
+**Desired outcome:** `createEvent`, `updateEvent`, `deleteEvent` methods in `EventService`.
+
+**Out of scope:** Complex conflict detection (separate task).
+
+**Technical constraints:**
+- Validate all inputs via Domain Entities
+- Throw specific Domain Exceptions (e.g., `EventNotFoundException`)
+
+**Key files to change:**
+- src/Application/Service/EventService.php
+- src/Domain/Exception/EventNotFoundException.php
+
+**Acceptance Criteria:**
+**Scenario: Delete non-existent event**  
+Given an ID that does not exist  
+When `deleteEvent` is called  
+Then `EventNotFoundException` is thrown
+
+**Definition of Done:**
+- [ ] CRUD methods implemented
+- [ ] Domain events dispatched (e.g., `EventCreated`)
+- [ ] Full test coverage for success and failure paths
+
+#### Task 2.3: Conflict Detection Logic
+**Status: TODO**  
+**Task:** Implement conflict detection for overlapping events
+
+**As a user,**  
+I want to be warned if I schedule an event that overlaps with another  
+so that I avoid double-booking.
+
+**One-sentence goal:** Implement logic to detect temporal overlaps between events.
+
+**Current situation:** `check_for_conflicts()` function in legacy.
+
+**Desired outcome:** `ConflictService` or method in `EventService` that returns overlapping events.
+
+**Out of scope:** UI warning display.
+
+**Technical constraints:**
+- Efficient overlap calculation ( StartA < EndB && EndA > StartB )
+- Respect `LIMIT_APPTS` system setting if passed
+
+**Key files to change:**
+- src/Domain/Service/ConflictDetector.php
+
+**Acceptance Criteria:**
+**Scenario: Exact overlap**  
+Given an event from 10:00-11:00  
+When checking a new event 10:00-11:00  
+Then conflict is detected
+
+**Definition of Done:**
+- [ ] Conflict detection logic isolated in domain service
+- [ ] Tests covering partial, full, and enclosing overlaps
+
 ### Epic 3: Repeating Events & RFC 5545 Compliance
 **Status: TODO**  
 **Goal:** Implement full RFC 5545 recurrence support with php-icalendar-core
+
+#### Task 3.1: Recurrence Domain Models
+**Status: TODO**  
+**Task:** Create Value Objects for Recurrence Rules (RRULE)
+
+**As a developer,**  
+I want to model RRULEs, EXDATEs, and RDATEs in the domain  
+so that I can robustly handle repeating events.
+
+**One-sentence goal:** Map RFC 5545 recurrence concepts to Domain Value Objects.
+
+**Current situation:** Legacy uses custom columns (`cal_frequency`, etc.).
+
+**Desired outcome:** `RecurrenceRule` value object that wraps/maps to `php-icalendar-core` structures.
+
+**Key files to change:**
+- src/Domain/ValueObject/RecurrenceRule.php
+
+**Acceptance Criteria:**
+**Scenario: Valid RRULE string**  
+Given "FREQ=WEEKLY;BYDAY=MO,WE"  
+When `RecurrenceRule` is instantiated  
+Then it parses correctly
+
+#### Task 3.2: Recurrence Expansion Service
+**Status: TODO**  
+**Task:** Implement service to expand repeating events into occurrences
+
+**As a system,**  
+I want to generate concrete occurrence dates from an RRULE  
+so that they can be displayed on the calendar.
+
+**One-sentence goal:** Use `php-icalendar-core` to expand recurrence rules into date lists.
+
+**Current situation:** Legacy `get_all_dates()` function.
+
+**Desired outcome:** `RecurrenceService::expand(Event $event, DateRange $range)` returns `Occurrence[]`.
+
+**Key files to change:**
+- src/Application/Service/RecurrenceService.php
+
+**Definition of Done:**
+- [ ] Service integrates with `craigk5n/php-icalendar-core`
+- [ ] Handles infinite recursion limits
+- [ ] Correctly processes EXDATEs (exceptions)
 
 ### Epic 4: Tasks, Journals & Advanced Features
 **Status: TODO**  
 **Goal:** Implement tasks, journals, and advanced calendar features
 
+#### Task 4.1: Task & Journal Entities
+**Status: TODO**  
+**Task:** Implement Task (VTODO) and Journal (VJOURNAL) entities
+
+**As a user,**  
+I want to track tasks and journal entries separate from events  
+so that I can manage to-dos and notes.
+
+**One-sentence goal:** Create specialized entities for Tasks and Journals inheriting/sharing logic with Events.
+
+**Desired outcome:** `Task` and `Journal` entities with specific fields (Due Date, Completion %).
+
+**Key files to change:**
+- src/Domain/Entity/Task.php
+- src/Domain/Entity/Journal.php
+
 ### Epic 5: User Management & Authentication
 **Status: TODO**  
 **Goal:** Implement user management and pluggable authentication
+
+#### Task 5.1: User Service & Repository
+**Status: TODO**  
+**Task:** Implement User lifecycle management
+
+**As an admin,**  
+I want to create and manage user accounts  
+so that people can access the calendar.
+
+**One-sentence goal:** Implement `UserService` for user CRUD and preference management.
+
+**Key files to change:**
+- src/Application/Service/UserService.php
+- src/Domain/Repository/UserRepositoryInterface.php
+
+#### Task 5.2: Authentication Provider Interface
+**Status: TODO**  
+**Task:** Abstract authentication behind a provider interface
+
+**As a developer,**  
+I want a pluggable authentication mechanism  
+so that I can support local DB, LDAP, or WordPress auth.
+
+**One-sentence goal:** Create `AuthenticationProvider` interface and a default implementation.
+
+**Key files to change:**
+- src/Application/Contract/AuthenticationProvider.php
+- src/Infrastructure/Security/DatabaseAuthenticationProvider.php
 
 ### Epic 6: Access Control & Security
 **Status: TODO**  
 **Goal:** Implement comprehensive access control system
 
+#### Task 6.1: Permission Service (UAC)
+**Status: TODO**  
+**Task:** Implement core Permission Service matching legacy UAC
+
+**As a system,**  
+I want to check if a user has access to specific functions  
+so that I can enforce security policies.
+
+**One-sentence goal:** Replicate legacy function-level access control (UAC) in a clean service.
+
+**Current situation:** `access_can_access_function()` in legacy.
+
+**Desired outcome:** `PermissionService::canAccess(User $user, string $function)`
+
+**Key files to change:**
+- src/Application/Service/PermissionService.php
+- src/Domain/ValueObject/Permission.php
+
 ### Epic 7: Import & Export Functionality
 **Status: TODO**  
 **Goal:** Implement iCal import/export and other data exchange formats
+
+#### Task 7.1: Import Service
+**Status: TODO**  
+**Task:** Implement ICS import logic
+
+**As a user,**  
+I want to import events from an .ics file  
+so that I can migrate data from other calendars.
+
+**One-sentence goal:** Parse ICS data using `php-icalendar-core` and convert to Domain Entities.
+
+**Key files to change:**
+- src/Application/Service/ImportService.php
+- src/Infrastructure/ICal/EventMapper.php
+
+#### Task 7.2: Export Service
+**Status: TODO**  
+**Task:** Implement ICS export logic
+
+**As a user,**  
+I want to export my calendar to .ics  
+so that I can use it in other applications.
+
+**One-sentence goal:** Convert Domain Entities to ICS format using `php-icalendar-core`.
+
+**Key files to change:**
+- src/Application/Service/ExportService.php
 
 ### Epic 8: Advanced Calendar Features
 **Status: TODO**  
 **Goal:** Implement groups, categories, layers, and custom views
 
+#### Task 8.1: Category Service
+**Status: TODO**  
+**Task:** Implement Category management
+
+**As a user,**  
+I want to color-code events with categories  
+so that I can visually organize my calendar.
+
+**One-sentence goal:** Implement `Category` entity and management service.
+
+**Key files to change:**
+- src/Domain/Entity/Category.php
+- src/Application/Service/CategoryService.php
+
+#### Task 8.2: Layer Service (Overlays)
+**Status: TODO**  
+**Task:** Implement Layer logic for overlaying calendars
+
+**As a user,**  
+I want to overlay another user's calendar on mine  
+so that I can see combined availability.
+
+**One-sentence goal:** Implement logic to fetch and merge events from "Layer" sources.
+
+**Key files to change:**
+- src/Domain/Entity/Layer.php
+- src/Application/Service/LayerService.php
+
 ### Epic 9: Quality & Infrastructure
 **Status: TODO**  
 **Goal:** Set up comprehensive testing, CI/CD, and documentation
+
+#### Task 9.1: Continuous Integration Setup
+**Status: TODO**  
+**Task:** Configure CI workflow for tests and static analysis
+
+**As a developer,**  
+I want automated checks on every commit  
+so that quality is maintained.
+
+**One-sentence goal:** Create GitHub Actions workflow for PHPUnit and PHPStan.
+
+**Key files to change:**
+- .github/workflows/ci.yml
 
 ## Release Plan
 
@@ -197,21 +476,23 @@ Then user is authenticated
 - Foundation & Core Infrastructure (Epic 1)
 - Calendar Views & Event Management (Epic 2)
 - Basic User Management (Epic 5)
+- Basic Access Control (Epic 6)
 
 ### Feature Complete Release (v2.0.0)
 - All remaining epics implemented
-- Full RFC 5545 compliance
-- Complete access control system
-- Import/export functionality
+- Full RFC 5545 compliance (Epic 3)
+- Tasks & Journals (Epic 4)
+- Import/Export (Epic 7)
+- Advanced Features (Epic 8)
 
 ## Dependencies & Blockers
 
-- **Blocker:** Repository implementations needed for service testing
+- **Blocker:** Repository implementations needed for service testing (Task 1.3)
 - **Dependency:** Domain layer must be complete before service layer
-- **Dependency:** Repository interfaces needed before service implementations
+- **Dependency:** `php-icalendar-core` integration required for Epics 3 and 7
 
 ## Risk Assessment
 
-- **High Risk:** RFC 5545 recurrence implementation complexity
-- **Medium Risk:** Access control system complexity
-- **Low Risk:** Basic CRUD operations
+- **High Risk:** RFC 5545 recurrence implementation complexity (Epic 3)
+- **Medium Risk:** Replicating legacy UAC logic accurately (Epic 6)
+- **Low Risk:** Basic CRUD operations (Epic 2)

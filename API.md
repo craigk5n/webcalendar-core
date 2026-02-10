@@ -11,6 +11,7 @@ This document defines the REST API for the `webcalendar-core` library. It covers
 - **Booleans:** JSON `true`/`false`
 
 ### 1.1 Authentication
+
 All endpoints (except public feeds/booking) require authentication.
 
 - **Header:** `Authorization: Bearer <token>`
@@ -46,11 +47,54 @@ All endpoints (except public feeds/booking) require authentication.
 
 ---
 
-## 2. Resources
+## 2. Authentication
 
-### 2.1 Events (`/events`)
+### 2.1 Session Authentication
+
+#### `POST /auth/login`
+Authenticate a user and receive a session token.
+
+**Request Body:**
+```json
+{
+  "username": "john_doe",
+  "password": "secret123"
+}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiIs...",
+    "user": {
+      "login": "john_doe",
+      "firstname": "John",
+      "lastname": "Doe",
+      "email": "john@example.com",
+      "is_admin": false
+    },
+    "expires_at": "2026-02-10T12:00:00Z"
+  }
+}
+```
+
+#### `POST /auth/logout`
+Invalidate the current session token.
+
+#### `POST /auth/refresh`
+Refresh an expiring session token.
+
+---
+
+## 3. Resources
+
+### 3.1 Events (`/events`)
 
 Manage calendar events. Supports standard CRUD, recurrence, and participation.
+
+**Event Types:** `E`=Event, `M`=Repeating Event, `T`=Task, `J`=Journal, `N`=Repeating Task, `O`=Repeating Journal  
+**Access Levels:** `P`=Public, `C`=Confidential, `R`=Private
 
 #### `GET /events`
 List events, optionally filtered by date range, user, or category. Returns **expanded instances** for repeating events.
@@ -60,7 +104,9 @@ List events, optionally filtered by date range, user, or category. Returns **exp
 - `end`: End date (`YYYYMMDD`).
 - `user`: User login to filter by (default: current user).
 - `category`: Category ID to filter by.
-- `q`: Search keyword.
+- `q`: Search keyword (searches title, description).
+- `type`: Filter by event type (`E`, `M`, `T`, `J`, `N`, `O`).
+- `include_repeating`: Include expanded repeating events (default: `true`).
 
 #### `POST /events`
 Create a new event.
@@ -74,20 +120,26 @@ Create a new event.
   "start_time": "100000",
   "duration": 60,
   "location": "Room A",
-  "access": "P",           // P=Public, C=Confidential, R=Private
-  "priority": 5,           // 1-9
+  "access": "P",
+  "priority": 5,
+  "type": "E",
   "participants": ["user1", "user2"],
   "external_participants": [
     {"name": "John Doe", "email": "john@example.com"}
   ],
-  "recurrence": {          // Optional
-    "freq": "WEEKLY",
+  "categories": [1, 2],
+  "recurrence": {
+    "type": "weekly",
+    "frequency": 1,
     "byday": "MO,WE",
-    "until": "20261231T235959Z"
+    "end": "20261231"
   },
-  "reminders": [           // Optional
+  "reminders": [
     {"action": "EMAIL", "offset": 15, "related": "START"}
-  ]
+  ],
+  "site_extras": {
+    "custom_field_1": "value"
+  }
 }
 ```
 
@@ -98,7 +150,10 @@ Get a single event's details. Returns the **master definition** (with RRULE) for
 Update an event. For repeating events, this updates the **master** series.
 
 #### `DELETE /events/{id}`
-Delete an event.
+Delete an event. Supports `mode` parameter:
+- `single`: Delete only this instance (creates exception)
+- `future`: Delete this and future instances
+- `all`: Delete entire series (default)
 
 #### `POST /events/{id}/approve`
 Approve a pending event participation request.
@@ -115,56 +170,233 @@ Check for scheduling conflicts before creating/updating.
   "start_date": "20260210",
   "start_time": "100000",
   "duration": 60,
-  "participants": ["user1"]
+  "participants": ["user1"],
+  "exclude_event_id": 123
 }
 ```
-**Response:** List of conflicting event objects.
 
 ---
 
-### 2.2 Tasks (`/tasks`)
+### 3.2 Event Participants (`/events/{id}/participants`)
 
-Manage to-do items (VTODO).
+#### `GET /events/{id}/participants`
+List all participants for an event.
+
+#### `POST /events/{id}/participants`
+Add participants to an event.
+
+**Request Body:**
+```json
+{
+  "participants": ["user1", "user2"],
+  "external": [
+    {"name": "Jane Doe", "email": "jane@example.com"}
+  ]
+}
+```
+
+#### `PUT /events/{id}/participants/{login}`
+Update participant status or completion percentage.
+
+**Request Body:**
+```json
+{
+  "status": "A",
+  "percent_complete": 50
+}
+```
+
+#### `DELETE /events/{id}/participants/{login}`
+Remove a participant from an event.
+
+---
+
+### 3.3 Event Recurrence (`/events/{id}/recurrence`)
+
+#### `GET /events/{id}/recurrence`
+Get recurrence pattern for a repeating event.
+
+#### `PUT /events/{id}/recurrence`
+Update recurrence pattern.
+
+#### `DELETE /events/{id}/recurrence`
+Remove recurrence (converts to single event).
+
+---
+
+### 3.4 Event Exceptions (`/events/{id}/exceptions`)
+
+#### `GET /events/{id}/exceptions`
+List exception dates for a repeating event.
+
+#### `POST /events/{id}/exceptions`
+Add an exception or inclusion date.
+
+**Request Body:**
+```json
+{
+  "date": "20260217",
+  "is_exclusion": true
+}
+```
+
+#### `DELETE /events/{id}/exceptions/{date}`
+Remove an exception date.
+
+---
+
+### 3.5 Event Attachments (`/events/{id}/attachments`)
+
+#### `GET /events/{id}/attachments`
+List attachments for an event.
+
+#### `POST /events/{id}/attachments`
+Upload an attachment (multipart/form-data).
+
+#### `GET /events/{id}/attachments/{attachment_id}`
+Download an attachment.
+
+#### `DELETE /events/{id}/attachments/{attachment_id}`
+Delete an attachment.
+
+---
+
+### 3.6 Event Comments (`/events/{id}/comments`)
+
+#### `GET /events/{id}/comments`
+List comments for an event.
+
+#### `POST /events/{id}/comments`
+Add a comment to an event.
+
+---
+
+### 3.7 Tasks (`/tasks`)
+
+Manage to-do items (VTODO). Tasks are events with `type: 'T'` or `'N'`.
 
 #### `GET /tasks`
-List tasks.
+List tasks with filtering options.
 
 **Query Parameters:**
 - `due_before`: Filter by due date (`YYYYMMDD`).
-- `status`: `pending`, `completed`, or `all`.
+- `status`: `pending`, `completed`, `in_progress`, or `all`.
+- `user`: Filter by assigned user.
 
 #### `POST /tasks`
-Create a task. Similar fields to Event but with `due_date`, `due_time`, `percent_complete`.
+Create a task.
+
+**Request Body:**
+```json
+{
+  "title": "Complete documentation",
+  "description": "Write API docs",
+  "due_date": "20260215",
+  "due_time": "170000",
+  "priority": 5,
+  "assigned_to": ["user1"],
+  "percent_complete": 0
+}
+```
+
+#### `GET /tasks/{id}`
+Get task details.
 
 #### `PUT /tasks/{id}`
-Update a task (e.g., mark complete).
+Update a task (e.g., mark complete, change due date).
+
+#### `DELETE /tasks/{id}`
+Delete a task.
 
 ---
 
-### 2.3 Journals (`/journals`)
+### 3.8 Journals (`/journals`)
 
-Manage journal entries (VJOURNAL).
+Manage journal entries (VJOURNAL). Journals are events with `type: 'J'` or `'O'`.
 
 #### `GET /journals`
 List journal entries.
 
+**Query Parameters:**
+- `start`: Start date.
+- `end`: End date.
+- `user`: Filter by author.
+
 #### `POST /journals`
-Create a journal entry. Fields: `date`, `title`, `text`.
+Create a journal entry.
+
+**Request Body:**
+```json
+{
+  "date": "20260210",
+  "title": "Daily Notes",
+  "text": "Today I worked on...",
+  "categories": [1]
+}
+```
+
+#### `GET /journals/{id}`
+Get journal entry details.
+
+#### `PUT /journals/{id}`
+Update a journal entry.
+
+#### `DELETE /journals/{id}`
+Delete a journal entry.
 
 ---
 
-### 2.4 Users (`/users`)
+### 3.9 Users (`/users`)
 
 Manage user accounts and preferences.
 
 #### `GET /users`
 List users (Admin or "View Others" permission required).
 
+**Query Parameters:**
+- `q`: Search by name or login.
+- `group_id`: Filter by group membership.
+- `enabled_only`: Only return enabled users (default: `true`).
+
 #### `GET /users/{login}`
 Get public profile of a user.
 
 #### `POST /users`
 Create a new user (Admin only).
+
+**Request Body:**
+```json
+{
+  "login": "newuser",
+  "firstname": "New",
+  "lastname": "User",
+  "email": "new@example.com",
+  "password": "temp123",
+  "is_admin": false,
+  "enabled": true
+}
+```
+
+#### `PUT /users/{login}`
+Update user profile (Admin or self).
+
+#### `DELETE /users/{login}`
+Delete a user (Admin only). Cascades to all related data.
+
+#### `PUT /users/{login}/password`
+Change user password.
+
+**Request Body:**
+```json
+{
+  "current_password": "oldpass",
+  "new_password": "newpass"
+}
+```
+
+---
+
+### 3.10 User Preferences (`/users/{login}/preferences`)
 
 #### `GET /users/{login}/preferences`
 Get user preferences (key-value pairs).
@@ -181,9 +413,27 @@ Update user preferences.
 }
 ```
 
+#### `DELETE /users/{login}/preferences/{key}`
+Remove a specific preference.
+
 ---
 
-### 2.5 Groups (`/groups`)
+### 3.11 User Assistants (`/users/{login}/assistants`)
+
+Manage assistant/boss relationships.
+
+#### `GET /users/{login}/assistants`
+List assistants for a user.
+
+#### `POST /users/{login}/assistants`
+Assign an assistant.
+
+#### `DELETE /users/{login}/assistants/{assistant_login}`
+Remove an assistant assignment.
+
+---
+
+### 3.12 Groups (`/groups`)
 
 Manage user groups.
 
@@ -191,19 +441,57 @@ Manage user groups.
 List groups visible to the current user.
 
 #### `POST /groups`
-Create a new group.
+Create a new group (Admin only).
+
+**Request Body:**
+```json
+{
+  "name": "Engineering Team",
+  "description": "All engineers"
+}
+```
+
+#### `GET /groups/{id}`
+Get group details.
+
+#### `PUT /groups/{id}`
+Update a group (Admin only).
+
+#### `DELETE /groups/{id}`
+Delete a group (Admin only).
+
+---
+
+### 3.13 Group Members (`/groups/{id}/members`)
 
 #### `GET /groups/{id}/members`
 Get members of a group.
 
+#### `POST /groups/{id}/members`
+Add members to a group.
+
+**Request Body:**
+```json
+{
+  "users": ["user1", "user2"]
+}
+```
+
+#### `DELETE /groups/{id}/members/{login}`
+Remove a member from a group.
+
 ---
 
-### 2.6 Categories (`/categories`)
+### 3.14 Categories (`/categories`)
 
 Manage event categories.
 
 #### `GET /categories`
 List categories (Global + Personal).
+
+**Query Parameters:**
+- `include_global`: Include global categories (default: `true`).
+- `user`: Filter by owner (for personal categories).
 
 #### `POST /categories`
 Create a category.
@@ -217,9 +505,18 @@ Create a category.
 }
 ```
 
+#### `GET /categories/{id}`
+Get category details.
+
+#### `PUT /categories/{id}`
+Update a category.
+
+#### `DELETE /categories/{id}`
+Delete a category.
+
 ---
 
-### 2.7 Layers (`/layers`)
+### 3.15 Layers (`/layers`)
 
 Manage calendar overlays.
 
@@ -229,9 +526,24 @@ List configured layers for the current user.
 #### `POST /layers`
 Add a new layer (overlay another user's calendar).
 
+**Request Body:**
+```json
+{
+  "source_user": "colleague1",
+  "color": "#00FF00",
+  "visible": true
+}
+```
+
+#### `PUT /layers/{id}`
+Update layer settings.
+
+#### `DELETE /layers/{id}`
+Remove a layer.
+
 ---
 
-### 2.8 Custom Views (`/views`)
+### 3.16 Custom Views (`/views`)
 
 Manage custom combined views.
 
@@ -241,9 +553,77 @@ List custom views.
 #### `POST /views`
 Create a custom view definition.
 
+**Request Body:**
+```json
+{
+  "name": "Team View",
+  "description": "Shows team calendars",
+  "users": ["user1", "user2", "user3"],
+  "show_tasks": true,
+  "show_events": true
+}
+```
+
+#### `GET /views/{id}`
+Get view details.
+
+#### `PUT /views/{id}`
+Update a custom view.
+
+#### `DELETE /views/{id}`
+Delete a custom view.
+
 ---
 
-### 2.9 Search (`/search`)
+### 3.17 Reports (`/reports`)
+
+Manage custom reports.
+
+#### `GET /reports`
+List available reports.
+
+#### `POST /reports`
+Create a custom report.
+
+**Request Body:**
+```json
+{
+  "name": "Monthly Summary",
+  "template_id": 1,
+  "date_range": {
+    "start": "20260201",
+    "end": "20260228"
+  },
+  "include_header": true,
+  "include_trailer": true
+}
+```
+
+#### `GET /reports/{id}`
+Get report details.
+
+#### `GET /reports/{id}/execute`
+Execute a report and get results.
+
+#### `PUT /reports/{id}`
+Update a report.
+
+#### `DELETE /reports/{id}`
+Delete a report.
+
+---
+
+### 3.18 Report Templates (`/report-templates`)
+
+#### `GET /report-templates`
+List report templates.
+
+#### `GET /report-templates/{id}`
+Get template details.
+
+---
+
+### 3.19 Search (`/search`)
 
 Global search across events.
 
@@ -255,30 +635,142 @@ Global search across events.
 - `end`: End date.
 - `cat_id`: Category filter.
 - `user`: Target user.
+- `type`: Event type filter.
 
 ---
 
-### 2.10 Import/Export
+### 3.20 Non-User Calendars (`/nonuser-cals`)
+
+Manage resource and remote calendars.
+
+#### `GET /nonuser-cals`
+List non-user calendars.
+
+#### `POST /nonuser-cals`
+Create a non-user calendar.
+
+**Request Body:**
+```json
+{
+  "login": "conference_room_a",
+  "lastname": "Conference Room A",
+  "is_public": true,
+  "admin": "admin_user",
+  "group_ids": [1, 2]
+}
+```
+
+#### `GET /nonuser-cals/{login}`
+Get non-user calendar details.
+
+#### `PUT /nonuser-cals/{login}`
+Update non-user calendar.
+
+#### `DELETE /nonuser-cals/{login}`
+Delete non-user calendar.
+
+---
+
+### 3.21 Reminders (`/reminders`)
+
+Manage event reminders.
+
+#### `GET /reminders`
+List reminders for the current user.
+
+**Query Parameters:**
+- `event_id`: Filter by specific event.
+- `due_before`: Get reminders due before date.
+
+#### `POST /reminders`
+Create a reminder.
+
+**Request Body:**
+```json
+{
+  "event_id": 123,
+  "action": "EMAIL",
+  "offset": 15,
+  "offset_unit": "minutes",
+  "related": "START"
+}
+```
+
+#### `PUT /reminders/{id}`
+Update a reminder.
+
+#### `DELETE /reminders/{id}`
+Delete a reminder.
+
+---
+
+### 3.22 Access Control (`/access`)
+
+Manage user and function permissions.
+
+#### `GET /access/users`
+Get user-to-user access permissions.
+
+**Query Parameters:**
+- `user`: Target user to check permissions for.
+
+#### `PUT /access/users/{login}`
+Set access permissions for a user.
+
+**Request Body:**
+```json
+{
+  "can_view": true,
+  "can_edit": false,
+  "can_view_others": false,
+  "can_edit_others": false
+}
+```
+
+#### `GET /access/functions`
+Get function-level permissions.
+
+#### `PUT /access/functions/{function_name}`
+Set function permissions.
+
+**Request Body:**
+```json
+{
+  "allowed_groups": [1, 2],
+  "allowed_users": ["admin1"]
+}
+```
+
+---
+
+### 3.23 Import/Export
 
 #### `POST /import`
 Import data from external formats.
 
-**Content-Type:** `multipart/form-data`
+**Content-Type:** `multipart/form-data`  
 **Parameters:**
 - `file`: The file (ICS, CSV, etc.)
 - `format`: `ical`, `csv`, `vcal`
+- `ignore_conflicts`: Skip conflict checking (default: `false`)
+- `dry_run`: Preview changes without importing (default: `false`)
+
+#### `GET /import/{id}/status`
+Get import status and results.
 
 #### `GET /export`
 Export calendar data.
 
 **Query Parameters:**
-- `format`: `ics`, `csv`.
+- `format`: `ics`, `csv`, `vcal`.
 - `start`: Start date.
 - `end`: End date.
+- `user`: Export specific user's calendar.
+- `include_private`: Include private events (requires permission).
 
 ---
 
-### 2.11 System (`/admin`)
+### 3.24 System (`/admin`)
 
 System-level configuration and logs.
 
@@ -288,15 +780,67 @@ Get system configuration (Admin only).
 #### `PUT /admin/settings`
 Update system configuration (Admin only).
 
+**Request Body:**
+```json
+{
+  "APPLICATION_NAME": "WebCalendar",
+  "LANGUAGE": "English",
+  "TIMEZONE": "America/New_York",
+  "WORK_DAY_START": "090000",
+  "WORK_DAY_END": "170000",
+  "DISABLE_ACCESS_FIELD": false
+}
+```
+
 #### `GET /admin/activity-log`
 Search the system activity log.
 
+**Query Parameters:**
+- `user`: Filter by user.
+- `action`: Filter by action type.
+- `start`: Start date.
+- `end`: End date.
+
+#### `GET /admin/security-audit`
+Run security audit (Admin only).
+
 ---
 
-### 2.12 Feeds (Public/Unauthenticated)
+### 3.25 Site Extras (`/site-extras`)
+
+Manage custom event fields.
+
+#### `GET /site-extras`
+List custom field definitions.
+
+#### `POST /site-extras`
+Create a custom field.
+
+**Request Body:**
+```json
+{
+  "name": "project_code",
+  "label": "Project Code",
+  "type": "text",
+  "required": false
+}
+```
+
+#### `PUT /site-extras/{id}`
+Update a custom field.
+
+#### `DELETE /site-extras/{id}`
+Delete a custom field.
+
+---
+
+### 3.26 Feeds (Public/Unauthenticated)
 
 #### `GET /feeds/ical/{user}.ics`
 iCalendar subscription feed.
+
+**Query Parameters:**
+- `token`: Access token for private calendars.
 
 #### `GET /feeds/freebusy/{user}.ifb`
 Free/Busy availability feed.
@@ -306,6 +850,71 @@ RSS feed of public events.
 
 ---
 
-## 3. Data Models (Reference)
+## 4. Database Tables Reference
 
-See `PRD.md` for detailed field definitions of `Event`, `User`, `Task`, etc.
+Based on analysis of the legacy codebase, the following tables are used:
+
+| Table | Purpose |
+|-------|---------|
+| `webcal_user` | User accounts and authentication |
+| `webcal_entry` | Calendar events (main table) |
+| `webcal_entry_user` | Event participants and status |
+| `webcal_entry_repeats` | Repeating event patterns |
+| `webcal_entry_repeats_not` | Exception dates for repeating events |
+| `webcal_entry_ext_user` | External (non-registered) participants |
+| `webcal_entry_categories` | Event-category associations |
+| `webcal_entry_log` | Activity/audit logging |
+| `webcal_user_pref` | User preferences/settings |
+| `webcal_user_layers` | Calendar layers (overlay views) |
+| `webcal_config` | System configuration |
+| `webcal_categories` | Event categories |
+| `webcal_group` | User groups |
+| `webcal_group_user` | Group membership |
+| `webcal_view` | Custom calendar views |
+| `webcal_view_user` | View participants |
+| `webcal_site_extras` | Custom event fields |
+| `webcal_reminders` | Event reminders |
+| `webcal_asst` | Assistant/boss relationships |
+| `webcal_nonuser_cals` | Non-user calendars (remote/resources) |
+| `webcal_import` | Import tracking |
+| `webcal_import_data` | Import event mapping |
+| `webcal_report` | Custom reports |
+| `webcal_report_template` | Report templates |
+| `webcal_access_user` | User-to-user access permissions |
+| `webcal_access_function` | Function-level permissions |
+| `webcal_user_template` | Custom headers/trailers |
+| `webcal_blob` | Attachments and comments |
+| `webcal_timezones` | Timezone definitions |
+
+---
+
+## 5. Changelog
+
+### Version 2.0
+
+**Added:**
+- Authentication endpoints (`/auth/login`, `/auth/logout`, `/auth/refresh`)
+- Event participant management endpoints
+- Event recurrence and exception management
+- Event attachments and comments
+- User password management
+- User assistants management
+- Group member management (POST/DELETE)
+- Views management (GET/PUT/DELETE)
+- Reports and report templates
+- Non-user calendars (resources)
+- Reminders management
+- Access control (user and function permissions)
+- Import status endpoint
+- Site extras (custom fields)
+- Security audit endpoint
+- Database tables reference
+
+**Modified:**
+- Event creation now includes `categories`, `site_extras`
+- Event deletion supports `mode` parameter
+- Import supports `dry_run` and `ignore_conflicts`
+- Export supports `include_private`
+
+**Removed:**
+- None

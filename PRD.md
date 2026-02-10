@@ -1716,7 +1716,29 @@ GET    /api/v2/admin/activity-log?start=YYYYMMDD&end=YYYYMMDD&user={login}
 - Configurable per user or globally
 - Integration with Zapier/Make
 
-### 27.6 Acceptance Criteria
+### 27.6 Recurrence Handling in API
+
+**TARGET:** To ensure compatibility with modern frontend libraries (e.g., Toast UI Calendar, FullCalendar) and simplify client-side logic, the API employs a hybrid expansion strategy.
+
+#### 27.6.1 Range Queries (Expanded Instances)
+For endpoints returning multiple events over a date range (e.g., `/api/v2/views/month`), the API returns **expanded instances**.
+- Each occurrence of a repeating series is returned as a distinct object.
+- **ID Strategy:** Instances use a composite ID (`{MasterID}_{YYYYMMDD}`) to allow clients to track individual occurrences while maintaining a link to the master.
+- **Exceptions:** Modified instances (exceptions) replace the generated occurrence in the result set, ensuring the UI sees the "truth" without complex client-side merging.
+
+#### 27.6.2 Single Event (Master Definition)
+For detail endpoints (e.g., `/api/v2/events/{id}`), the API returns the **master definition**.
+- Includes the full RFC 5545 `RRULE` string.
+- Provides metadata about the series (e.g., total count, exclusion list).
+
+#### 27.6.3 UI Category Mapping
+To support modern UI rendering, the API DTOs map the internal `cal_type` and `cal_duration` to standard UI categories:
+- **milestone:** Untimed events with 0 duration.
+- **task:** Entry where `cal_type = 'T'`.
+- **allday:** Entry where `cal_time = -1` or `cal_duration = 1440`.
+- **time:** Standard timed events.
+
+### 27.7 Acceptance Criteria
 
 - [ ] All endpoints return JSON with consistent envelope format
 - [ ] Authentication is required for all endpoints except public feeds and booking
