@@ -44,6 +44,12 @@ so that I can build business logic on a strong type-safe foundation.
 - Immutable objects with proper validation
 - Value objects must be final and immutable
 - Domain logic must be framework/DB agnostic
+- **TDD Required:** Write failing tests first, then implement.
+
+**Testing Requirements:**
+- Unit tests in `tests/Unit/Domain/`
+- 100% coverage for Value Objects and Entities
+- Test boundary conditions (invalid dates, negative IDs, etc.)
 
 **Key files to change:**
 - src/Domain/Entity/Event.php
@@ -158,6 +164,15 @@ Then user is authenticated
 - [ ] Business logic is centralized
 - [ ] Services are testable with mocks
 - [ ] No framework dependencies
+
+#### Task 1.5: Infrastructure Setup
+**Status: DONE**  
+**Task:** Establish SQLite schema for integration testing
+
+**Acceptance Criteria:**
+- [x] SQLite schema created in `src/Infrastructure/Persistence/sqlite-schema.sql`
+- [x] Schema includes PRD 4.0 target columns
+- [x] Documentation added to GEMINI.md
 
 ### Epic 2: Calendar Views & Event Management
 **Status: TODO**  
@@ -460,6 +475,38 @@ so that I can see combined availability.
 #### Task 9.1: Continuous Integration Setup
 **Status: TODO**  
 **Task:** Configure CI workflow for tests and static analysis
+
+#### Task 9.2: Dockerized Integration Test Environment
+**Status: TODO**  
+**Task:** Create Docker Compose setup for local MySQL/Postgres testing
+
+**As a developer,**  
+I want to run integration tests against real MySQL and Postgres instances locally  
+so that I can catch engine-specific bugs before pushing to CI.
+
+**One-sentence goal:** Provide a one-command environment for multi-DB testing.
+
+**Desired outcome:** `docker-compose -f docker-compose.test.yml up` provides all needed engines.
+
+**Key files to change:**
+- docker-compose.test.yml
+- tests/Integration/RepositoryTestCase.php
+
+**Acceptance Criteria:**
+- [ ] Docker Compose file defines `mysql` and `postgres` services.
+- [ ] Base test case can switch engines via environment variables.
+
+#### Task 9.3: Multi-Engine Matrix Testing in CI
+**Status: TODO**  
+**Task:** Implement GitHub Actions matrix for SQLite, MySQL, and Postgres
+
+**As a maintainer,**  
+I want the CI suite to run all integration tests on every supported database  
+so that we never break compatibility for a specific engine.
+
+**Acceptance Criteria:**
+- [ ] `.github/workflows/ci.yml` uses a matrix strategy for `db-type`.
+- [ ] Tests pass on all three engines in the CI pipeline.
 
 **As a developer,**  
 I want automated checks on every commit  

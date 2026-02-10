@@ -1849,9 +1849,34 @@ WordPress uses `$wpdb`, standalone uses PDO.
 ### 29.3 Acceptance Criteria
 
 - [ ] All queries work on MySQL, PostgreSQL, and SQLite3
+
 - [ ] No raw SQL string concatenation (all parameterized)
+
 - [ ] Repository interfaces are fully implemented for all entities
+
 - [ ] WordPress bridge correctly maps to `$wpdb` methods
+
+
+
+### 29.4 Integration Testing Requirements
+
+To ensure cross-database compatibility, the library must be tested against real instances of supported engines:
+
+- **MySQL/MariaDB:** Verify compatibility with legacy schema and strict mode.
+
+- **PostgreSQL:** Ensure proper type-casting and sequence handling.
+
+- **SQLite:** Used for fast, local development and unit test isolation.
+
+
+
+**Implementation:**
+
+- Local testing via `docker-compose.test.yml`.
+
+- GitHub Actions matrix testing against all three engines.
+
+- Connection parameters provided via environment variables (`DB_TYPE`, `DB_URL`).
 
 ---
 
@@ -2246,7 +2271,81 @@ These RFC 5545 properties are low-priority and do not warrant dedicated columns.
 
 ---
 
-## Appendix G: Epics & User Stories
+## Appendix H: Test-Driven Development (TDD) Guidelines
+
+### H.1 Core Philosophy
+This project adopts a **strict TDD** approach to ensure the new `webcalendar-core` library is robust, regression-free, and adheres to the "Clean Architecture" pattern.
+
+**The Golden Rule:** *Write a failing test before writing any production code.*
+
+### H.2 The Red-Green-Refactor Cycle
+
+1.  **RED (Write a Failing Test):**
+    *   Create a test file in `tests/Unit/` (or `tests/Integration/`) corresponding to the class you are about to build.
+    *   Write a test method that asserts the expected behavior of a specific feature or edge case.
+    *   Run the test suite. **It must fail** (either because the class/method doesn't exist or the logic is missing). This confirms the test is valid.
+
+2.  **GREEN (Make it Pass):**
+    *   Write the *minimum* amount of code in `src/` to satisfy the test.
+    *   Do not worry about perfect elegance or optimization yet.
+    *   Run the test suite. **It must pass.**
+
+3.  **REFACTOR (Clean Up):**
+    *   Improve the code structure, naming, and performance.
+    *   Apply design patterns and strict typing.
+    *   Remove duplication.
+    *   Run the test suite again. **It must still pass.**
+
+### H.3 Testing Strategy
+
+| Layer | Type | Tool | Focus | Mocking |
+|-------|------|------|-------|---------|
+| **Domain** | Unit | PHPUnit | Entities, Value Objects, Logic | None (Pure PHP) |
+| **Application** | Unit | PHPUnit | Services, Use Cases | Mock Repositories & External Services |
+| **Infrastructure** | Integration | PHPUnit | Repositories, iCal Parsers | Real Database (SQLite in memory) |
+
+### H.4 Testing Requirements
+
+*   **Coverage:** Target **95%** line coverage for Domain and Application layers.
+*   **Isolation:** Unit tests must not touch the database or file system.
+*   **Mocks:** Use PHPUnit's `createMock()` for dependencies.
+*   **Assertions:** Use specific assertions (e.g., `assertSame`, `expectException`) rather than generic ones.
+*   **Naming:** Test methods should be descriptive (e.g., `test_it_throws_exception_when_start_date_is_after_end_date`).
+
+### H.5 TDD Example (EventId)
+
+**1. RED:**
+```php
+// tests/Unit/Domain/ValueObject/EventIdTest.php
+public function test_it_can_be_created_from_int(): void {
+    $id = new EventId(123);
+    $this->assertSame(123, $id->toInt());
+}
+```
+
+**2. GREEN:**
+```php
+// src/Domain/ValueObject/EventId.php
+final class EventId {
+    public function __construct(private int $id) {}
+    public function toInt(): int { return $this->id; }
+}
+```
+
+**3. REFACTOR:**
+```php
+// src/Domain/ValueObject/EventId.php
+declare(strict_types=1);
+namespace WebCalendar\Core\Domain\ValueObject;
+
+final class EventId {
+    public function __construct(private readonly int $id) {
+        if ($id <= 0) throw new \InvalidArgumentException("ID must be positive");
+    }
+    public function toInt(): int { return $this->id; }
+}
+```
+*(Then update test to cover the exception case)*
 
 This appendix provides a complete, prioritized backlog of epics and user stories for the WebCalendar modern rewrite. Each story is self-contained with acceptance criteria, sizing, and dependency information.
 
@@ -2966,6 +3065,84 @@ S-3.1 (API router)
 | 10 | S-5.3, S-5.4, S-6.2, S-6.3, S-6.4, S-6.5 | Supporting features |
 | 11 | S-7.1, S-7.2, S-7.3, S-7.4 | Data exchange |
 | 12 | S-8.1, S-8.2, S-8.3, S-9.1, S-9.2, S-9.4 | Notifications + admin |
+
+---
+
+## Appendix H: Test-Driven Development (TDD) Guidelines
+
+### H.1 Core Philosophy
+This project adopts a **strict TDD** approach to ensure the new `webcalendar-core` library is robust, regression-free, and adheres to the "Clean Architecture" pattern.
+
+**The Golden Rule:** *Write a failing test before writing any production code.*
+
+### H.2 The Red-Green-Refactor Cycle
+
+1.  **RED (Write a Failing Test):**
+    *   Create a test file in `tests/Unit/` (or `tests/Integration/`) corresponding to the class you are about to build.
+    *   Write a test method that asserts the expected behavior of a specific feature or edge case.
+    *   Run the test suite. **It must fail** (either because the class/method doesn't exist or the logic is missing). This confirms the test is valid.
+
+2.  **GREEN (Make it Pass):**
+    *   Write the *minimum* amount of code in `src/` to satisfy the test.
+    *   Do not worry about perfect elegance or optimization yet.
+    *   Run the test suite. **It must pass.**
+
+3.  **REFACTOR (Clean Up):**
+    *   Improve the code structure, naming, and performance.
+    *   Apply design patterns and strict typing.
+    *   Remove duplication.
+    *   Run the test suite again. **It must still pass.**
+
+### H.3 Testing Strategy
+
+| Layer | Type | Tool | Focus | Mocking |
+|-------|------|------|-------|---------|
+| **Domain** | Unit | PHPUnit | Entities, Value Objects, Logic | None (Pure PHP) |
+| **Application** | Unit | PHPUnit | Services, Use Cases | Mock Repositories & External Services |
+| **Infrastructure** | Integration | PHPUnit | Repositories, iCal Parsers | Real Database (SQLite in memory) |
+
+### H.4 Testing Requirements
+
+*   **Coverage:** Target **95%** line coverage for Domain and Application layers.
+*   **Isolation:** Unit tests must not touch the database or file system.
+*   **Mocks:** Use PHPUnit's `createMock()` for dependencies.
+*   **Assertions:** Use specific assertions (e.g., `assertSame`, `expectException`) rather than generic ones.
+*   **Naming:** Test methods should be descriptive (e.g., `test_it_throws_exception_when_start_date_is_after_end_date`).
+
+### H.5 TDD Example (EventId)
+
+**1. RED:**
+```php
+// tests/Unit/Domain/ValueObject/EventIdTest.php
+public function test_it_can_be_created_from_int(): void {
+    $id = new EventId(123);
+    $this->assertSame(123, $id->toInt());
+}
+```
+
+**2. GREEN:**
+```php
+// src/Domain/ValueObject/EventId.php
+final class EventId {
+    public function __construct(private int $id) {}
+    public function toInt(): int { return $this->id; }
+}
+```
+
+**3. REFACTOR:**
+```php
+// src/Domain/ValueObject/EventId.php
+declare(strict_types=1);
+namespace WebCalendar\Core\Domain\ValueObject;
+
+final class EventId {
+    public function __construct(private readonly int $id) {
+        if ($id <= 0) throw new \InvalidArgumentException("ID must be positive");
+    }
+    public function toInt(): int { return $this->id; }
+}
+```
+*(Then update test to cover the exception case)*
 
 ---
 
