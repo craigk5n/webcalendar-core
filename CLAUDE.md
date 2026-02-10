@@ -91,8 +91,28 @@ Key tables: `webcal_entry` (events), `webcal_entry_user` (participants), `webcal
 - PSR-12 compliant
 - 2-space indentation (not tabs)
 - 80-character line length
-- PHPUnit 9.x for testing, target 90%+ branch coverage on core services
 - PHPStan Level 8+ (no errors allowed)
+
+## Testing Standards
+
+- **Unit:** PHPUnit 9.x for Domain/Application layers. Target 95% line coverage.
+- **Integration:** Test repository implementations against SQLite (in-memory).
+- **Contract:** Validate API responses against OpenAPI spec (e.g., Schemathesis).
+- **Performance:** Benchmark critical paths (target p95 < 200ms).
+- **Mutation:** Use Infection PHP to verify test quality (target score > 80%).
+
+## Security Standards
+
+- **Input Validation:** Strict type checking on all inputs. Sanitize HTML in descriptions (if `ALLOW_HTML_DESCRIPTION` is enabled). Validate file uploads (MIME type, size).
+- **Output Encoding:** Ensure proper JSON encoding/escaping. Implement Content Security Policy (CSP) headers.
+- **Secrets Management:** Never commit secrets to git. Use environment variables for sensitive config.
+- **Audit Logging:** Log all administrative actions, authentication events, and permission changes to `webcal_entry_log`.
+
+## Observability Standards
+
+- **Metrics:** Track response times (p50, p95, p99), error rates by endpoint, request volume, and DB query performance.
+- **Logging:** Use structured JSON logging (PSR-3) with correlation IDs for request tracing.
+- **Tracing:** Implement distributed tracing for multi-service interactions.
 
 ## Legacy Codebase Reference (legacy/)
 

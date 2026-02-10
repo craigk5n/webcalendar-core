@@ -45,6 +45,40 @@ All endpoints (except public feeds/booking) require authentication.
 }
 ```
 
+### 1.4 Versioning
+
+The API follows a URL-based versioning strategy:
+
+- **Current Version:** `/api/v2`
+- **Breaking Changes:** Will result in a major version bump (e.g., `/api/v3`).
+- **Deprecation:** Deprecated endpoints will include `Deprecation: true` and `Sunset: <date>` headers.
+- **Compatibility:** At least one previous major version will be supported during transition periods.
+
+### 1.5 Rate Limiting
+
+To prevent abuse and ensure fair usage, the API enforces rate limits.
+
+- **Headers:**
+    - `X-RateLimit-Limit`: Maximum requests allowed in the window.
+    - `X-RateLimit-Remaining`: Remaining requests in the current window.
+    - `X-RateLimit-Reset`: Unix timestamp when the limit resets.
+- **Limits:**
+    - **Read Operations:** 1000 requests/minute.
+    - **Write Operations:** 100 requests/minute.
+    - **Authentication:** 10 requests/minute.
+- **Exceeded:** Returns `429 Too Many Requests` with a `Retry-After` header.
+
+### 1.6 Caching
+
+HTTP caching is implemented to improve performance.
+
+- **ETag:** All `GET` endpoints return an `ETag` header. Clients should use `If-None-Match` to conditionally request resources (returns `304 Not Modified`).
+- **Cache-Control:**
+    - **Events:** `private, max-age=60` (1 minute)
+    - **Users:** `private, max-age=300` (5 minutes)
+    - **Categories:** `public, max-age=3600` (1 hour)
+    - **Reports:** `no-cache`
+
 ---
 
 ## 2. Authentication
