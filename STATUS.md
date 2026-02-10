@@ -40,7 +40,7 @@ so that I can build business logic on a strong type-safe foundation.
 **Out of scope:** Repository implementations, services, and API endpoints
 
 **Technical constraints:**
-- PHP 8.2+, strict_types=1
+- PHP 8.1+, strict_types=1
 - Immutable objects with proper validation
 - Value objects must be final and immutable
 - Domain logic must be framework/DB agnostic

@@ -271,41 +271,6 @@ Add a comment to an event.
 
 ---
 
-### 3.21 Reminders (`/reminders`)
-
-Manage event reminders.
-
-#### `GET /reminders`
-List reminders for the current user.
-
-**Query Parameters:**
-- `event_id`: Filter by specific event.
-- `due_before`: Get reminders due before date.
-
-#### `POST /reminders`
-Create a reminder.
-
-**Request Body:**
-```json
-{
-  "event_id": 123,
-  "action": "EMAIL",
-  "offset": 15,
-  "offset_unit": "minutes",
-  "related": "START"
-}
-```
-
-#### `PUT /reminders/{id}`
-Update a reminder.
-
-#### `DELETE /reminders/{id}`
-Delete a reminder.
-
----
-
----
-
 ### 3.7 Tasks (`/tasks`)
 
 Manage to-do items (VTODO). Tasks are events with `type: 'T'` or `'N'`.
@@ -514,6 +479,16 @@ Add members to a group.
 
 #### `DELETE /groups/{id}/members/{login}`
 Remove a member from a group.
+
+#### `PUT /groups/{id}/members/{login}`
+Update member role or permissions.
+
+**Request Body:**
+```json
+{
+  "role": "member"
+}
+```
 
 ---
 
