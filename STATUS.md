@@ -24,7 +24,7 @@
 - [x] Development dependencies configured (PHPUnit, PHPStan, PHP-CS-Fixer)
 
 #### Task 1.2: Domain Layer Foundation
-**Status: TODO**  
+**Status: DONE**  
 **Task:** Create core domain entities and value objects
 
 **As a developer,**  
@@ -78,7 +78,7 @@ Then InvalidArgumentException is thrown
 - [ ] No framework dependencies in domain layer
 
 #### Task 1.3: Repository Interfaces
-**Status: TODO**  
+**Status: DONE**  
 **Task:** Define repository interfaces for data access
 
 **As a developer,**  
@@ -122,7 +122,7 @@ Then event is persisted
 - [ ] Tests mock interfaces successfully
 
 #### Task 1.4: Service Layer Foundation
-**Status: TODO**  
+**Status: DONE**  
 **Task:** Create core service layer with EventService and UserService
 
 **As a developer,**  
@@ -179,7 +179,7 @@ Then user is authenticated
 **Goal:** Implement calendar views and core event management functionality
 
 #### Task 2.1: Event Retrieval & Date Range Querying
-**Status: TODO**  
+**Status: DONE**  
 **Task:** Implement querying logic for standard calendar views (Month, Week, Day)
 
 **As a frontend developer,**  
@@ -215,7 +215,7 @@ Then all single events falling within that range are returned
 - [ ] Mock repository implementation available
 
 #### Task 2.2: Event CRUD Operations
-**Status: TODO**  
+**Status: DONE**  
 **Task:** Implement Create, Update, and Delete operations for Events
 
 **As a user,**  
@@ -250,7 +250,7 @@ Then `EventNotFoundException` is thrown
 - [ ] Full test coverage for success and failure paths
 
 #### Task 2.3: Conflict Detection Logic
-**Status: TODO**  
+**Status: DONE**  
 **Task:** Implement conflict detection for overlapping events
 
 **As a user,**  
@@ -287,7 +287,7 @@ Then conflict is detected
 **Goal:** Implement full RFC 5545 recurrence support with php-icalendar-core
 
 #### Task 3.1: Recurrence Domain Models
-**Status: TODO**  
+**Status: DONE**  
 **Task:** Create Value Objects for Recurrence Rules (RRULE)
 
 **As a developer,**  
@@ -310,7 +310,7 @@ When `RecurrenceRule` is instantiated
 Then it parses correctly
 
 #### Task 3.2: Recurrence Expansion Service
-**Status: TODO**  
+**Status: DONE**  
 **Task:** Implement service to expand repeating events into occurrences
 
 **As a system,**  
@@ -336,7 +336,7 @@ so that they can be displayed on the calendar.
 **Goal:** Implement tasks, journals, and advanced calendar features
 
 #### Task 4.1: Task & Journal Entities
-**Status: TODO**  
+**Status: DONE**  
 **Task:** Implement Task (VTODO) and Journal (VJOURNAL) entities
 
 **As a user,**  
@@ -356,7 +356,7 @@ so that I can manage to-dos and notes.
 **Goal:** Implement user management and pluggable authentication
 
 #### Task 5.1: User Service & Repository
-**Status: TODO**  
+**Status: DONE**  
 **Task:** Implement User lifecycle management
 
 **As an admin,**  
@@ -370,7 +370,7 @@ so that people can access the calendar.
 - src/Domain/Repository/UserRepositoryInterface.php
 
 #### Task 5.2: Authentication Provider & Interface
-**Status: TODO**  
+**Status: DONE**  
 **Task:** Implement interface-based authentication strategy
 
 **As a developer,**  
@@ -405,7 +405,7 @@ Then core services can verify users using WP's native auth.
 **Goal:** Implement comprehensive access control system
 
 #### Task 6.1: Permission Service (UAC)
-**Status: TODO**  
+**Status: DONE**  
 **Task:** Implement core Permission Service matching legacy UAC
 
 **As a system,**  
