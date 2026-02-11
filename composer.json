@@ -39,7 +39,7 @@
   },
   "scripts": {
     "test": "phpunit",
-    "phpstan": "phpstan analyse src tests --level=8",
+    "phpstan": "phpstan analyse",
     "cs-check": "phpcs",
     "cs-fix": "php-cs-fixer fix"
   },
