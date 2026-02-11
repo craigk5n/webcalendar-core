@@ -3,7 +3,7 @@
 **Version:** 4.0
 **Date:** 2026-02-09
 **Status:** Planning / Refactoring
-**Purpose:** Feature catalog and architectural blueprint for `webcalendar-core`, the PHP 8.1+ business logic library (Composer package) that provides domain models, services, repository interfaces, and REST API contracts for the WebCalendar ecosystem.
+**Purpose:** Feature catalog and architectural blueprint for `webcalendar-core`, the PHP 8.1+ business logic library (Composer package) that provides domain models, services, repository interfaces, and REST API contracts for the WebCalendar ecosystem. This package will first be used as the REST backend service that powers a new WebCalendar plugin for WordPress.  It will also be used as the starting point of the next generation of WebCalendar.
 
 ---
 
