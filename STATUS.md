@@ -553,6 +553,54 @@ so that quality is maintained.
 **Key files to change:**
 - .github/workflows/ci.yml
 
+### Epic 10: Concrete Persistence (Infrastructure)
+**Status: IN_PROGRESS**
+**Goal:** Implement database-backed repositories using PDO.
+
+#### Task 10.1: SQLite Repository Implementation
+
+**Status: DONE**  
+
+
+**Task:** Implement PdoUserRepository and PdoEventRepository for SQLite.
+
+**As a developer,**
+I want concrete repository implementations for SQLite
+so that I can run integration tests and use the library in local environments.
+
+**One-sentence goal:** Implement PDO-based repositories for User and Event entities targeting SQLite.
+
+**Key files to change:**
+- src/Infrastructure/Persistence/PdoUserRepository.php
+- src/Infrastructure/Persistence/PdoEventRepository.php
+- tests/Integration/Persistence/PdoUserRepositoryTest.php
+- tests/Integration/Persistence/PdoEventRepositoryTest.php
+
+#### Task 10.2: MySQL & PostgreSQL Repository Support
+**Status: TODO**
+**Task:** Ensure PDO repositories work with MySQL and PostgreSQL.
+
+### Epic 11: Public Scheduling & Notifications
+**Status: IN_PROGRESS**
+**Goal:** Implement booking service and notification system.
+
+#### Task 11.1: Public Scheduling (Booking)
+
+**Status: DONE**  
+
+
+**Task:** Implement BookingService for availability calculation.
+
+**As a user,**
+I want others to be able to book appointments on my calendar
+so that I can automate my scheduling.
+
+**One-sentence goal:** Implement BookingService to calculate availability and handle booking requests.
+
+**Key files to change:**
+- src/Application/Service/BookingService.php
+- tests/Unit/Application/Service/BookingServiceTest.php
+
 ## Release Plan
 
 ### MVP Release (v1.0.0)
