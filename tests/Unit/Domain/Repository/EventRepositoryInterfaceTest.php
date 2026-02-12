@@ -24,4 +24,17 @@ final class EventRepositoryInterfaceTest extends TestCase
 
         $this->assertNull($repository->findById($id));
     }
+
+    public function testCanMockFindByUid(): void
+    {
+        $repository = $this->createMock(EventRepositoryInterface::class);
+        
+        $uid = 'test-uid';
+        $repository->expects($this->once())
+            ->method('findByUid')
+            ->with($uid)
+            ->willReturn(null);
+
+        $this->assertNull($repository->findByUid($uid));
+    }
 }

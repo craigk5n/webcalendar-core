@@ -19,6 +19,11 @@ interface EventRepositoryInterface
     public function findById(EventId $id): ?Event;
 
     /**
+     * Finds an event by its globally unique identifier (RFC 5545 UID).
+     */
+    public function findByUid(string $uid): ?Event;
+
+    /**
      * Finds all events within a specific date range.
      * Optionally filtered by user.
      * 

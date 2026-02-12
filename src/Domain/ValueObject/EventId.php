@@ -10,14 +10,14 @@ namespace WebCalendar\Core\Domain\ValueObject;
 final readonly class EventId
 {
     /**
-     * @param int $value The unique identifier value. Must be positive.
-     * @throws \InvalidArgumentException If value is not positive.
+     * @param int $value The unique identifier value. Must be non-negative.
+     * @throws \InvalidArgumentException If value is negative.
      */
     public function __construct(
         private int $value
     ) {
-        if ($this->value <= 0) {
-            throw new \InvalidArgumentException('Event ID must be a positive integer.');
+        if ($this->value < 0) {
+            throw new \InvalidArgumentException('Event ID must be a non-negative integer.');
         }
     }
 

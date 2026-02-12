@@ -10,7 +10,7 @@
 ## Epics & Tasks
 
 ### Epic 1: Foundation & Core Infrastructure
-**Status: IN_PROGRESS**  
+**Status: DONE**  
 **Goal:** Set up project foundation with core business logic layer
 
 #### Task 1.1: Project Structure & Dependencies
@@ -175,7 +175,7 @@ Then user is authenticated
 - [x] Documentation added to GEMINI.md
 
 ### Epic 2: Calendar Views & Event Management
-**Status: TODO**  
+**Status: DONE**  
 **Goal:** Implement calendar views and core event management functionality
 
 #### Task 2.1: Event Retrieval & Date Range Querying
@@ -283,7 +283,7 @@ Then conflict is detected
 - [ ] Tests covering partial, full, and enclosing overlaps
 
 ### Epic 3: Repeating Events & RFC 5545 Compliance
-**Status: TODO**  
+**Status: DONE**  
 **Goal:** Implement full RFC 5545 recurrence support with php-icalendar-core
 
 #### Task 3.1: Recurrence Domain Models
@@ -332,7 +332,7 @@ so that they can be displayed on the calendar.
 - [ ] Correctly processes EXDATEs (exceptions)
 
 ### Epic 4: Tasks, Journals & Advanced Features
-**Status: TODO**  
+**Status: DONE**  
 **Goal:** Implement tasks, journals, and advanced calendar features
 
 #### Task 4.1: Task & Journal Entities
@@ -352,7 +352,7 @@ so that I can manage to-dos and notes.
 - src/Domain/Entity/Journal.php
 
 ### Epic 5: User Management & Authentication
-**Status: TODO**  
+**Status: DONE**  
 **Goal:** Implement user management and pluggable authentication
 
 #### Task 5.1: User Service & Repository
@@ -401,7 +401,7 @@ Then core services can verify users using WP's native auth.
 - [ ] Unit tests for interface compliance
 
 ### Epic 6: Access Control & Security
-**Status: TODO**  
+**Status: DONE**  
 **Goal:** Implement comprehensive access control system
 
 #### Task 6.1: Permission Service (UAC)
@@ -427,7 +427,7 @@ so that I can enforce security policies.
 **Goal:** Implement iCal import/export and other data exchange formats
 
 #### Task 7.1: Import Service
-**Status: TODO**  
+**Status: DONE**  
 **Task:** Implement ICS import logic
 
 **As a user,**  
@@ -441,7 +441,7 @@ so that I can migrate data from other calendars.
 - src/Infrastructure/ICal/EventMapper.php
 
 #### Task 7.2: Export Service
-**Status: TODO**  
+**Status: DONE**  
 **Task:** Implement ICS export logic
 
 **As a user,**  
@@ -458,7 +458,7 @@ so that I can use it in other applications.
 **Goal:** Implement groups, categories, layers, and custom views
 
 #### Task 8.1: Category Service
-**Status: TODO**  
+**Status: DONE**  
 **Task:** Implement Category management
 
 **As a user,**  
@@ -472,7 +472,7 @@ so that I can visually organize my calendar.
 - src/Application/Service/CategoryService.php
 
 #### Task 8.2: Layer Service (Overlays)
-**Status: TODO**  
+**Status: DONE**  
 **Task:** Implement Layer logic for overlaying calendars
 
 **As a user,**  

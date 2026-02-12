@@ -15,10 +15,10 @@ final class EventIdTest extends TestCase
         $this->assertSame(123, $id->value());
     }
 
-    public function testThrowsExceptionForInvalidInteger(): void
+    public function testCanBeCreatedFromZero(): void
     {
-        $this->expectException(\InvalidArgumentException::class);
-        new EventId(0);
+        $id = new EventId(0);
+        $this->assertSame(0, $id->value());
     }
 
     public function testThrowsExceptionForNegativeInteger(): void

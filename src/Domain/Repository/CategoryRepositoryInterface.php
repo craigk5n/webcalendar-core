@@ -1,0 +1,43 @@
+<?php
+
+declare(strict_types=1);
+
+namespace WebCalendar\Core\Domain\Repository;
+
+use WebCalendar\Core\Domain\Entity\Category;
+use WebCalendar\Core\Domain\ValueObject\EventId;
+
+/**
+ * Interface for Category persistence operations.
+ */
+interface CategoryRepositoryInterface
+{
+    public function findById(int $id): ?Category;
+
+    /**
+     * @return Category[]
+     */
+    public function findByOwner(?string $owner): array;
+
+    /**
+     * @return Category[]
+     */
+    public function findAllGlobal(): array;
+
+    public function save(Category $category): void;
+
+    public function delete(int $id): void;
+
+    /**
+     * Assigns categories to an event for a specific user.
+     * 
+     * @param int[] $categoryIds
+     */
+    public function assignToEvent(EventId $eventId, string $userLogin, array $categoryIds): void;
+
+    /**
+     * Gets categories assigned to an event for a user.
+     * @return Category[]
+     */
+    public function getForEvent(EventId $eventId, string $userLogin): array;
+}
