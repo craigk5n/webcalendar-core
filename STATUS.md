@@ -632,6 +632,57 @@ so that I can audit system usage and troubleshoot issues.
 **Status: DONE**  
 **Task:** Implement AssistantService for managing delegate access.
 
+### Epic 15: Internationalization (i18n)
+
+**Status: DONE**  
+
+
+**Goal:** Implement custom translation system.
+
+#### Task 15.1: Translation Service
+
+**Status: DONE**  
+
+
+**Task:** Implement TranslationService for multi-language support.
+
+**As a user,**
+I want to use the calendar in my preferred language
+so that I can navigate the interface easily.
+
+**One-sentence goal:** Implement TranslationService to handle language-specific strings and caching.
+
+**Key files to change:**
+- src/Application/Service/TranslationService.php
+- tests/Unit/Application/Service/TranslationServiceTest.php
+
+### Epic 16: Attachments & Comments
+
+**Status: DONE**  
+
+  
+
+
+**Goal:** Implement event attachments and comments.
+
+#### Task 16.1: Blob Service
+
+**Status: DONE**  
+
+
+**Task:** Implement BlobService for managing event attachments and comments.
+
+**As a user,**
+I want to attach files and add comments to events
+so that I can share relevant information with participants.
+
+**One-sentence goal:** Implement BlobService to handle binary data and text comments for events.
+
+**Key files to change:**
+- src/Application/Service/BlobService.php
+- src/Domain/Entity/Blob.php
+- src/Domain/Repository/BlobRepositoryInterface.php
+
 ## Release Plan
 
 ### MVP Release (v1.0.0)

@@ -306,7 +306,7 @@ CREATE TABLE webcal_user_template (
 );
 
 CREATE TABLE webcal_blob (
-  cal_blob_id INT NOT NULL,
+  cal_blob_id INT NOT NULL AUTO_INCREMENT,
   cal_id INT NULL,
   cal_login VARCHAR(25) NULL,
   cal_name VARCHAR(30) NULL,

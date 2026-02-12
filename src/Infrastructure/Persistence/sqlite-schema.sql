@@ -304,7 +304,7 @@ CREATE TABLE webcal_user_template (
 );
 
 CREATE TABLE webcal_blob (
-    cal_blob_id INT NOT NULL,
+    cal_blob_id INTEGER PRIMARY KEY AUTOINCREMENT,
     cal_id INT NULL,
     cal_login VARCHAR(25) NULL,
     cal_name VARCHAR(30) NULL,
@@ -314,8 +314,7 @@ CREATE TABLE webcal_blob (
     cal_type CHAR(1) NOT NULL,
     cal_mod_date INT NOT NULL,
     cal_mod_time INT NOT NULL,
-    cal_blob BLOB,
-    PRIMARY KEY (cal_blob_id)
+    cal_blob BLOB
 );
 
 CREATE TABLE webcal_timezones (
