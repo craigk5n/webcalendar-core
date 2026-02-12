@@ -577,29 +577,39 @@ so that I can run integration tests and use the library in local environments.
 - tests/Integration/Persistence/PdoEventRepositoryTest.php
 
 #### Task 10.2: MySQL & PostgreSQL Repository Support
-**Status: TODO**
-**Task:** Ensure PDO repositories work with MySQL and PostgreSQL.
-
-### Epic 11: Public Scheduling & Notifications
-**Status: IN_PROGRESS**
-**Goal:** Implement booking service and notification system.
-
-#### Task 11.1: Public Scheduling (Booking)
 
 **Status: DONE**  
 
 
+**Task:** Ensure PDO repositories work with MySQL and PostgreSQL.
+
+### Epic 11: Public Scheduling & Notifications
+
+**Status: DONE**  
+
+
+**Goal:** Implement booking service and notification system.
+
+#### Task 11.1: Public Scheduling (Booking)
+**Status: DONE**  
 **Task:** Implement BookingService for availability calculation.
 
-**As a user,**
-I want others to be able to book appointments on my calendar
-so that I can automate my scheduling.
+#### Task 11.2: Notification Service
 
-**One-sentence goal:** Implement BookingService to calculate availability and handle booking requests.
+**Status: DONE**  
+
+
+**Task:** Implement NotificationService for email and webhook dispatch.
+
+**As a user,**
+I want to receive notifications for event reminders and invitations
+so that I don't miss important meetings.
+
+**One-sentence goal:** Implement NotificationService to handle email and webhook notifications.
 
 **Key files to change:**
-- src/Application/Service/BookingService.php
-- tests/Unit/Application/Service/BookingServiceTest.php
+- src/Application/Service/NotificationService.php
+- tests/Unit/Application/Service/NotificationServiceTest.php
 
 ## Release Plan
 

@@ -85,8 +85,15 @@ final readonly class PdoEventRepository implements EventRepositoryInterface
 
     public function save(Event $event): void
     {
+        $idValue = $event->id()->value();
+        $isNew = ($idValue === 0);
+
+        if ($isNew) {
+            $idValue = $this->getNextId();
+        }
+
         $data = [
-            'id' => $event->id()->value(),
+            'id' => $idValue,
             'create_by' => $event->createdBy(),
             'date' => (int)$event->start()->format('Ymd'),
             'time' => (int)$event->start()->format('His'),
@@ -101,21 +108,34 @@ final readonly class PdoEventRepository implements EventRepositoryInterface
             'status' => $event->status()
         ];
 
-        if ($data['id'] === 0) {
-            $data['id'] = $this->getNextId();
+        if ($isNew) {
+            $sql = 'INSERT INTO webcal_entry 
+                    (cal_id, cal_create_by, cal_date, cal_time, cal_duration, cal_name, 
+                     cal_description, cal_location, cal_type, cal_access, cal_uid, 
+                     cal_sequence, cal_status)
+                    VALUES (:id, :create_by, :date, :time, :duration, :name, 
+                            :description, :location, :type, :access, :uid, 
+                            :sequence, :status)';
+        } else {
+            $sql = 'UPDATE webcal_entry SET 
+                    cal_create_by = :create_by, 
+                    cal_date = :date, 
+                    cal_time = :time, 
+                    cal_duration = :duration, 
+                    cal_name = :name, 
+                    cal_description = :description, 
+                    cal_location = :location, 
+                    cal_type = :type, 
+                    cal_access = :access, 
+                    cal_uid = :uid, 
+                    cal_sequence = :sequence, 
+                    cal_status = :status 
+                    WHERE cal_id = :id';
         }
-
-        $sql = 'INSERT OR REPLACE INTO webcal_entry 
-                (cal_id, cal_create_by, cal_date, cal_time, cal_duration, cal_name, 
-                 cal_description, cal_location, cal_type, cal_access, cal_uid, 
-                 cal_sequence, cal_status)
-                VALUES (:id, :create_by, :date, :time, :duration, :name, 
-                        :description, :location, :type, :access, :uid, 
-                        :sequence, :status)';
 
         $this->pdo->prepare($sql)->execute($data);
         
-        $this->saveRecurrence((int)$data['id'], $event->recurrence());
+        $this->saveRecurrence($idValue, $event->recurrence());
     }
 
     public function delete(EventId $id): void

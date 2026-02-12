@@ -62,10 +62,21 @@ final readonly class PdoUserRepository implements UserRepositoryInterface
             'enabled' => $user->isEnabled() ? 'Y' : 'N',
         ];
 
-        // SQLite-compatible UPSERT (INSERT OR REPLACE)
-        $sql = 'INSERT OR REPLACE INTO webcal_user 
-                (cal_login, cal_lastname, cal_firstname, cal_is_admin, cal_email, cal_enabled)
-                VALUES (:login, :lastname, :firstname, :is_admin, :email, :enabled)';
+        $existing = $this->findByLogin($user->login());
+
+        if ($existing) {
+            $sql = 'UPDATE webcal_user SET 
+                    cal_lastname = :lastname, 
+                    cal_firstname = :firstname, 
+                    cal_is_admin = :is_admin, 
+                    cal_email = :email, 
+                    cal_enabled = :enabled 
+                    WHERE cal_login = :login';
+        } else {
+            $sql = 'INSERT INTO webcal_user 
+                    (cal_login, cal_lastname, cal_firstname, cal_is_admin, cal_email, cal_enabled)
+                    VALUES (:login, :lastname, :firstname, :is_admin, :email, :enabled)';
+        }
 
         $this->pdo->prepare($sql)->execute($data);
     }
@@ -109,14 +120,24 @@ final readonly class PdoUserRepository implements UserRepositoryInterface
 
     public function savePreference(string $login, UserPreference $preference): void
     {
-        $sql = 'INSERT OR REPLACE INTO webcal_user_pref (cal_login, cal_setting, cal_value)
-                VALUES (:login, :setting, :value)';
-        
-        $this->pdo->prepare($sql)->execute([
+        $data = [
             'login' => $login,
             'setting' => $preference->key(),
             'value' => $preference->value(),
-        ]);
+        ];
+
+        $stmt = $this->pdo->prepare('SELECT 1 FROM webcal_user_pref WHERE cal_login = :login AND cal_setting = :setting');
+        $stmt->execute(['login' => $login, 'setting' => $preference->key()]);
+        
+        if ($stmt->fetch()) {
+            $sql = 'UPDATE webcal_user_pref SET cal_value = :value 
+                    WHERE cal_login = :login AND cal_setting = :setting';
+        } else {
+            $sql = 'INSERT INTO webcal_user_pref (cal_login, cal_setting, cal_value)
+                    VALUES (:login, :setting, :value)';
+        }
+        
+        $this->pdo->prepare($sql)->execute($data);
     }
 
     /**

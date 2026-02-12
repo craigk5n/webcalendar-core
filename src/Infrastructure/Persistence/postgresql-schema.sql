@@ -18,8 +18,8 @@ CREATE TABLE webcal_user (
   PRIMARY KEY ( cal_login )
 );
 
-INSERT INTO webcal_user ( cal_login, cal_passwd, cal_lastname, cal_firstname, cal_is_admin )
-VALUES ( 'admin', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Administrator', 'Default', 'Y' );
+INSERT INTO webcal_user ( cal_login, cal_passwd, cal_lastname, cal_firstname, cal_is_admin, cal_email )
+VALUES ( 'admin', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Administrator', 'Default', 'Y', 'admin@example.com' );
 
 CREATE TABLE webcal_entry (
   cal_id INT NOT NULL,

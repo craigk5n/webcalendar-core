@@ -4,41 +4,19 @@ declare(strict_types=1);
 
 namespace WebCalendar\Core\Tests\Integration\Persistence;
 
-use PDO;
-use PHPUnit\Framework\TestCase;
 use WebCalendar\Core\Domain\Entity\User;
 use WebCalendar\Core\Domain\ValueObject\UserPreference;
 use WebCalendar\Core\Infrastructure\Persistence\PdoUserRepository;
+use WebCalendar\Core\Tests\Integration\RepositoryTestCase;
 
-final class PdoUserRepositoryTest extends TestCase
+final class PdoUserRepositoryTest extends RepositoryTestCase
 {
-    private PDO $pdo;
     private PdoUserRepository $repository;
 
     protected function setUp(): void
     {
-        $this->pdo = new PDO('sqlite::memory:');
-        $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-        
-        $this->loadSchema();
-        
+        parent::setUp();
         $this->repository = new PdoUserRepository($this->pdo);
-    }
-
-    private function loadSchema(): void
-    {
-        $path = __DIR__ . '/../../../src/Infrastructure/Persistence/sqlite-schema.sql';
-        $sql = file_get_contents($path);
-        if ($sql === false) {
-            throw new \RuntimeException("Failed to load schema from $path");
-        }
-        $statements = explode(';', $sql);
-        foreach ($statements as $statement) {
-            $statement = trim($statement);
-            if (!empty($statement)) {
-                $this->pdo->exec($statement);
-            }
-        }
     }
 
     public function testSaveAndFindByLogin(): void
