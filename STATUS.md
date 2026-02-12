@@ -577,7 +577,7 @@ so that quality is maintained.
 **Goal:** Implement event searching and audit trail.
 
 #### Task 12.1: Search Service
-**Status: TODO**
+**Status: DONE**  
 **Task:** Implement SearchService for event and task searching.
 
 **As a user,**
@@ -607,6 +607,30 @@ so that I can audit system usage and troubleshoot issues.
 - src/Application/Service/ActivityLogService.php
 - src/Domain/Entity/ActivityLogEntry.php
 - src/Domain/Repository/ActivityLogRepositoryInterface.php
+
+### Epic 13: Reports & Feeds
+**Status: DONE**
+**Goal:** Implement reporting engine and calendar feeds (RSS, Free/Busy).
+
+#### Task 13.1: Report Service
+**Status: DONE**  
+**Task:** Implement ReportService for generating custom reports based on templates.
+
+#### Task 13.2: Feed Service
+**Status: DONE**  
+**Task:** Implement FeedService for RSS and Free/Busy feeds.
+
+### Epic 14: Non-User Calendars & Delegates
+**Status: DONE**
+**Goal:** Implement resource management and delegate access.
+
+#### Task 14.1: Resource Service
+**Status: DONE**  
+**Task:** Implement ResourceService for managing rooms and equipment.
+
+#### Task 14.2: Assistant Service
+**Status: DONE**  
+**Task:** Implement AssistantService for managing delegate access.
 
 ## Release Plan
 
