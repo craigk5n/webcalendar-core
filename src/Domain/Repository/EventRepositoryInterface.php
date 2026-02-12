@@ -34,6 +34,13 @@ interface EventRepositoryInterface
     public function findByDateRange(DateRange $range, ?\WebCalendar\Core\Domain\Entity\User $user = null): array;
 
     /**
+     * Searches for events by keyword and optional filters.
+     * 
+     * @return \WebCalendar\Core\Domain\ValueObject\EventCollection
+     */
+    public function search(string $keyword, ?DateRange $range = null, ?\WebCalendar\Core\Domain\Entity\User $user = null): \WebCalendar\Core\Domain\ValueObject\EventCollection;
+
+    /**
      * Persists an event.
      */
     public function save(Event $event): void;

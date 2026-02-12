@@ -37,4 +37,17 @@ final class EventRepositoryInterfaceTest extends TestCase
 
         $this->assertNull($repository->findByUid($uid));
     }
+
+    public function testCanMockSearch(): void
+    {
+        $repository = $this->createMock(EventRepositoryInterface::class);
+        $events = new \WebCalendar\Core\Domain\ValueObject\EventCollection([]);
+        
+        $repository->expects($this->once())
+            ->method('search')
+            ->with('keyword')
+            ->willReturn($events);
+
+        $this->assertSame($events, $repository->search('keyword'));
+    }
 }

@@ -554,62 +554,59 @@ so that quality is maintained.
 - .github/workflows/ci.yml
 
 ### Epic 10: Concrete Persistence (Infrastructure)
-**Status: IN_PROGRESS**
+**Status: DONE**
 **Goal:** Implement database-backed repositories using PDO.
 
 #### Task 10.1: SQLite Repository Implementation
-
 **Status: DONE**  
-
-
 **Task:** Implement PdoUserRepository and PdoEventRepository for SQLite.
 
-**As a developer,**
-I want concrete repository implementations for SQLite
-so that I can run integration tests and use the library in local environments.
-
-**One-sentence goal:** Implement PDO-based repositories for User and Event entities targeting SQLite.
-
-**Key files to change:**
-- src/Infrastructure/Persistence/PdoUserRepository.php
-- src/Infrastructure/Persistence/PdoEventRepository.php
-- tests/Integration/Persistence/PdoUserRepositoryTest.php
-- tests/Integration/Persistence/PdoEventRepositoryTest.php
-
 #### Task 10.2: MySQL & PostgreSQL Repository Support
-
 **Status: DONE**  
-
-
 **Task:** Ensure PDO repositories work with MySQL and PostgreSQL.
 
 ### Epic 11: Public Scheduling & Notifications
-
 **Status: DONE**  
-
-
 **Goal:** Implement booking service and notification system.
 
-#### Task 11.1: Public Scheduling (Booking)
-**Status: DONE**  
-**Task:** Implement BookingService for availability calculation.
-
-#### Task 11.2: Notification Service
+### Epic 12: Search & Activity Log
 
 **Status: DONE**  
 
 
-**Task:** Implement NotificationService for email and webhook dispatch.
+**Goal:** Implement event searching and audit trail.
+
+#### Task 12.1: Search Service
+**Status: TODO**
+**Task:** Implement SearchService for event and task searching.
 
 **As a user,**
-I want to receive notifications for event reminders and invitations
-so that I don't miss important meetings.
+I want to search for events by keyword and date range
+so that I can quickly find specific appointments.
 
-**One-sentence goal:** Implement NotificationService to handle email and webhook notifications.
+**One-sentence goal:** Implement SearchService to provide keyword and filtered search capabilities.
 
 **Key files to change:**
-- src/Application/Service/NotificationService.php
-- tests/Unit/Application/Service/NotificationServiceTest.php
+- src/Application/Service/SearchService.php
+- tests/Unit/Application/Service/SearchServiceTest.php
+
+#### Task 12.2: Activity Log Service
+
+**Status: DONE**  
+
+
+**Task:** Implement ActivityLogService for audit trails.
+
+**As an admin,**
+I want to track all changes to calendar entries
+so that I can audit system usage and troubleshoot issues.
+
+**One-sentence goal:** Implement ActivityLogService to record and retrieve system activities.
+
+**Key files to change:**
+- src/Application/Service/ActivityLogService.php
+- src/Domain/Entity/ActivityLogEntry.php
+- src/Domain/Repository/ActivityLogRepositoryInterface.php
 
 ## Release Plan
 

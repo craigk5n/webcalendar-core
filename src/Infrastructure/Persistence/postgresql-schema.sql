@@ -185,15 +185,14 @@ CREATE TABLE webcal_config (
 INSERT INTO webcal_config (cal_setting, cal_value) VALUES ('WEBCALENDAR_PROGRAM_VERSION', 'v4.0.0');
 
 CREATE TABLE webcal_entry_log (
-  cal_log_id INT NOT NULL,
+  cal_log_id SERIAL PRIMARY KEY,
   cal_entry_id INT NOT NULL,
   cal_login VARCHAR(25) NOT NULL,
   cal_user_cal VARCHAR(25) NULL,
   cal_type CHAR(1) NOT NULL,
   cal_date INT NOT NULL,
   cal_time INT NOT NULL,
-  cal_text TEXT,
-  PRIMARY KEY ( cal_log_id )
+  cal_text TEXT
 );
 
 CREATE TABLE webcal_entry_categories (

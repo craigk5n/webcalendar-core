@@ -50,6 +50,35 @@ final readonly class PdoEventRepository implements EventRepositoryInterface
         return $this->mapRowToEvent($row);
     }
 
+    public function search(string $keyword, ?DateRange $range = null, ?User $user = null): \WebCalendar\Core\Domain\ValueObject\EventCollection
+    {
+        $sql = "SELECT * FROM webcal_entry WHERE (cal_name LIKE :keyword OR cal_description LIKE :keyword)";
+        $params = ['keyword' => '%' . $keyword . '%'];
+
+        if ($range !== null) {
+            $sql .= ' AND cal_date BETWEEN :start AND :end';
+            $params['start'] = (int)$range->startDate()->format('Ymd');
+            $params['end'] = (int)$range->endDate()->format('Ymd');
+        }
+
+        if ($user !== null) {
+            $sql .= ' AND cal_create_by = :login';
+            $params['login'] = $user->login();
+        }
+
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute($params);
+        $events = [];
+
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            if (is_array($row)) {
+                $events[] = $this->mapRowToEvent($row);
+            }
+        }
+
+        return new \WebCalendar\Core\Domain\ValueObject\EventCollection($events);
+    }
+
     /**
      * @return Event[]
      */

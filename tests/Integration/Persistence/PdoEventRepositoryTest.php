@@ -95,4 +95,22 @@ final class PdoEventRepositoryTest extends RepositoryTestCase
         $this->assertCount(1, $events);
         $this->assertSame('E1', $events[0]->name());
     }
+
+    public function testSearch(): void
+    {
+        $date = new \DateTimeImmutable('2026-02-11 10:00:00');
+        $event1 = new Event(new EventId(0), 'u1', 'Meeting with Bob', 'Discussion', '', $date, 30, 'admin', EventType::EVENT, AccessLevel::PUBLIC);
+        $event2 = new Event(new EventId(0), 'u2', 'Lunch', 'Eat food', '', $date, 60, 'admin', EventType::EVENT, AccessLevel::PUBLIC);
+
+        $this->repository->save($event1);
+        $this->repository->save($event2);
+
+        $results = $this->repository->search('Meeting');
+        $this->assertCount(1, $results);
+        $this->assertSame('Meeting with Bob', $results->all()[0]->name());
+
+        $results = $this->repository->search('food');
+        $this->assertCount(1, $results);
+        $this->assertSame('Lunch', $results->all()[0]->name());
+    }
 }
