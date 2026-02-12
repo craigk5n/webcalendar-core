@@ -9,6 +9,9 @@ use WebCalendar\Core\Domain\ValueObject\EventId;
 use WebCalendar\Core\Domain\ValueObject\EventType;
 use WebCalendar\Core\Domain\ValueObject\AccessLevel;
 use WebCalendar\Core\Domain\ValueObject\DateRange;
+use WebCalendar\Core\Domain\ValueObject\Recurrence;
+use WebCalendar\Core\Domain\ValueObject\RecurrenceRule;
+use WebCalendar\Core\Domain\ValueObject\ExDate;
 use WebCalendar\Core\Infrastructure\Persistence\PdoEventRepository;
 use WebCalendar\Core\Tests\Integration\RepositoryTestCase;
 
@@ -112,5 +115,37 @@ final class PdoEventRepositoryTest extends RepositoryTestCase
         $results = $this->repository->search('food');
         $this->assertCount(1, $results);
         $this->assertSame('Lunch', $results->all()[0]->name());
+    }
+
+    public function testRecurrencePersistence(): void
+    {
+        $start = new \DateTimeImmutable('2026-02-11 10:00:00');
+        $recurrence = new Recurrence(
+            rule: new RecurrenceRule('FREQ=WEEKLY;BYDAY=MO,WE'),
+            exDate: new ExDate([new \DateTimeImmutable('2026-02-16')])
+        );
+
+        $event = new Event(
+            id: new EventId(0),
+            uid: 'rec-1',
+            name: 'Recurring Event',
+            description: '',
+            location: '',
+            start: $start,
+            duration: 60,
+            createdBy: 'admin',
+            type: EventType::EVENT,
+            access: AccessLevel::PUBLIC,
+            recurrence: $recurrence
+        );
+
+        $this->repository->save($event);
+
+        $foundEvent = $this->repository->findByUid('rec-1');
+        $this->assertNotNull($foundEvent);
+        $this->assertTrue($foundEvent->recurrence()->isRepeating());
+        $this->assertSame('FREQ=WEEKLY;BYDAY=MO,WE', $foundEvent->recurrence()->rule()?->toString());
+        $this->assertCount(1, $foundEvent->recurrence()->exDate()->dates());
+        $this->assertSame('2026-02-16', $foundEvent->recurrence()->exDate()->dates()[0]->format('Y-m-d'));
     }
 }

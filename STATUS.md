@@ -565,6 +565,20 @@ so that quality is maintained.
 **Status: DONE**  
 **Task:** Ensure PDO repositories work with MySQL and PostgreSQL.
 
+#### Task 10.3: Recurrence Persistence
+**Status: DONE**  
+**Task:** Implement full RRULE and exception persistence in PdoEventRepository.
+
+**As a developer,**
+I want recurring event rules and exceptions to be saved to the database
+so that I can reload and expand them correctly later.
+
+**One-sentence goal:** Implement bidirectional mapping between Recurrence value objects and legacy database tables.
+
+**Key files to change:**
+- src/Infrastructure/Persistence/PdoEventRepository.php
+- tests/Integration/Persistence/PdoEventRepositoryTest.php
+
 ### Epic 11: Public Scheduling & Notifications
 **Status: DONE**  
 **Goal:** Implement booking service and notification system.
@@ -682,6 +696,47 @@ so that I can share relevant information with participants.
 - src/Application/Service/BlobService.php
 - src/Domain/Entity/Blob.php
 - src/Domain/Repository/BlobRepositoryInterface.php
+
+### Epic 17: System Configuration & Admin Settings
+**Status: DONE**
+**Goal:** Implement system-wide settings management.
+
+#### Task 17.1: Config Service
+**Status: DONE**  
+**Task:** Implement ConfigService for reading and writing system settings.
+
+### Epic 18: REST API & MCP Server
+
+**Status: DONE**  
+
+
+**Goal:** Implement API DTOs and MCP Server for AI integration.
+
+#### Task 18.1: API DTOs
+**Status: DONE**  
+**Task:** Implement Request/Response DTOs for the REST API.
+
+**As a developer,**
+I want well-defined data structures for the API
+so that I can ensure consistent communication with frontends.
+
+**One-sentence goal:** Implement DTO classes for all core entities.
+
+**Key files to change:**
+- src/Application/DTO/
+
+#### Task 18.2: MCP Server implementation
+
+**Status: DONE**  
+
+
+**Task:** Implement Model Context Protocol tools.
+
+**As an AI assistant,**
+I want to interact with the calendar via MCP
+so that I can help users manage their schedules.
+
+**One-sentence goal:** Implement MCP tool handlers for listing, searching, and adding events.
 
 ## Release Plan
 

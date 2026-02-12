@@ -13,6 +13,9 @@ use WebCalendar\Core\Domain\ValueObject\DateRange;
 use WebCalendar\Core\Domain\ValueObject\EventType;
 use WebCalendar\Core\Domain\ValueObject\AccessLevel;
 use WebCalendar\Core\Domain\ValueObject\Recurrence;
+use WebCalendar\Core\Domain\ValueObject\RecurrenceRule;
+use WebCalendar\Core\Domain\ValueObject\ExDate;
+use WebCalendar\Core\Domain\ValueObject\RDate;
 
 /**
  * PDO-based implementation of EventRepositoryInterface.
@@ -235,10 +238,239 @@ final readonly class PdoEventRepository implements EventRepositoryInterface
 
     private function loadRecurrence(int $id): Recurrence
     {
-        return new Recurrence();
+        $stmt = $this->pdo->prepare('SELECT * FROM webcal_entry_repeats WHERE cal_id = :id');
+        $stmt->execute(['id' => $id]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        $rule = null;
+        if (is_array($row)) {
+            $rule = $this->mapRowToRecurrenceRule($row);
+        }
+
+        [$exDate, $rDate] = $this->loadExceptions($id);
+
+        return new Recurrence($rule, $exDate, $rDate);
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     */
+    private function mapRowToRecurrenceRule(array $row): RecurrenceRule
+    {
+        $parts = [];
+        
+        $type = is_string($row['cal_type'] ?? null) ? $row['cal_type'] : 'daily';
+        $parts['FREQ'] = match ($type) {
+            'daily' => 'DAILY',
+            'weekly' => 'WEEKLY',
+            'monthlyByDate', 'monthlyByDay', 'monthlyBySetPos' => 'MONTHLY',
+            'yearly' => 'YEARLY',
+            default => 'DAILY'
+        };
+
+        $frequency = is_numeric($row['cal_frequency'] ?? null) ? (int)$row['cal_frequency'] : 1;
+        if ($frequency > 1) {
+            $parts['INTERVAL'] = $frequency;
+        }
+
+        $count = is_numeric($row['cal_count'] ?? null) ? (int)$row['cal_count'] : 0;
+        if ($count > 0) {
+            $parts['COUNT'] = $count;
+        }
+
+        $end = is_scalar($row['cal_end'] ?? null) ? (string)$row['cal_end'] : '';
+        if (!empty($end)) {
+            $endTime = is_numeric($row['cal_endtime'] ?? null) ? (int)$row['cal_endtime'] : 0;
+            $time = str_pad((string)$endTime, 6, '0', STR_PAD_LEFT);
+            $parts['UNTIL'] = $end . 'T' . $time . 'Z';
+        }
+
+        $byDay = is_string($row['cal_byday'] ?? null) ? $row['cal_byday'] : '';
+        if (!empty($byDay)) {
+            $parts['BYDAY'] = $byDay;
+        }
+
+        $byMonth = is_string($row['cal_bymonth'] ?? null) ? $row['cal_bymonth'] : '';
+        if (!empty($byMonth)) {
+            $parts['BYMONTH'] = $byMonth;
+        }
+
+        $byMonthDay = is_string($row['cal_bymonthday'] ?? null) ? $row['cal_bymonthday'] : '';
+        if (!empty($byMonthDay)) {
+            $parts['BYMONTHDAY'] = $byMonthDay;
+        }
+
+        $bySetPos = is_string($row['cal_bysetpos'] ?? null) ? $row['cal_bysetpos'] : '';
+        if (!empty($bySetPos)) {
+            $parts['BYSETPOS'] = $bySetPos;
+        }
+
+        $wkst = is_string($row['cal_wkst'] ?? null) ? $row['cal_wkst'] : '';
+        if (!empty($wkst)) {
+            $parts['WKST'] = $wkst;
+        }
+
+        return RecurrenceRule::fromParts($parts);
+    }
+
+    /**
+     * @return array{\WebCalendar\Core\Domain\ValueObject\ExDate, \WebCalendar\Core\Domain\ValueObject\RDate}
+     */
+    private function loadExceptions(int $id): array
+    {
+        $stmt = $this->pdo->prepare('SELECT cal_date, cal_exdate FROM webcal_entry_repeats_not WHERE cal_id = :id');
+        $stmt->execute(['id' => $id]);
+        
+        $exDates = [];
+        $rDates = [];
+
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            if (is_array($row)) {
+                $dateStr = (string)$row['cal_date'];
+                $date = \DateTimeImmutable::createFromFormat('Ymd', $dateStr);
+                if ($date !== false) {
+                    if ((int)$row['cal_exdate'] === 1) {
+                        $exDates[] = $date;
+                    } else {
+                        $rDates[] = $date;
+                    }
+                }
+            }
+        }
+
+        return [
+            new \WebCalendar\Core\Domain\ValueObject\ExDate($exDates),
+            new \WebCalendar\Core\Domain\ValueObject\RDate($rDates)
+        ];
     }
 
     private function saveRecurrence(int $id, Recurrence $recurrence): void
     {
+        // 1. Delete existing rules and exceptions
+        $this->pdo->prepare('DELETE FROM webcal_entry_repeats WHERE cal_id = :id')
+            ->execute(['id' => $id]);
+        $this->pdo->prepare('DELETE FROM webcal_entry_repeats_not WHERE cal_id = :id')
+            ->execute(['id' => $id]);
+
+        $rule = $recurrence->rule();
+        if ($rule === null) {
+            // Check if RDATEs exist (PRD says RDATE additions include extra dates)
+            $this->saveExceptions($id, $recurrence);
+            return;
+        }
+
+        $rrule = $rule->getRRule();
+        
+        // 2. Map RRULE to legacy columns
+        $data = [
+            'id' => $id,
+            'type' => $this->mapFreqToType($rrule->getFreq()),
+            'end' => $rrule->getUntil()?->format('Ymd'),
+            'endtime' => $rrule->getUntil()?->format('His'),
+            'frequency' => $rrule->getInterval(),
+            'count' => $rrule->getCount(),
+            'wkst' => $rrule->getWkst(),
+            'bymonth' => $this->implodeOrNull($rrule->getByMonth()),
+            'bymonthday' => $this->implodeOrNull($rrule->getByMonthDay()),
+            'byyearday' => $this->implodeOrNull($rrule->getByYearDay()),
+            'byweekno' => $this->implodeOrNull($rrule->getByWeekNo()),
+            'bysetpos' => $this->implodeOrNull($rrule->getBySetPos()),
+            'byhour' => $this->implodeOrNull($rrule->getByHour()),
+            'byminute' => $this->implodeOrNull($rrule->getByMinute()),
+            'bysecond' => $this->implodeOrNull($rrule->getBySecond()),
+            'days' => $this->mapByDayToDaysBitmask($rrule->getByDay(), $rrule->getFreq()),
+            'byday' => $this->mapByDayToLegacyString($rrule->getByDay())
+        ];
+
+        $sql = 'INSERT INTO webcal_entry_repeats (
+                    cal_id, cal_type, cal_end, cal_endtime, cal_frequency, cal_count, 
+                    cal_wkst, cal_bymonth, cal_bymonthday, cal_byyearday, cal_byweekno, 
+                    cal_bysetpos, cal_byhour, cal_byminute, cal_bysecond, cal_days, cal_byday
+                ) VALUES (
+                    :id, :type, :end, :endtime, :frequency, :count, 
+                    :wkst, :bymonth, :bymonthday, :byyearday, :byweekno, 
+                    :bysetpos, :byhour, :byminute, :bysecond, :days, :byday
+                )';
+        
+        $this->pdo->prepare($sql)->execute($data);
+
+        // 3. Save Exceptions (EXDATE/RDATE)
+        $this->saveExceptions($id, $recurrence);
+    }
+
+    private function saveExceptions(int $id, Recurrence $recurrence): void
+    {
+        $stmt = $this->pdo->prepare('INSERT INTO webcal_entry_repeats_not (cal_id, cal_date, cal_exdate) VALUES (:id, :date, :exdate)');
+        
+        foreach ($recurrence->exDate()->dates() as $date) {
+            $stmt->execute(['id' => $id, 'date' => (int)$date->format('Ymd'), 'exdate' => 1]);
+        }
+
+        foreach ($recurrence->rDate()->dates() as $date) {
+            $stmt->execute(['id' => $id, 'date' => (int)$date->format('Ymd'), 'exdate' => 0]);
+        }
+    }
+
+    private function mapFreqToType(string $freq): string
+    {
+        return match ($freq) {
+            'DAILY' => 'daily',
+            'WEEKLY' => 'weekly',
+            'MONTHLY' => 'monthlyByDate', // Simplified, legacy has several monthly types
+            'YEARLY' => 'yearly',
+            default => 'daily'
+        };
+    }
+
+    /**
+     * @param array<int> $arr
+     */
+    private function implodeOrNull(array $arr): ?string
+    {
+        return empty($arr) ? null : implode(',', $arr);
+    }
+
+    /**
+     * @param array<array{day: string, ordinal: int|null}> $byDay
+     */
+    private function mapByDayToDaysBitmask(array $byDay, string $freq): ?string
+    {
+        if ($freq !== 'WEEKLY') {
+            return null;
+        }
+
+        $days = ['SU' => 0, 'MO' => 1, 'TU' => 2, 'WE' => 3, 'TH' => 4, 'FR' => 5, 'SA' => 6];
+        $bitmask = str_repeat('n', 7);
+        
+        foreach ($byDay as $dayInfo) {
+            $day = $dayInfo['day'];
+            if (isset($days[$day])) {
+                $bitmask[$days[$day]] = 'y';
+            }
+        }
+
+        return $bitmask;
+    }
+
+    /**
+     * @param array<array{day: string, ordinal: int|null}> $byDay
+     */
+    private function mapByDayToLegacyString(array $byDay): ?string
+    {
+        if (empty($byDay)) {
+            return null;
+        }
+
+        $parts = [];
+        foreach ($byDay as $dayInfo) {
+            $dayStr = '';
+            if ($dayInfo['ordinal'] !== null) {
+                $dayStr .= $dayInfo['ordinal'];
+            }
+            $dayStr .= $dayInfo['day'];
+            $parts[] = $dayStr;
+        }
+
+        return implode(',', $parts);
     }
 }
