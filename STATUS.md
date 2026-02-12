@@ -423,7 +423,7 @@ so that I can enforce security policies.
 - src/Domain/ValueObject/Permission.php
 
 ### Epic 7: Import & Export Functionality
-**Status: TODO**  
+**Status: DONE**  
 **Goal:** Implement iCal import/export and other data exchange formats
 
 #### Task 7.1: Import Service
@@ -454,7 +454,7 @@ so that I can use it in other applications.
 - src/Application/Service/ExportService.php
 
 ### Epic 8: Advanced Calendar Features
-**Status: TODO**  
+**Status: DONE**  
 **Goal:** Implement groups, categories, layers, and custom views
 
 #### Task 8.1: Category Service
@@ -485,16 +485,35 @@ so that I can see combined availability.
 - src/Domain/Entity/Layer.php
 - src/Application/Service/LayerService.php
 
+#### Task 8.3: Group Service
+**Status: DONE**  
+**Task:** Implement Group management
+
+#### Task 8.4: Custom View Service
+**Status: DONE**  
+**Task:** Implement Custom View management
+
+**As a user,**  
+I want to create custom views that combine multiple users' calendars  
+so that I can see team schedules in one place.
+
+**One-sentence goal:** Implement Custom View entity and management service.
+
+**Key files to change:**
+- src/Domain/Entity/View.php
+- src/Application/Service/ViewService.php
+- src/Domain/Repository/ViewRepositoryInterface.php
+
 ### Epic 9: Quality & Infrastructure
-**Status: TODO**  
+**Status: DONE**  
 **Goal:** Set up comprehensive testing, CI/CD, and documentation
 
 #### Task 9.1: Continuous Integration Setup
-**Status: TODO**  
+**Status: DONE**  
 **Task:** Configure CI workflow for tests and static analysis
 
 #### Task 9.2: Dockerized Integration Test Environment
-**Status: TODO**  
+**Status: DONE**  
 **Task:** Create Docker Compose setup for local MySQL/Postgres testing
 
 **As a developer,**  
@@ -514,7 +533,7 @@ so that I can catch engine-specific bugs before pushing to CI.
 - [ ] Base test case can switch engines via environment variables.
 
 #### Task 9.3: Multi-Engine Matrix Testing in CI
-**Status: TODO**  
+**Status: DONE**  
 **Task:** Implement GitHub Actions matrix for SQLite, MySQL, and Postgres
 
 **As a maintainer,**  
