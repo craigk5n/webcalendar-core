@@ -361,7 +361,7 @@ The core library provides services that return structured event data for calenda
 | `cal_id` | INT (PK) | Unique event ID |
 | `cal_group_id` | INT | Group ID (for exception events replacing a recurring instance) |
 | `cal_ext_for_id` | INT | If non-zero, this is an "extension" of another event (additions to repeating series) |
-| `cal_create_by` | VARCHAR(25) | Login of creator |
+| `cal_create_by` | VARCHAR(60) | Login of creator |
 | `cal_date` | INT | Start date as YYYYMMDD |
 | `cal_time` | INT | Start time as HHMMSS (-1 = untimed/all-day) |
 | `cal_mod_date` | INT | Last modified date YYYYMMDD |
@@ -401,7 +401,7 @@ The core library provides services that return structured event data for calenda
 | Column | Type | Description |
 |--------|------|-------------|
 | `cal_id` | INT | Event ID (FK) |
-| `cal_login` | VARCHAR(25) | User login |
+| `cal_login` | VARCHAR(60) | User login |
 | `cal_status` | CHAR(1) | **A**=Accepted, **C**=Completed, **D**=Deleted, **P**=In-Progress, **R**=Rejected, **W**=Waiting |
 | `cal_category` | INT | Category ID for this user's view |
 | `cal_percent` | INT | Percentage completion (tasks only) |
@@ -411,7 +411,7 @@ The core library provides services that return structured event data for calenda
 | Column | Type | Description |
 |--------|------|-------------|
 | `cal_id` | INT | Event ID (FK) |
-| `cal_fullname` | VARCHAR(50) | External participant name |
+| `cal_fullname` | VARCHAR(60) | External participant name |
 | `cal_email` | VARCHAR(75) | External participant email |
 
 ### 5.2 Key Functions (CURRENT)
@@ -478,12 +478,12 @@ POST   /api/v2/events/{id}/reject        # Reject pending event
 | `cal_endtime` | INT | End time HHMMSS |
 | `cal_frequency` | INT | Interval (every N occurrences, default 1) |
 | `cal_days` | VARCHAR(7) | For weekly: bitmask of days (e.g., `ynynyny` = MWF) |
-| `cal_bymonth` | VARCHAR(50) | Comma-separated month numbers |
+| `cal_bymonth` | VARCHAR(60) | Comma-separated month numbers |
 | `cal_bymonthday` | VARCHAR(100) | Comma-separated days of month |
 | `cal_byday` | VARCHAR(100) | Comma-separated weekday specs (MO, TU, 2MO = second Monday) |
-| `cal_bysetpos` | VARCHAR(50) | Position within month |
-| `cal_byweekno` | VARCHAR(50) | Week numbers |
-| `cal_byyearday` | VARCHAR(50) | Day of year |
+| `cal_bysetpos` | VARCHAR(60) | Position within month |
+| `cal_byweekno` | VARCHAR(60) | Week numbers |
+| `cal_byyearday` | VARCHAR(60) | Day of year |
 | `cal_wkst` | VARCHAR(2) | Week start day (default `MO`) |
 | `cal_count` | INT | Total number of occurrences |
 
@@ -491,9 +491,9 @@ POST   /api/v2/events/{id}/reject        # Reject pending event
 
 | Column | Type | RRULE Part | Rationale |
 |--------|------|------------|-----------|
-| `cal_byhour` | VARCHAR(50) DEFAULT NULL | BYHOUR | Hours filter (0-23). Supported by `php-icalendar-core` RRule. Rare but needed for sub-daily recurrence patterns. |
-| `cal_byminute` | VARCHAR(50) DEFAULT NULL | BYMINUTE | Minutes filter (0-59). Supported by `php-icalendar-core` RRule. |
-| `cal_bysecond` | VARCHAR(50) DEFAULT NULL | BYSECOND | Seconds filter (0-60). Supported by `php-icalendar-core` RRule. Extremely rare but needed for complete RRULE round-trip. |
+| `cal_byhour` | VARCHAR(60) DEFAULT NULL | BYHOUR | Hours filter (0-23). Supported by `php-icalendar-core` RRule. Rare but needed for sub-daily recurrence patterns. |
+| `cal_byminute` | VARCHAR(60) DEFAULT NULL | BYMINUTE | Minutes filter (0-59). Supported by `php-icalendar-core` RRule. |
+| `cal_bysecond` | VARCHAR(60) DEFAULT NULL | BYSECOND | Seconds filter (0-60). Supported by `php-icalendar-core` RRule. Extremely rare but needed for complete RRULE round-trip. |
 
 > **For AI Agents:** The `php-icalendar-core` `RRule` class supports all 14 RRULE parts. The current schema covers 11 of 14. After adding BYHOUR, BYMINUTE, and BYSECOND, the schema will have complete coverage. The `RecurrenceService` must convert between the column-based storage and the `RRule` value object bidirectionally.
 
@@ -614,14 +614,14 @@ POST   /api/v2/journals
 
 | Column | Type | Description |
 |--------|------|-------------|
-| `cal_login` | VARCHAR(25) PK | Unique login name |
+| `cal_login` | VARCHAR(60) PK | Unique login name |
 | `cal_passwd` | VARCHAR(255) | Hashed password (bcrypt; legacy MD5 auto-upgraded) |
-| `cal_lastname` | VARCHAR(25) | Last name |
-| `cal_firstname` | VARCHAR(25) | First name |
+| `cal_lastname` | VARCHAR(60) | Last name |
+| `cal_firstname` | VARCHAR(60) | First name |
 | `cal_is_admin` | CHAR(1) | `Y` = admin, `N` = regular user |
 | `cal_email` | VARCHAR(75) | Email address |
 | `cal_enabled` | CHAR(1) | `Y` = active, `N` = disabled |
-| `cal_telephone` | VARCHAR(50) | Phone number |
+| `cal_telephone` | VARCHAR(60) | Phone number |
 | `cal_address` | VARCHAR(75) | Address |
 | `cal_title` | VARCHAR(75) | Title/position |
 | `cal_birthday` | INT | Birthday YYYYMMDD |
@@ -691,8 +691,8 @@ public function getEventsForUser(User $currentUser, DateRange $range): array;
 
 | Column | Type | Description |
 |--------|------|-------------|
-| `cal_login` | VARCHAR(25) | User login (FK) |
-| `cal_setting` | VARCHAR(25) | Setting name |
+| `cal_login` | VARCHAR(60) | User login (FK) |
+| `cal_setting` | VARCHAR(60) | Setting name |
 | `cal_value` | VARCHAR(100) | Setting value |
 
 **Common Preference Keys:** `STARTVIEW`, `DATE_FORMAT`, `TIME_FORMAT`, `LANGUAGE`, `TIMEZONE`, `WEEK_START`, `WORK_DAY_START_HOUR`, `WORK_DAY_END_HOUR`, `DISPLAY_UNAPPROVED`, `PUBLISH_ENABLED`, `FREEBUSY_ENABLED`
@@ -722,7 +722,7 @@ public function getEventsForUser(User $currentUser, DateRange $range): array;
 
 | Column | Type | Description |
 |--------|------|-------------|
-| `cal_login` | VARCHAR(25) | User login |
+| `cal_login` | VARCHAR(60) | User login |
 | `cal_permissions` | VARCHAR(64) | Bitmask string: position = function ID, value = `Y`/`N` |
 
 **Function IDs:**
@@ -764,8 +764,8 @@ public function getEventsForUser(User $currentUser, DateRange $range): array;
 
 | Column | Type | Description |
 |--------|------|-------------|
-| `cal_login` | VARCHAR(25) | The user being granted access |
-| `cal_other_user` | VARCHAR(25) | The calendar owner |
+| `cal_login` | VARCHAR(60) | The user being granted access |
+| `cal_other_user` | VARCHAR(60) | The calendar owner |
 | `cal_can_view` | INT | Bitfield for view permissions (see 9.5 for bit values) |
 | `cal_can_edit` | INT | 1=can edit events on this calendar |
 | `cal_can_approve` | INT | 1=can approve events on this calendar |
@@ -838,8 +838,8 @@ PUT  /api/v2/booking/{user}/config       # Update booking config (owner only)
 | Column | Type | Description |
 |--------|------|-------------|
 | `cal_group_id` | INT (PK) | Group ID |
-| `cal_owner` | VARCHAR(25) | Group owner login |
-| `cal_name` | VARCHAR(50) | Group name |
+| `cal_owner` | VARCHAR(60) | Group owner login |
+| `cal_name` | VARCHAR(60) | Group name |
 | `cal_last_update` | INT | Last update timestamp YYYYMMDD |
 
 **CURRENT Table:** `webcal_group_user`
@@ -847,7 +847,7 @@ PUT  /api/v2/booking/{user}/config       # Update booking config (owner only)
 | Column | Type | Description |
 |--------|------|-------------|
 | `cal_group_id` | INT (FK) | Group ID |
-| `cal_login` | VARCHAR(25) | Member login |
+| `cal_login` | VARCHAR(60) | Member login |
 
 ### 11.2 Key Files (CURRENT)
 
@@ -892,7 +892,7 @@ DELETE /api/v2/groups/{id}/members/{login}
 | Column | Type | Description |
 |--------|------|-------------|
 | `cat_id` | INT (PK) | Category ID |
-| `cat_owner` | VARCHAR(25) | Owner login (NULL = global category, admin-created) |
+| `cat_owner` | VARCHAR(60) | Owner login (NULL = global category, admin-created) |
 | `cat_name` | VARCHAR(80) | Category name |
 | `cat_color` | VARCHAR(16) | Hex color code (e.g., `#FF0000`) |
 | `cat_status` | CHAR(1) | `A`=Active, `D`=Disabled |
@@ -906,7 +906,7 @@ DELETE /api/v2/groups/{id}/members/{login}
 | `cal_id` | INT (FK) | Event ID |
 | `cat_id` | INT (FK) | Category ID |
 | `cat_order` | INT | Display order |
-| `cat_owner` | VARCHAR(25) | User login (categories are per-user per-event) |
+| `cat_owner` | VARCHAR(60) | User login (categories are per-user per-event) |
 
 ### 12.2 Key Functions (CURRENT)
 
@@ -952,9 +952,9 @@ DELETE /api/v2/categories/{id}           # Delete category
 | Column | Type | Description |
 |--------|------|-------------|
 | `cal_layerid` | INT (PK) | Layer ID |
-| `cal_login` | VARCHAR(25) | User who owns this layer |
-| `cal_layeruser` | VARCHAR(25) | User whose calendar is being overlaid |
-| `cal_color` | VARCHAR(25) | Display color for this layer |
+| `cal_login` | VARCHAR(60) | User who owns this layer |
+| `cal_layeruser` | VARCHAR(60) | User whose calendar is being overlaid |
+| `cal_color` | VARCHAR(60) | Display color for this layer |
 | `cal_dups` | CHAR(1) | `Y`=show duplicates, `N`=hide duplicates |
 
 ### 13.2 Key Behaviors (CURRENT)
@@ -990,8 +990,8 @@ DELETE /api/v2/categories/{id}           # Delete category
 | Column | Type | Description |
 |--------|------|-------------|
 | `cal_view_id` | INT (PK) | View ID |
-| `cal_owner` | VARCHAR(25) | View creator login |
-| `cal_name` | VARCHAR(50) | View name |
+| `cal_owner` | VARCHAR(60) | View creator login |
+| `cal_name` | VARCHAR(60) | View name |
 | `cal_view_type` | CHAR(1) | **D**=Day, **W**=Week, **M**=Month |
 | `cal_is_global` | CHAR(1) | `Y`=visible to all, `N`=private |
 
@@ -1000,7 +1000,7 @@ DELETE /api/v2/categories/{id}           # Delete category
 | Column | Type | Description |
 |--------|------|-------------|
 | `cal_view_id` | INT (FK) | View ID |
-| `cal_login` | VARCHAR(25) | User to include in view. Special value `__all__` = all visible users. |
+| `cal_login` | VARCHAR(60) | User to include in view. Special value `__all__` = all visible users. |
 
 ### 14.2 Key Behaviors (CURRENT)
 
@@ -1036,11 +1036,11 @@ DELETE /api/v2/categories/{id}           # Delete category
 |--------|------|-------------|
 | `cal_blob_id` | INT (PK) | Blob ID |
 | `cal_id` | INT (FK) | Event ID |
-| `cal_login` | VARCHAR(25) | Creator login |
+| `cal_login` | VARCHAR(60) | Creator login |
 | `cal_name` | VARCHAR(30) | Filename (attachments) or empty (comments) |
 | `cal_description` | VARCHAR(128) | Description or comment subject line |
 | `cal_size` | INT | File size in bytes |
-| `cal_mime_type` | VARCHAR(50) | MIME type (e.g., `application/pdf`) |
+| `cal_mime_type` | VARCHAR(60) | MIME type (e.g., `application/pdf`) |
 | `cal_type` | CHAR(1) | **A**=Attachment, **C**=Comment |
 | `cal_mod_date` | INT | Upload/creation date YYYYMMDD |
 | `cal_mod_time` | INT | Upload/creation time HHMMSS |
@@ -1086,10 +1086,10 @@ DELETE /api/v2/categories/{id}           # Delete category
 | Column | Type | Description |
 |--------|------|-------------|
 | `cal_import_id` | INT (PK) | Import batch ID |
-| `cal_name` | VARCHAR(50) | Import name/description |
+| `cal_name` | VARCHAR(60) | Import name/description |
 | `cal_date` | INT | Import date YYYYMMDD |
 | `cal_type` | VARCHAR(10) | Format: `ical`, `vcal`, `palm`, `outlookcsv` |
-| `cal_login` | VARCHAR(25) | Importing user |
+| `cal_login` | VARCHAR(60) | Importing user |
 | `cal_check_date` | INT | Last remote check date (for remote calendars) |
 | `cal_md5` | VARCHAR(32) | MD5 hash of remote content (change detection) |
 
@@ -1204,11 +1204,11 @@ GET /api/v2/search?q={keyword}&start=YYYYMMDD&end=YYYYMMDD&category={id}&user={l
 | Column | Type | Description |
 |--------|------|-------------|
 | `cal_report_id` | INT (PK) | Report ID |
-| `cal_login` | VARCHAR(25) | Report owner |
+| `cal_login` | VARCHAR(60) | Report owner |
 | `cal_report_type` | VARCHAR(20) | Time range type |
-| `cal_report_name` | VARCHAR(50) | Report name |
+| `cal_report_name` | VARCHAR(60) | Report name |
 | `cal_time_range` | INT | Time range selector |
-| `cal_user` | VARCHAR(25) | User to report on |
+| `cal_user` | VARCHAR(60) | User to report on |
 | `cal_allow_nav` | CHAR(1) | `Y`=allow next/previous navigation |
 | `cal_cat_id` | INT | Category filter (0 = all) |
 | `cal_include_empty` | CHAR(1) | `Y`=include empty dates |
@@ -1377,10 +1377,10 @@ GET /api/v2/feeds/rss/{user}.xml        # RSS feed
 
 | Column | Type | Description |
 |--------|------|-------------|
-| `cal_login` | VARCHAR(25) PK | Resource "login" identifier |
-| `cal_lastname` | VARCHAR(25) | Resource display name |
-| `cal_firstname` | VARCHAR(25) | Optional first name field |
-| `cal_admin` | VARCHAR(25) | Admin user login (who manages this resource) |
+| `cal_login` | VARCHAR(60) PK | Resource "login" identifier |
+| `cal_lastname` | VARCHAR(60) | Resource display name |
+| `cal_firstname` | VARCHAR(60) | Optional first name field |
+| `cal_admin` | VARCHAR(60) | Admin user login (who manages this resource) |
 | `cal_is_public` | CHAR(1) | `Y`=publicly visible, `N`=restricted |
 | `cal_url` | VARCHAR(255) | Remote iCal URL (for remote calendar feeds) |
 
@@ -1424,8 +1424,8 @@ GET /api/v2/feeds/rss/{user}.xml        # RSS feed
 
 | Column | Type | Description |
 |--------|------|-------------|
-| `cal_boss` | VARCHAR(25) | Boss user login |
-| `cal_assistant` | VARCHAR(25) | Assistant user login |
+| `cal_boss` | VARCHAR(60) | Boss user login |
+| `cal_assistant` | VARCHAR(60) | Assistant user login |
 
 ### 22.2 Key Behaviors (CURRENT)
 
@@ -1466,8 +1466,8 @@ GET /api/v2/feeds/rss/{user}.xml        # RSS feed
 |--------|------|-------------|
 | `cal_log_id` | INT (PK) | Log entry ID |
 | `cal_entry_id` | INT | Event ID (0 for system-level events) |
-| `cal_login` | VARCHAR(25) | User who performed the action |
-| `cal_user_cal` | VARCHAR(25) | Calendar owner affected |
+| `cal_login` | VARCHAR(60) | User who performed the action |
+| `cal_user_cal` | VARCHAR(60) | Calendar owner affected |
 | `cal_type` | CHAR(1) | Log type code (see below) |
 | `cal_date` | INT | Log date YYYYMMDD |
 | `cal_time` | INT | Log time HHMMSS |
@@ -1538,7 +1538,7 @@ The core library provides a `ConfigService` for reading and writing system setti
 
 | Column | Type | Description |
 |--------|------|-------------|
-| `cal_setting` | VARCHAR(50) PK | Setting name |
+| `cal_setting` | VARCHAR(60) PK | Setting name |
 | `cal_value` | VARCHAR(100) | Setting value |
 
 ### 24.3 Acceptance Criteria
@@ -2005,7 +2005,7 @@ See also: `docs/WebCalendar-Database.md` for additional schema documentation.
 | Column | Type | Description |
 |--------|------|-------------|
 | `cal_id` | INT (FK) | Event ID |
-| `cal_name` | VARCHAR(25) | Field name |
+| `cal_name` | VARCHAR(60) | Field name |
 | `cal_type` | INT | Field type (URL, Date, etc.) |
 | `cal_date` | INT | Date value YYYYMMDD |
 | `cal_remind` | INT | Reminder flag |
@@ -2025,7 +2025,7 @@ See also: `docs/WebCalendar-Database.md` for additional schema documentation.
 
 | Column | Type | Description |
 |--------|------|-------------|
-| `cal_login` | VARCHAR(25) | User login |
+| `cal_login` | VARCHAR(60) | User login |
 | `cal_type` | CHAR(1) | **H**=Header, **T**=Trailer, **S**=Stylesheet |
 | `cal_template_text` | TEXT | Custom HTML/CSS content |
 
@@ -2040,8 +2040,8 @@ Allows per-user customization of page header, footer, and CSS. The core library 
 | Column | Type | Description |
 |--------|------|-------------|
 | `tzid` | VARCHAR(100) PK | Olson timezone ID (e.g., `America/New_York`) |
-| `dtstart` | VARCHAR(25) | DST transition start |
-| `dtend` | VARCHAR(25) | DST transition end |
+| `dtstart` | VARCHAR(60) | DST transition start |
+| `dtend` | VARCHAR(60) | DST transition end |
 | `vtimezone` | TEXT | Full VTIMEZONE component text |
 
 **Key Functions:**
@@ -2193,9 +2193,9 @@ ALTER TABLE webcal_entry ADD COLUMN cal_created_time INT DEFAULT NULL;
 CREATE INDEX idx_webcal_entry_uid ON webcal_entry(cal_uid);
 
 -- webcal_entry_repeats: Complete RRULE support
-ALTER TABLE webcal_entry_repeats ADD COLUMN cal_byhour VARCHAR(50) DEFAULT NULL;
-ALTER TABLE webcal_entry_repeats ADD COLUMN cal_byminute VARCHAR(50) DEFAULT NULL;
-ALTER TABLE webcal_entry_repeats ADD COLUMN cal_bysecond VARCHAR(50) DEFAULT NULL;
+ALTER TABLE webcal_entry_repeats ADD COLUMN cal_byhour VARCHAR(60) DEFAULT NULL;
+ALTER TABLE webcal_entry_repeats ADD COLUMN cal_byminute VARCHAR(60) DEFAULT NULL;
+ALTER TABLE webcal_entry_repeats ADD COLUMN cal_bysecond VARCHAR(60) DEFAULT NULL;
 
 -- webcal_reminders: Complete VALARM support
 ALTER TABLE webcal_reminders ADD COLUMN cal_description TEXT DEFAULT NULL;
@@ -2225,9 +2225,9 @@ ALTER TABLE webcal_entry ADD COLUMN cal_created INT DEFAULT NULL;
 ALTER TABLE webcal_entry ADD COLUMN cal_created_time INT DEFAULT NULL;
 CREATE INDEX idx_webcal_entry_uid ON webcal_entry(cal_uid);
 
-ALTER TABLE webcal_entry_repeats ADD COLUMN cal_byhour VARCHAR(50) DEFAULT NULL;
-ALTER TABLE webcal_entry_repeats ADD COLUMN cal_byminute VARCHAR(50) DEFAULT NULL;
-ALTER TABLE webcal_entry_repeats ADD COLUMN cal_bysecond VARCHAR(50) DEFAULT NULL;
+ALTER TABLE webcal_entry_repeats ADD COLUMN cal_byhour VARCHAR(60) DEFAULT NULL;
+ALTER TABLE webcal_entry_repeats ADD COLUMN cal_byminute VARCHAR(60) DEFAULT NULL;
+ALTER TABLE webcal_entry_repeats ADD COLUMN cal_bysecond VARCHAR(60) DEFAULT NULL;
 
 ALTER TABLE webcal_reminders ADD COLUMN cal_description TEXT DEFAULT NULL;
 ALTER TABLE webcal_reminders ADD COLUMN cal_summary VARCHAR(255) DEFAULT NULL;
@@ -2255,9 +2255,9 @@ ALTER TABLE webcal_entry ADD COLUMN cal_created INT DEFAULT NULL;
 ALTER TABLE webcal_entry ADD COLUMN cal_created_time INT DEFAULT NULL;
 CREATE INDEX IF NOT EXISTS idx_webcal_entry_uid ON webcal_entry(cal_uid);
 
-ALTER TABLE webcal_entry_repeats ADD COLUMN cal_byhour VARCHAR(50) DEFAULT NULL;
-ALTER TABLE webcal_entry_repeats ADD COLUMN cal_byminute VARCHAR(50) DEFAULT NULL;
-ALTER TABLE webcal_entry_repeats ADD COLUMN cal_bysecond VARCHAR(50) DEFAULT NULL;
+ALTER TABLE webcal_entry_repeats ADD COLUMN cal_byhour VARCHAR(60) DEFAULT NULL;
+ALTER TABLE webcal_entry_repeats ADD COLUMN cal_byminute VARCHAR(60) DEFAULT NULL;
+ALTER TABLE webcal_entry_repeats ADD COLUMN cal_bysecond VARCHAR(60) DEFAULT NULL;
 
 ALTER TABLE webcal_reminders ADD COLUMN cal_description TEXT DEFAULT NULL;
 ALTER TABLE webcal_reminders ADD COLUMN cal_summary VARCHAR(255) DEFAULT NULL;
