@@ -15,13 +15,14 @@ use WebCalendar\Core\Domain\ValueObject\BlobType;
 final readonly class PdoBlobRepository implements BlobRepositoryInterface
 {
     public function __construct(
-        private PDO $pdo
+        private PDO $pdo,
+        private string $tablePrefix = '',
     ) {
     }
 
     public function findById(int $id): ?Blob
     {
-        $stmt = $this->pdo->prepare('SELECT * FROM webcal_blob WHERE cal_blob_id = :id');
+        $stmt = $this->pdo->prepare("SELECT * FROM {$this->tablePrefix}webcal_blob WHERE cal_blob_id = :id");
         $stmt->execute(['id' => $id]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -37,7 +38,7 @@ final readonly class PdoBlobRepository implements BlobRepositoryInterface
      */
     public function findByEvent(int $eventId, ?BlobType $type = null): array
     {
-        $sql = 'SELECT * FROM webcal_blob WHERE cal_id = :event_id';
+        $sql = "SELECT * FROM {$this->tablePrefix}webcal_blob WHERE cal_id = :event_id";
         $params = ['event_id' => $eventId];
 
         if ($type !== null) {
@@ -74,27 +75,27 @@ final readonly class PdoBlobRepository implements BlobRepositoryInterface
             'blob' => $blob->content()
         ];
 
-        $stmt = $this->pdo->prepare('SELECT 1 FROM webcal_blob WHERE cal_blob_id = :id');
+        $stmt = $this->pdo->prepare("SELECT 1 FROM {$this->tablePrefix}webcal_blob WHERE cal_blob_id = :id");
         $stmt->execute(['id' => $blob->id()]);
-        
+
         if ($stmt->fetch() && $blob->id() !== 0) {
-            $sql = 'UPDATE webcal_blob SET 
-                    cal_id = :event_id, 
-                    cal_login = :login, 
-                    cal_name = :name, 
-                    cal_description = :description, 
-                    cal_size = :size, 
-                    cal_mime_type = :mime_type, 
-                    cal_type = :type, 
-                    cal_mod_date = :date, 
-                    cal_mod_time = :time, 
-                    cal_blob = :blob 
-                    WHERE cal_blob_id = :id';
+            $sql = "UPDATE {$this->tablePrefix}webcal_blob SET
+                    cal_id = :event_id,
+                    cal_login = :login,
+                    cal_name = :name,
+                    cal_description = :description,
+                    cal_size = :size,
+                    cal_mime_type = :mime_type,
+                    cal_type = :type,
+                    cal_mod_date = :date,
+                    cal_mod_time = :time,
+                    cal_blob = :blob
+                    WHERE cal_blob_id = :id";
         } else {
             // Check for AUTOINCREMENT/SERIAL or manually get next ID?
             // PRD says cal_blob_id is PK.
-            $sql = 'INSERT INTO webcal_blob (cal_id, cal_login, cal_name, cal_description, cal_size, cal_mime_type, cal_type, cal_mod_date, cal_mod_time, cal_blob)
-                    VALUES (:event_id, :login, :name, :description, :size, :mime_type, :type, :date, :time, :blob)';
+            $sql = "INSERT INTO {$this->tablePrefix}webcal_blob (cal_id, cal_login, cal_name, cal_description, cal_size, cal_mime_type, cal_type, cal_mod_date, cal_mod_time, cal_blob)
+                    VALUES (:event_id, :login, :name, :description, :size, :mime_type, :type, :date, :time, :blob)";
             unset($data['id']);
         }
 
@@ -103,7 +104,7 @@ final readonly class PdoBlobRepository implements BlobRepositoryInterface
 
     public function delete(int $id): void
     {
-        $stmt = $this->pdo->prepare('DELETE FROM webcal_blob WHERE cal_blob_id = :id');
+        $stmt = $this->pdo->prepare("DELETE FROM {$this->tablePrefix}webcal_blob WHERE cal_blob_id = :id");
         $stmt->execute(['id' => $id]);
     }
 

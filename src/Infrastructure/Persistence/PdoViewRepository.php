@@ -15,13 +15,14 @@ use WebCalendar\Core\Domain\ValueObject\ViewType;
 final readonly class PdoViewRepository implements ViewRepositoryInterface
 {
     public function __construct(
-        private PDO $pdo
+        private PDO $pdo,
+        private string $tablePrefix = '',
     ) {
     }
 
     public function findById(int $id): ?View
     {
-        $stmt = $this->pdo->prepare('SELECT * FROM webcal_view WHERE cal_view_id = :id');
+        $stmt = $this->pdo->prepare("SELECT * FROM {$this->tablePrefix}webcal_view WHERE cal_view_id = :id");
         $stmt->execute(['id' => $id]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -37,7 +38,7 @@ final readonly class PdoViewRepository implements ViewRepositoryInterface
      */
     public function findByOwner(string $owner): array
     {
-        $stmt = $this->pdo->prepare('SELECT * FROM webcal_view WHERE cal_owner = :owner');
+        $stmt = $this->pdo->prepare("SELECT * FROM {$this->tablePrefix}webcal_view WHERE cal_owner = :owner");
         $stmt->execute(['owner' => $owner]);
         $views = [];
 
@@ -55,7 +56,7 @@ final readonly class PdoViewRepository implements ViewRepositoryInterface
      */
     public function findAllGlobal(): array
     {
-        $stmt = $this->pdo->query("SELECT * FROM webcal_view WHERE cal_is_global = 'Y'");
+        $stmt = $this->pdo->query("SELECT * FROM {$this->tablePrefix}webcal_view WHERE cal_is_global = 'Y'");
         $views = [];
 
         if ($stmt) {
@@ -79,19 +80,19 @@ final readonly class PdoViewRepository implements ViewRepositoryInterface
             'global' => $view->isGlobal() ? 'Y' : 'N'
         ];
 
-        $stmt = $this->pdo->prepare('SELECT 1 FROM webcal_view WHERE cal_view_id = :id');
+        $stmt = $this->pdo->prepare("SELECT 1 FROM {$this->tablePrefix}webcal_view WHERE cal_view_id = :id");
         $stmt->execute(['id' => $view->id()]);
-        
+
         if ($stmt->fetch()) {
-            $sql = 'UPDATE webcal_view SET 
-                    cal_owner = :owner, 
-                    cal_name = :name, 
-                    cal_view_type = :type, 
-                    cal_is_global = :global 
-                    WHERE cal_view_id = :id';
+            $sql = "UPDATE {$this->tablePrefix}webcal_view SET
+                    cal_owner = :owner,
+                    cal_name = :name,
+                    cal_view_type = :type,
+                    cal_is_global = :global
+                    WHERE cal_view_id = :id";
         } else {
-            $sql = 'INSERT INTO webcal_view (cal_view_id, cal_owner, cal_name, cal_view_type, cal_is_global)
-                    VALUES (:id, :owner, :name, :type, :global)';
+            $sql = "INSERT INTO {$this->tablePrefix}webcal_view (cal_view_id, cal_owner, cal_name, cal_view_type, cal_is_global)
+                    VALUES (:id, :owner, :name, :type, :global)";
         }
 
         $this->pdo->prepare($sql)->execute($data);
@@ -99,9 +100,9 @@ final readonly class PdoViewRepository implements ViewRepositoryInterface
 
     public function delete(int $id): void
     {
-        $this->pdo->prepare('DELETE FROM webcal_view_user WHERE cal_view_id = :id')
+        $this->pdo->prepare("DELETE FROM {$this->tablePrefix}webcal_view_user WHERE cal_view_id = :id")
             ->execute(['id' => $id]);
-        $this->pdo->prepare('DELETE FROM webcal_view WHERE cal_view_id = :id')
+        $this->pdo->prepare("DELETE FROM {$this->tablePrefix}webcal_view WHERE cal_view_id = :id")
             ->execute(['id' => $id]);
     }
 
@@ -110,7 +111,7 @@ final readonly class PdoViewRepository implements ViewRepositoryInterface
      */
     public function getUsers(int $viewId): array
     {
-        $stmt = $this->pdo->prepare('SELECT cal_login FROM webcal_view_user WHERE cal_view_id = :id');
+        $stmt = $this->pdo->prepare("SELECT cal_login FROM {$this->tablePrefix}webcal_view_user WHERE cal_view_id = :id");
         $stmt->execute(['id' => $viewId]);
         /** @var string[] $logins */
         $logins = $stmt->fetchAll(PDO::FETCH_COLUMN);
@@ -119,10 +120,10 @@ final readonly class PdoViewRepository implements ViewRepositoryInterface
 
     public function setUsers(int $viewId, array $logins): void
     {
-        $this->pdo->prepare('DELETE FROM webcal_view_user WHERE cal_view_id = :id')
+        $this->pdo->prepare("DELETE FROM {$this->tablePrefix}webcal_view_user WHERE cal_view_id = :id")
             ->execute(['id' => $viewId]);
 
-        $stmt = $this->pdo->prepare('INSERT INTO webcal_view_user (cal_view_id, cal_login) VALUES (:id, :login)');
+        $stmt = $this->pdo->prepare("INSERT INTO {$this->tablePrefix}webcal_view_user (cal_view_id, cal_login) VALUES (:id, :login)");
         foreach ($logins as $login) {
             $stmt->execute(['id' => $viewId, 'login' => $login]);
         }

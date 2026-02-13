@@ -16,7 +16,8 @@ use WebCalendar\Core\Domain\ValueObject\DateRange;
 final readonly class PdoActivityLogRepository implements ActivityLogRepositoryInterface
 {
     public function __construct(
-        private PDO $pdo
+        private PDO $pdo,
+        private string $tablePrefix = '',
     ) {
     }
 
@@ -37,8 +38,8 @@ final readonly class PdoActivityLogRepository implements ActivityLogRepositoryIn
         // sqlite-schema.sql: cal_log_id INT NOT NULL, PRIMARY KEY (cal_log_id)
         // Wait, I need to check if it's auto-increment in schema.
         
-        $sql = 'INSERT INTO webcal_entry_log (cal_entry_id, cal_login, cal_user_cal, cal_type, cal_date, cal_time, cal_text)
-                VALUES (:entry_id, :login, :user_cal, :type, :date, :time, :text)';
+        $sql = "INSERT INTO {$this->tablePrefix}webcal_entry_log (cal_entry_id, cal_login, cal_user_cal, cal_type, cal_date, cal_time, cal_text)
+                VALUES (:entry_id, :login, :user_cal, :type, :date, :time, :text)";
 
         $this->pdo->prepare($sql)->execute($data);
     }
@@ -48,7 +49,7 @@ final readonly class PdoActivityLogRepository implements ActivityLogRepositoryIn
      */
     public function findByDateRange(DateRange $range, ?string $login = null): array
     {
-        $sql = 'SELECT * FROM webcal_entry_log WHERE cal_date BETWEEN :start AND :end';
+        $sql = "SELECT * FROM {$this->tablePrefix}webcal_entry_log WHERE cal_date BETWEEN :start AND :end";
         $params = [
             'start' => (int)$range->startDate()->format('Ymd'),
             'end' => (int)$range->endDate()->format('Ymd')

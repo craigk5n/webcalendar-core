@@ -14,13 +14,14 @@ use WebCalendar\Core\Domain\Repository\ReportRepositoryInterface;
 final readonly class PdoReportRepository implements ReportRepositoryInterface
 {
     public function __construct(
-        private PDO $pdo
+        private PDO $pdo,
+        private string $tablePrefix = '',
     ) {
     }
 
     public function findById(int $id): ?Report
     {
-        $stmt = $this->pdo->prepare('SELECT * FROM webcal_report WHERE cal_report_id = :id');
+        $stmt = $this->pdo->prepare("SELECT * FROM {$this->tablePrefix}webcal_report WHERE cal_report_id = :id");
         $stmt->execute(['id' => $id]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -36,7 +37,7 @@ final readonly class PdoReportRepository implements ReportRepositoryInterface
      */
     public function findByOwner(string $owner): array
     {
-        $stmt = $this->pdo->prepare('SELECT * FROM webcal_report WHERE cal_user = :owner');
+        $stmt = $this->pdo->prepare("SELECT * FROM {$this->tablePrefix}webcal_report WHERE cal_user = :owner");
         $stmt->execute(['owner' => $owner]);
         $reports = [];
 
@@ -54,7 +55,7 @@ final readonly class PdoReportRepository implements ReportRepositoryInterface
      */
     public function findAllGlobal(): array
     {
-        $stmt = $this->pdo->query("SELECT * FROM webcal_report WHERE cal_is_global = 'Y'");
+        $stmt = $this->pdo->query("SELECT * FROM {$this->tablePrefix}webcal_report WHERE cal_is_global = 'Y'");
         $reports = [];
 
         if ($stmt) {
@@ -81,19 +82,19 @@ final readonly class PdoReportRepository implements ReportRepositoryInterface
         // This is simplified; real implementation would need to handle all fields
         // and templates. For now, focus on the entity persistence.
         
-        $stmt = $this->pdo->prepare('SELECT 1 FROM webcal_report WHERE cal_report_id = :id');
+        $stmt = $this->pdo->prepare("SELECT 1 FROM {$this->tablePrefix}webcal_report WHERE cal_report_id = :id");
         $stmt->execute(['id' => $report->id()]);
-        
+
         if ($stmt->fetch()) {
-            $sql = 'UPDATE webcal_report SET 
-                    cal_user = :owner, 
-                    cal_report_name = :name, 
-                    cal_report_type = :type, 
-                    cal_is_global = :global 
-                    WHERE cal_report_id = :id';
+            $sql = "UPDATE {$this->tablePrefix}webcal_report SET
+                    cal_user = :owner,
+                    cal_report_name = :name,
+                    cal_report_type = :type,
+                    cal_is_global = :global
+                    WHERE cal_report_id = :id";
         } else {
             // Need other required fields for INSERT
-            $sql = "INSERT INTO webcal_report (cal_report_id, cal_user, cal_report_name, cal_report_type, cal_is_global, cal_time_range, cal_update_date)
+            $sql = "INSERT INTO {$this->tablePrefix}webcal_report (cal_report_id, cal_user, cal_report_name, cal_report_type, cal_is_global, cal_time_range, cal_update_date)
                     VALUES (:id, :owner, :name, :type, :global, 0, 0)";
         }
 
@@ -104,19 +105,19 @@ final readonly class PdoReportRepository implements ReportRepositoryInterface
 
     public function delete(int $id): void
     {
-        $this->pdo->prepare('DELETE FROM webcal_report_template WHERE cal_report_id = :id')
+        $this->pdo->prepare("DELETE FROM {$this->tablePrefix}webcal_report_template WHERE cal_report_id = :id")
             ->execute(['id' => $id]);
-        $this->pdo->prepare('DELETE FROM webcal_report WHERE cal_report_id = :id')
+        $this->pdo->prepare("DELETE FROM {$this->tablePrefix}webcal_report WHERE cal_report_id = :id")
             ->execute(['id' => $id]);
     }
 
     private function saveTemplates(Report $report): void
     {
-        $this->pdo->prepare('DELETE FROM webcal_report_template WHERE cal_report_id = :id')
+        $this->pdo->prepare("DELETE FROM {$this->tablePrefix}webcal_report_template WHERE cal_report_id = :id")
             ->execute(['id' => $report->id()]);
 
-        $stmt = $this->pdo->prepare('INSERT INTO webcal_report_template (cal_report_id, cal_template_type, cal_template_text)
-                                     VALUES (:id, :type, :text)');
+        $stmt = $this->pdo->prepare("INSERT INTO {$this->tablePrefix}webcal_report_template (cal_report_id, cal_template_type, cal_template_text)
+                                     VALUES (:id, :type, :text)");
         
         foreach ($report->templates() as $type => $text) {
             $stmt->execute(['id' => $report->id(), 'type' => $type, 'text' => $text]);
@@ -144,7 +145,7 @@ final readonly class PdoReportRepository implements ReportRepositoryInterface
      */
     private function loadTemplates(int $id): array
     {
-        $stmt = $this->pdo->prepare('SELECT cal_template_type, cal_template_text FROM webcal_report_template WHERE cal_report_id = :id');
+        $stmt = $this->pdo->prepare("SELECT cal_template_type, cal_template_text FROM {$this->tablePrefix}webcal_report_template WHERE cal_report_id = :id");
         $stmt->execute(['id' => $id]);
         $templates = [];
 

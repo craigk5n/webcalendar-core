@@ -14,13 +14,14 @@ use WebCalendar\Core\Domain\Repository\GroupRepositoryInterface;
 final readonly class PdoGroupRepository implements GroupRepositoryInterface
 {
     public function __construct(
-        private PDO $pdo
+        private PDO $pdo,
+        private string $tablePrefix = '',
     ) {
     }
 
     public function findById(int $id): ?Group
     {
-        $stmt = $this->pdo->prepare('SELECT * FROM webcal_group WHERE cal_group_id = :id');
+        $stmt = $this->pdo->prepare("SELECT * FROM {$this->tablePrefix}webcal_group WHERE cal_group_id = :id");
         $stmt->execute(['id' => $id]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -36,7 +37,7 @@ final readonly class PdoGroupRepository implements GroupRepositoryInterface
      */
     public function findAll(): array
     {
-        $stmt = $this->pdo->query('SELECT * FROM webcal_group');
+        $stmt = $this->pdo->query("SELECT * FROM {$this->tablePrefix}webcal_group");
         $groups = [];
 
         if ($stmt) {
@@ -55,7 +56,7 @@ final readonly class PdoGroupRepository implements GroupRepositoryInterface
      */
     public function findByOwner(string $owner): array
     {
-        $stmt = $this->pdo->prepare('SELECT * FROM webcal_group WHERE cal_owner = :owner');
+        $stmt = $this->pdo->prepare("SELECT * FROM {$this->tablePrefix}webcal_group WHERE cal_owner = :owner");
         $stmt->execute(['owner' => $owner]);
         $groups = [];
 
@@ -77,18 +78,18 @@ final readonly class PdoGroupRepository implements GroupRepositoryInterface
             'last_update' => (int)$group->lastUpdate()->format('Ymd')
         ];
 
-        $stmt = $this->pdo->prepare('SELECT 1 FROM webcal_group WHERE cal_group_id = :id');
+        $stmt = $this->pdo->prepare("SELECT 1 FROM {$this->tablePrefix}webcal_group WHERE cal_group_id = :id");
         $stmt->execute(['id' => $group->id()]);
         
         if ($stmt->fetch()) {
-            $sql = 'UPDATE webcal_group SET 
-                    cal_owner = :owner, 
-                    cal_name = :name, 
-                    cal_last_update = :last_update 
-                    WHERE cal_group_id = :id';
+            $sql = "UPDATE {$this->tablePrefix}webcal_group SET
+                    cal_owner = :owner,
+                    cal_name = :name,
+                    cal_last_update = :last_update
+                    WHERE cal_group_id = :id";
         } else {
-            $sql = 'INSERT INTO webcal_group (cal_group_id, cal_owner, cal_name, cal_last_update)
-                    VALUES (:id, :owner, :name, :last_update)';
+            $sql = "INSERT INTO {$this->tablePrefix}webcal_group (cal_group_id, cal_owner, cal_name, cal_last_update)
+                    VALUES (:id, :owner, :name, :last_update)";
         }
 
         $this->pdo->prepare($sql)->execute($data);
@@ -96,9 +97,9 @@ final readonly class PdoGroupRepository implements GroupRepositoryInterface
 
     public function delete(int $id): void
     {
-        $this->pdo->prepare('DELETE FROM webcal_group_user WHERE cal_group_id = :id')
+        $this->pdo->prepare("DELETE FROM {$this->tablePrefix}webcal_group_user WHERE cal_group_id = :id")
             ->execute(['id' => $id]);
-        $this->pdo->prepare('DELETE FROM webcal_group WHERE cal_group_id = :id')
+        $this->pdo->prepare("DELETE FROM {$this->tablePrefix}webcal_group WHERE cal_group_id = :id")
             ->execute(['id' => $id]);
     }
 
@@ -107,20 +108,20 @@ final readonly class PdoGroupRepository implements GroupRepositoryInterface
      */
     public function getMembers(int $groupId): array
     {
-        $stmt = $this->pdo->prepare('SELECT cal_login FROM webcal_group_user WHERE cal_group_id = :id');
+        $stmt = $this->pdo->prepare("SELECT cal_login FROM {$this->tablePrefix}webcal_group_user WHERE cal_group_id = :id");
         $stmt->execute(['id' => $groupId]);
         return $stmt->fetchAll(PDO::FETCH_COLUMN);
     }
 
     public function addMember(int $groupId, string $login): void
     {
-        $sql = 'INSERT INTO webcal_group_user (cal_group_id, cal_login) VALUES (:id, :login)';
+        $sql = "INSERT INTO {$this->tablePrefix}webcal_group_user (cal_group_id, cal_login) VALUES (:id, :login)";
         $this->pdo->prepare($sql)->execute(['id' => $groupId, 'login' => $login]);
     }
 
     public function removeMember(int $groupId, string $login): void
     {
-        $sql = 'DELETE FROM webcal_group_user WHERE cal_group_id = :id AND cal_login = :login';
+        $sql = "DELETE FROM {$this->tablePrefix}webcal_group_user WHERE cal_group_id = :id AND cal_login = :login";
         $this->pdo->prepare($sql)->execute(['id' => $groupId, 'login' => $login]);
     }
 

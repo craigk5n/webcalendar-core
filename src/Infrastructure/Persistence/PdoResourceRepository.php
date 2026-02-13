@@ -14,13 +14,14 @@ use WebCalendar\Core\Domain\Repository\ResourceRepositoryInterface;
 final readonly class PdoResourceRepository implements ResourceRepositoryInterface
 {
     public function __construct(
-        private PDO $pdo
+        private PDO $pdo,
+        private string $tablePrefix = '',
     ) {
     }
 
     public function findByLogin(string $login): ?Resource
     {
-        $stmt = $this->pdo->prepare('SELECT * FROM webcal_nonuser_cals WHERE cal_login = :login');
+        $stmt = $this->pdo->prepare("SELECT * FROM {$this->tablePrefix}webcal_nonuser_cals WHERE cal_login = :login");
         $stmt->execute(['login' => $login]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -36,7 +37,7 @@ final readonly class PdoResourceRepository implements ResourceRepositoryInterfac
      */
     public function findAll(): array
     {
-        $stmt = $this->pdo->query('SELECT * FROM webcal_nonuser_cals');
+        $stmt = $this->pdo->query("SELECT * FROM {$this->tablePrefix}webcal_nonuser_cals");
         $resources = [];
 
         if ($stmt) {
@@ -55,7 +56,7 @@ final readonly class PdoResourceRepository implements ResourceRepositoryInterfac
      */
     public function findByAdmin(string $adminLogin): array
     {
-        $stmt = $this->pdo->prepare('SELECT * FROM webcal_nonuser_cals WHERE cal_admin = :admin');
+        $stmt = $this->pdo->prepare("SELECT * FROM {$this->tablePrefix}webcal_nonuser_cals WHERE cal_admin = :admin");
         $stmt->execute(['admin' => $adminLogin]);
         $resources = [];
 
@@ -78,19 +79,19 @@ final readonly class PdoResourceRepository implements ResourceRepositoryInterfac
             'url' => $resource->url()
         ];
 
-        $stmt = $this->pdo->prepare('SELECT 1 FROM webcal_nonuser_cals WHERE cal_login = :login');
+        $stmt = $this->pdo->prepare("SELECT 1 FROM {$this->tablePrefix}webcal_nonuser_cals WHERE cal_login = :login");
         $stmt->execute(['login' => $resource->login()]);
-        
+
         if ($stmt->fetch()) {
-            $sql = 'UPDATE webcal_nonuser_cals SET 
-                    cal_lastname = :name, 
-                    cal_admin = :admin, 
-                    cal_is_public = :is_public, 
-                    cal_url = :url 
-                    WHERE cal_login = :login';
+            $sql = "UPDATE {$this->tablePrefix}webcal_nonuser_cals SET
+                    cal_lastname = :name,
+                    cal_admin = :admin,
+                    cal_is_public = :is_public,
+                    cal_url = :url
+                    WHERE cal_login = :login";
         } else {
-            $sql = 'INSERT INTO webcal_nonuser_cals (cal_login, cal_lastname, cal_admin, cal_is_public, cal_url)
-                    VALUES (:login, :name, :admin, :is_public, :url)';
+            $sql = "INSERT INTO {$this->tablePrefix}webcal_nonuser_cals (cal_login, cal_lastname, cal_admin, cal_is_public, cal_url)
+                    VALUES (:login, :name, :admin, :is_public, :url)";
         }
 
         $this->pdo->prepare($sql)->execute($data);
@@ -98,7 +99,7 @@ final readonly class PdoResourceRepository implements ResourceRepositoryInterfac
 
     public function delete(string $login): void
     {
-        $stmt = $this->pdo->prepare('DELETE FROM webcal_nonuser_cals WHERE cal_login = :login');
+        $stmt = $this->pdo->prepare("DELETE FROM {$this->tablePrefix}webcal_nonuser_cals WHERE cal_login = :login");
         $stmt->execute(['login' => $login]);
     }
 

@@ -14,7 +14,8 @@ use WebCalendar\Core\Domain\Repository\LayerRepositoryInterface;
 final readonly class PdoLayerRepository implements LayerRepositoryInterface
 {
     public function __construct(
-        private PDO $pdo
+        private PDO $pdo,
+        private string $tablePrefix = '',
     ) {
     }
 
@@ -23,7 +24,7 @@ final readonly class PdoLayerRepository implements LayerRepositoryInterface
      */
     public function findByOwner(string $owner): array
     {
-        $stmt = $this->pdo->prepare('SELECT * FROM webcal_user_layers WHERE cal_login = :owner');
+        $stmt = $this->pdo->prepare("SELECT * FROM {$this->tablePrefix}webcal_user_layers WHERE cal_login = :owner");
         $stmt->execute(['owner' => $owner]);
         $layers = [];
 
@@ -45,17 +46,17 @@ final readonly class PdoLayerRepository implements LayerRepositoryInterface
             'dups' => $layer->showDuplicates() ? 'Y' : 'N'
         ];
 
-        $stmt = $this->pdo->prepare('SELECT 1 FROM webcal_user_layers WHERE cal_login = :owner AND cal_layeruser = :layeruser');
+        $stmt = $this->pdo->prepare("SELECT 1 FROM {$this->tablePrefix}webcal_user_layers WHERE cal_login = :owner AND cal_layeruser = :layeruser");
         $stmt->execute(['owner' => $layer->owner(), 'layeruser' => $layer->layerUser()]);
         
         if ($stmt->fetch()) {
-            $sql = 'UPDATE webcal_user_layers SET 
-                    cal_color = :color, 
-                    cal_dups = :dups 
-                    WHERE cal_login = :owner AND cal_layeruser = :layeruser';
+            $sql = "UPDATE {$this->tablePrefix}webcal_user_layers SET
+                    cal_color = :color,
+                    cal_dups = :dups
+                    WHERE cal_login = :owner AND cal_layeruser = :layeruser";
         } else {
-            $sql = 'INSERT INTO webcal_user_layers (cal_login, cal_layeruser, cal_color, cal_dups)
-                    VALUES (:owner, :layeruser, :color, :dups)';
+            $sql = "INSERT INTO {$this->tablePrefix}webcal_user_layers (cal_login, cal_layeruser, cal_color, cal_dups)
+                    VALUES (:owner, :layeruser, :color, :dups)";
         }
 
         $this->pdo->prepare($sql)->execute($data);
@@ -63,7 +64,7 @@ final readonly class PdoLayerRepository implements LayerRepositoryInterface
 
     public function delete(int $id): void
     {
-        $stmt = $this->pdo->prepare('DELETE FROM webcal_user_layers WHERE cal_layerid = :id');
+        $stmt = $this->pdo->prepare("DELETE FROM {$this->tablePrefix}webcal_user_layers WHERE cal_layerid = :id");
         $stmt->execute(['id' => $id]);
     }
 

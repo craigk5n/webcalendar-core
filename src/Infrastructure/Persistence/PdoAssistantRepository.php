@@ -14,7 +14,8 @@ use WebCalendar\Core\Domain\Repository\AssistantRepositoryInterface;
 final readonly class PdoAssistantRepository implements AssistantRepositoryInterface
 {
     public function __construct(
-        private PDO $pdo
+        private PDO $pdo,
+        private string $tablePrefix = '',
     ) {
     }
 
@@ -23,7 +24,7 @@ final readonly class PdoAssistantRepository implements AssistantRepositoryInterf
      */
     public function findAssistantsForBoss(string $bossLogin): array
     {
-        $stmt = $this->pdo->prepare('SELECT cal_assistant FROM webcal_asst WHERE cal_boss = :boss');
+        $stmt = $this->pdo->prepare("SELECT cal_assistant FROM {$this->tablePrefix}webcal_asst WHERE cal_boss = :boss");
         $stmt->execute(['boss' => $bossLogin]);
         /** @var string[] $logins */
         $logins = $stmt->fetchAll(PDO::FETCH_COLUMN);
@@ -35,7 +36,7 @@ final readonly class PdoAssistantRepository implements AssistantRepositoryInterf
      */
     public function findBossesForAssistant(string $asstLogin): array
     {
-        $stmt = $this->pdo->prepare('SELECT cal_boss FROM webcal_asst WHERE cal_assistant = :asst');
+        $stmt = $this->pdo->prepare("SELECT cal_boss FROM {$this->tablePrefix}webcal_asst WHERE cal_assistant = :asst");
         $stmt->execute(['asst' => $asstLogin]);
         /** @var string[] $logins */
         $logins = $stmt->fetchAll(PDO::FETCH_COLUMN);
@@ -44,18 +45,18 @@ final readonly class PdoAssistantRepository implements AssistantRepositoryInterf
 
     public function save(Assistant $assistant): void
     {
-        $stmt = $this->pdo->prepare('SELECT 1 FROM webcal_asst WHERE cal_boss = :boss AND cal_assistant = :asst');
+        $stmt = $this->pdo->prepare("SELECT 1 FROM {$this->tablePrefix}webcal_asst WHERE cal_boss = :boss AND cal_assistant = :asst");
         $stmt->execute(['boss' => $assistant->boss(), 'asst' => $assistant->assistant()]);
         
         if (!$stmt->fetch()) {
-            $sql = 'INSERT INTO webcal_asst (cal_boss, cal_assistant) VALUES (:boss, :asst)';
+            $sql = "INSERT INTO {$this->tablePrefix}webcal_asst (cal_boss, cal_assistant) VALUES (:boss, :asst)";
             $this->pdo->prepare($sql)->execute(['boss' => $assistant->boss(), 'asst' => $assistant->assistant()]);
         }
     }
 
     public function delete(string $bossLogin, string $asstLogin): void
     {
-        $stmt = $this->pdo->prepare('DELETE FROM webcal_asst WHERE cal_boss = :boss AND cal_assistant = :asst');
+        $stmt = $this->pdo->prepare("DELETE FROM {$this->tablePrefix}webcal_asst WHERE cal_boss = :boss AND cal_assistant = :asst");
         $stmt->execute(['boss' => $bossLogin, 'asst' => $asstLogin]);
     }
 }

@@ -15,13 +15,14 @@ use WebCalendar\Core\Domain\ValueObject\EventId;
 final readonly class PdoCategoryRepository implements CategoryRepositoryInterface
 {
     public function __construct(
-        private PDO $pdo
+        private PDO $pdo,
+        private string $tablePrefix = '',
     ) {
     }
 
     public function findById(int $id): ?Category
     {
-        $stmt = $this->pdo->prepare('SELECT * FROM webcal_categories WHERE cat_id = :id');
+        $stmt = $this->pdo->prepare("SELECT * FROM {$this->tablePrefix}webcal_categories WHERE cat_id = :id");
         $stmt->execute(['id' => $id]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -37,7 +38,7 @@ final readonly class PdoCategoryRepository implements CategoryRepositoryInterfac
      */
     public function findByOwner(?string $owner): array
     {
-        $stmt = $this->pdo->prepare('SELECT * FROM webcal_categories WHERE cat_owner = :owner');
+        $stmt = $this->pdo->prepare("SELECT * FROM {$this->tablePrefix}webcal_categories WHERE cat_owner = :owner");
         $stmt->execute(['owner' => $owner ?? '']);
         $categories = [];
 
@@ -55,7 +56,7 @@ final readonly class PdoCategoryRepository implements CategoryRepositoryInterfac
      */
     public function findAllGlobal(): array
     {
-        $stmt = $this->pdo->query("SELECT * FROM webcal_categories WHERE cat_owner = '' OR cat_owner IS NULL");
+        $stmt = $this->pdo->query("SELECT * FROM {$this->tablePrefix}webcal_categories WHERE cat_owner = '' OR cat_owner IS NULL");
         $categories = [];
 
         if ($stmt) {
@@ -79,18 +80,18 @@ final readonly class PdoCategoryRepository implements CategoryRepositoryInterfac
             'status' => $category->isEnabled() ? 'A' : 'D'
         ];
 
-        $stmt = $this->pdo->prepare('SELECT 1 FROM webcal_categories WHERE cat_id = :id AND cat_owner = :owner');
+        $stmt = $this->pdo->prepare("SELECT 1 FROM {$this->tablePrefix}webcal_categories WHERE cat_id = :id AND cat_owner = :owner");
         $stmt->execute(['id' => $category->id(), 'owner' => $data['owner']]);
         
         if ($stmt->fetch()) {
-            $sql = 'UPDATE webcal_categories SET 
+            $sql = "UPDATE {$this->tablePrefix}webcal_categories SET 
                     cat_name = :name, 
                     cat_color = :color, 
                     cat_status = :status 
-                    WHERE cat_id = :id AND cat_owner = :owner';
+                    WHERE cat_id = :id AND cat_owner = :owner";
         } else {
-            $sql = 'INSERT INTO webcal_categories (cat_id, cat_owner, cat_name, cat_color, cat_status)
-                    VALUES (:id, :owner, :name, :color, :status)';
+            $sql = "INSERT INTO {$this->tablePrefix}webcal_categories (cat_id, cat_owner, cat_name, cat_color, cat_status)
+                    VALUES (:id, :owner, :name, :color, :status)";
         }
 
         $this->pdo->prepare($sql)->execute($data);
@@ -98,17 +99,17 @@ final readonly class PdoCategoryRepository implements CategoryRepositoryInterfac
 
     public function delete(int $id): void
     {
-        $stmt = $this->pdo->prepare('DELETE FROM webcal_categories WHERE cat_id = :id');
+        $stmt = $this->pdo->prepare("DELETE FROM {$this->tablePrefix}webcal_categories WHERE cat_id = :id");
         $stmt->execute(['id' => $id]);
     }
 
     public function assignToEvent(EventId $eventId, string $userLogin, array $categoryIds): void
     {
-        $stmt = $this->pdo->prepare('DELETE FROM webcal_entry_categories WHERE cal_id = :cal_id AND cat_owner = :owner');
+        $stmt = $this->pdo->prepare("DELETE FROM {$this->tablePrefix}webcal_entry_categories WHERE cal_id = :cal_id AND cat_owner = :owner");
         $stmt->execute(['cal_id' => $eventId->value(), 'owner' => $userLogin]);
 
-        $sql = 'INSERT INTO webcal_entry_categories (cal_id, cat_id, cat_owner, cat_order)
-                VALUES (:cal_id, :cat_id, :owner, :order)';
+        $sql = "INSERT INTO {$this->tablePrefix}webcal_entry_categories (cal_id, cat_id, cat_owner, cat_order)
+                VALUES (:cal_id, :cat_id, :owner, :order)";
         $stmt = $this->pdo->prepare($sql);
 
         foreach ($categoryIds as $index => $catId) {
@@ -126,9 +127,9 @@ final readonly class PdoCategoryRepository implements CategoryRepositoryInterfac
      */
     public function getForEvent(EventId $eventId, string $userLogin): array
     {
-        $sql = 'SELECT c.* FROM webcal_categories c
-                JOIN webcal_entry_categories ec ON c.cat_id = ec.cat_id
-                WHERE ec.cal_id = :cal_id AND ec.cat_owner = :owner';
+        $sql = "SELECT c.* FROM {$this->tablePrefix}webcal_categories c
+                JOIN {$this->tablePrefix}webcal_entry_categories ec ON c.cat_id = ec.cat_id
+                WHERE ec.cal_id = :cal_id AND ec.cat_owner = :owner";
         
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute(['cal_id' => $eventId->value(), 'owner' => $userLogin]);

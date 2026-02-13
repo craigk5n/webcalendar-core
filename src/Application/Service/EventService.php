@@ -71,4 +71,20 @@ final readonly class EventService
         }
         $this->eventRepository->delete($id);
     }
+
+    /**
+     * Approves an event for a user.
+     */
+    public function approveEvent(EventId $id, string $userLogin): void
+    {
+        $this->eventRepository->updateParticipantStatus($id, $userLogin, 'A');
+    }
+
+    /**
+     * Rejects an event for a user.
+     */
+    public function rejectEvent(EventId $id, string $userLogin): void
+    {
+        $this->eventRepository->updateParticipantStatus($id, $userLogin, 'R');
+    }
 }

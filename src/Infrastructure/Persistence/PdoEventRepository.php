@@ -23,13 +23,14 @@ use WebCalendar\Core\Domain\ValueObject\RDate;
 final readonly class PdoEventRepository implements EventRepositoryInterface
 {
     public function __construct(
-        private PDO $pdo
+        private PDO $pdo,
+        private string $tablePrefix = '',
     ) {
     }
 
     public function findById(EventId $id): ?Event
     {
-        $stmt = $this->pdo->prepare('SELECT * FROM webcal_entry WHERE cal_id = :id');
+        $stmt = $this->pdo->prepare("SELECT * FROM {$this->tablePrefix}webcal_entry WHERE cal_id = :id");
         $stmt->execute(['id' => $id->value()]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -42,7 +43,7 @@ final readonly class PdoEventRepository implements EventRepositoryInterface
 
     public function findByUid(string $uid): ?Event
     {
-        $stmt = $this->pdo->prepare('SELECT * FROM webcal_entry WHERE cal_uid = :uid');
+        $stmt = $this->pdo->prepare("SELECT * FROM {$this->tablePrefix}webcal_entry WHERE cal_uid = :uid");
         $stmt->execute(['uid' => $uid]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -55,7 +56,7 @@ final readonly class PdoEventRepository implements EventRepositoryInterface
 
     public function search(string $keyword, ?DateRange $range = null, ?User $user = null): \WebCalendar\Core\Domain\ValueObject\EventCollection
     {
-        $sql = "SELECT * FROM webcal_entry WHERE (cal_name LIKE :keyword OR cal_description LIKE :keyword)";
+        $sql = "SELECT * FROM {$this->tablePrefix}webcal_entry WHERE (cal_name LIKE :keyword OR cal_description LIKE :keyword)";
         $params = ['keyword' => '%' . $keyword . '%'];
 
         if ($range !== null) {
@@ -90,8 +91,8 @@ final readonly class PdoEventRepository implements EventRepositoryInterface
         $startDateInt = (int)$range->startDate()->format('Ymd');
         $endDateInt = (int)$range->endDate()->format('Ymd');
 
-        $sql = 'SELECT * FROM webcal_entry 
-                WHERE cal_date BETWEEN :start AND :end';
+        $sql = "SELECT * FROM {$this->tablePrefix}webcal_entry
+                WHERE cal_date BETWEEN :start AND :end";
         $params = [
             'start' => $startDateInt,
             'end' => $endDateInt
@@ -141,15 +142,15 @@ final readonly class PdoEventRepository implements EventRepositoryInterface
         ];
 
         if ($isNew) {
-            $sql = 'INSERT INTO webcal_entry 
-                    (cal_id, cal_create_by, cal_date, cal_time, cal_duration, cal_name, 
-                     cal_description, cal_location, cal_type, cal_access, cal_uid, 
+            $sql = "INSERT INTO {$this->tablePrefix}webcal_entry
+                    (cal_id, cal_create_by, cal_date, cal_time, cal_duration, cal_name,
+                     cal_description, cal_location, cal_type, cal_access, cal_uid,
                      cal_sequence, cal_status)
-                    VALUES (:id, :create_by, :date, :time, :duration, :name, 
-                            :description, :location, :type, :access, :uid, 
-                            :sequence, :status)';
+                    VALUES (:id, :create_by, :date, :time, :duration, :name,
+                            :description, :location, :type, :access, :uid,
+                            :sequence, :status)";
         } else {
-            $sql = 'UPDATE webcal_entry SET 
+            $sql = "UPDATE {$this->tablePrefix}webcal_entry SET 
                     cal_create_by = :create_by, 
                     cal_date = :date, 
                     cal_time = :time, 
@@ -161,8 +162,8 @@ final readonly class PdoEventRepository implements EventRepositoryInterface
                     cal_access = :access, 
                     cal_uid = :uid, 
                     cal_sequence = :sequence, 
-                    cal_status = :status 
-                    WHERE cal_id = :id';
+                    cal_status = :status
+                    WHERE cal_id = :id";
         }
 
         $this->pdo->prepare($sql)->execute($data);
@@ -172,15 +173,27 @@ final readonly class PdoEventRepository implements EventRepositoryInterface
 
     public function delete(EventId $id): void
     {
-        $this->pdo->prepare('DELETE FROM webcal_entry WHERE cal_id = :id')
+        $this->pdo->prepare("DELETE FROM {$this->tablePrefix}webcal_entry WHERE cal_id = :id")
             ->execute(['id' => $id->value()]);
-        $this->pdo->prepare('DELETE FROM webcal_entry_repeats WHERE cal_id = :id')
+        $this->pdo->prepare("DELETE FROM {$this->tablePrefix}webcal_entry_repeats WHERE cal_id = :id")
             ->execute(['id' => $id->value()]);
+    }
+
+    public function updateParticipantStatus(EventId $eventId, string $userLogin, string $status): void
+    {
+        $sql = "UPDATE {$this->tablePrefix}webcal_entry_user SET cal_status = :status
+                WHERE cal_id = :id AND cal_login = :login";
+        
+        $this->pdo->prepare($sql)->execute([
+            'id' => $eventId->value(),
+            'login' => $userLogin,
+            'status' => $status
+        ]);
     }
 
     private function getNextId(): int
     {
-        $stmt = $this->pdo->query('SELECT IFNULL(MAX(cal_id), 0) + 1 FROM webcal_entry');
+        $stmt = $this->pdo->query("SELECT IFNULL(MAX(cal_id), 0) + 1 FROM {$this->tablePrefix}webcal_entry");
         if ($stmt === false) {
             return 1;
         }
@@ -238,7 +251,7 @@ final readonly class PdoEventRepository implements EventRepositoryInterface
 
     private function loadRecurrence(int $id): Recurrence
     {
-        $stmt = $this->pdo->prepare('SELECT * FROM webcal_entry_repeats WHERE cal_id = :id');
+        $stmt = $this->pdo->prepare("SELECT * FROM {$this->tablePrefix}webcal_entry_repeats WHERE cal_id = :id");
         $stmt->execute(['id' => $id]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -318,7 +331,7 @@ final readonly class PdoEventRepository implements EventRepositoryInterface
      */
     private function loadExceptions(int $id): array
     {
-        $stmt = $this->pdo->prepare('SELECT cal_date, cal_exdate FROM webcal_entry_repeats_not WHERE cal_id = :id');
+        $stmt = $this->pdo->prepare("SELECT cal_date, cal_exdate FROM {$this->tablePrefix}webcal_entry_repeats_not WHERE cal_id = :id");
         $stmt->execute(['id' => $id]);
         
         $exDates = [];
@@ -347,9 +360,9 @@ final readonly class PdoEventRepository implements EventRepositoryInterface
     private function saveRecurrence(int $id, Recurrence $recurrence): void
     {
         // 1. Delete existing rules and exceptions
-        $this->pdo->prepare('DELETE FROM webcal_entry_repeats WHERE cal_id = :id')
+        $this->pdo->prepare("DELETE FROM {$this->tablePrefix}webcal_entry_repeats WHERE cal_id = :id")
             ->execute(['id' => $id]);
-        $this->pdo->prepare('DELETE FROM webcal_entry_repeats_not WHERE cal_id = :id')
+        $this->pdo->prepare("DELETE FROM {$this->tablePrefix}webcal_entry_repeats_not WHERE cal_id = :id")
             ->execute(['id' => $id]);
 
         $rule = $recurrence->rule();
@@ -382,15 +395,15 @@ final readonly class PdoEventRepository implements EventRepositoryInterface
             'byday' => $this->mapByDayToLegacyString($rrule->getByDay())
         ];
 
-        $sql = 'INSERT INTO webcal_entry_repeats (
-                    cal_id, cal_type, cal_end, cal_endtime, cal_frequency, cal_count, 
-                    cal_wkst, cal_bymonth, cal_bymonthday, cal_byyearday, cal_byweekno, 
+        $sql = "INSERT INTO {$this->tablePrefix}webcal_entry_repeats (
+                    cal_id, cal_type, cal_end, cal_endtime, cal_frequency, cal_count,
+                    cal_wkst, cal_bymonth, cal_bymonthday, cal_byyearday, cal_byweekno,
                     cal_bysetpos, cal_byhour, cal_byminute, cal_bysecond, cal_days, cal_byday
                 ) VALUES (
-                    :id, :type, :end, :endtime, :frequency, :count, 
-                    :wkst, :bymonth, :bymonthday, :byyearday, :byweekno, 
+                    :id, :type, :end, :endtime, :frequency, :count,
+                    :wkst, :bymonth, :bymonthday, :byyearday, :byweekno,
                     :bysetpos, :byhour, :byminute, :bysecond, :days, :byday
-                )';
+                )";
         
         $this->pdo->prepare($sql)->execute($data);
 
@@ -400,7 +413,7 @@ final readonly class PdoEventRepository implements EventRepositoryInterface
 
     private function saveExceptions(int $id, Recurrence $recurrence): void
     {
-        $stmt = $this->pdo->prepare('INSERT INTO webcal_entry_repeats_not (cal_id, cal_date, cal_exdate) VALUES (:id, :date, :exdate)');
+        $stmt = $this->pdo->prepare("INSERT INTO {$this->tablePrefix}webcal_entry_repeats_not (cal_id, cal_date, cal_exdate) VALUES (:id, :date, :exdate)");
         
         foreach ($recurrence->exDate()->dates() as $date) {
             $stmt->execute(['id' => $id, 'date' => (int)$date->format('Ymd'), 'exdate' => 1]);

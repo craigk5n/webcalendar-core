@@ -104,4 +104,28 @@ final class EventServiceTest extends TestCase
         $this->expectException(\WebCalendar\Core\Domain\Exception\EventNotFoundException::class);
         $this->eventService->updateEvent($event);
     }
+
+    public function testApproveEvent(): void
+    {
+        $id = new EventId(123);
+        $login = 'jdoe';
+        
+        $this->eventRepository->expects($this->once())
+            ->method('updateParticipantStatus')
+            ->with($id, $login, 'A');
+
+        $this->eventService->approveEvent($id, $login);
+    }
+
+    public function testRejectEvent(): void
+    {
+        $id = new EventId(123);
+        $login = 'jdoe';
+        
+        $this->eventRepository->expects($this->once())
+            ->method('updateParticipantStatus')
+            ->with($id, $login, 'R');
+
+        $this->eventService->rejectEvent($id, $login);
+    }
 }

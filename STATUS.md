@@ -738,6 +738,38 @@ so that I can help users manage their schedules.
 
 **One-sentence goal:** Implement MCP tool handlers for listing, searching, and adding events.
 
+### Epic 19: Entry Extensions & Workflow
+**Status: DONE**
+**Goal:** Implement entry approval workflow and specialized Task/Journal services.
+
+#### Task 19.1: Entry Approval Workflow
+**Status: DONE**  
+**Task:** Implement approval and rejection logic in EventService.
+
+#### Task 19.2: Task & Journal Services
+**Status: DONE**  
+**Task:** Implement specialized services for Tasks and Journals.
+
+### Epic 20: Customizations & Templates
+**Status: DONE**
+**Goal:** Implement site extras and user templates.
+
+#### Task 20.1: Site Extras Service
+**Status: DONE**  
+**Task:** Implement SiteExtraService for custom event fields.
+
+#### Task 20.2: User Template Service
+**Status: DONE**  
+**Task:** Implement TemplateService for custom headers/footers.
+
+### Epic 21: Security & Sessions
+**Status: DONE**
+**Goal:** Implement security utilities and stateless session management.
+
+#### Task 21.1: Security Service
+**Status: DONE**  
+**Task:** Implement SecurityService for token management and sanitization.
+
 ## Release Plan
 
 ### MVP Release (v1.0.0)

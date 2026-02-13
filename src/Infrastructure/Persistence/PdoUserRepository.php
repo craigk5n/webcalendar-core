@@ -15,13 +15,14 @@ use WebCalendar\Core\Domain\ValueObject\UserPreference;
 final readonly class PdoUserRepository implements UserRepositoryInterface
 {
     public function __construct(
-        private PDO $pdo
+        private PDO $pdo,
+        private string $tablePrefix = '',
     ) {
     }
 
     public function findByLogin(string $login): ?User
     {
-        $stmt = $this->pdo->prepare('SELECT * FROM webcal_user WHERE cal_login = :login');
+        $stmt = $this->pdo->prepare("SELECT * FROM {$this->tablePrefix}webcal_user WHERE cal_login = :login");
         $stmt->execute(['login' => $login]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -37,7 +38,7 @@ final readonly class PdoUserRepository implements UserRepositoryInterface
      */
     public function findAll(): array
     {
-        $stmt = $this->pdo->query('SELECT * FROM webcal_user');
+        $stmt = $this->pdo->query("SELECT * FROM {$this->tablePrefix}webcal_user");
         $users = [];
 
         if ($stmt) {
@@ -65,17 +66,17 @@ final readonly class PdoUserRepository implements UserRepositoryInterface
         $existing = $this->findByLogin($user->login());
 
         if ($existing) {
-            $sql = 'UPDATE webcal_user SET 
-                    cal_lastname = :lastname, 
-                    cal_firstname = :firstname, 
-                    cal_is_admin = :is_admin, 
-                    cal_email = :email, 
-                    cal_enabled = :enabled 
-                    WHERE cal_login = :login';
+            $sql = "UPDATE {$this->tablePrefix}webcal_user SET
+                    cal_lastname = :lastname,
+                    cal_firstname = :firstname,
+                    cal_is_admin = :is_admin,
+                    cal_email = :email,
+                    cal_enabled = :enabled
+                    WHERE cal_login = :login";
         } else {
-            $sql = 'INSERT INTO webcal_user 
+            $sql = "INSERT INTO {$this->tablePrefix}webcal_user
                     (cal_login, cal_lastname, cal_firstname, cal_is_admin, cal_email, cal_enabled)
-                    VALUES (:login, :lastname, :firstname, :is_admin, :email, :enabled)';
+                    VALUES (:login, :lastname, :firstname, :is_admin, :email, :enabled)";
         }
 
         $this->pdo->prepare($sql)->execute($data);
@@ -83,7 +84,7 @@ final readonly class PdoUserRepository implements UserRepositoryInterface
 
     public function delete(string $login): void
     {
-        $stmt = $this->pdo->prepare('DELETE FROM webcal_user WHERE cal_login = :login');
+        $stmt = $this->pdo->prepare("DELETE FROM {$this->tablePrefix}webcal_user WHERE cal_login = :login");
         $stmt->execute(['login' => $login]);
     }
 
@@ -92,7 +93,7 @@ final readonly class PdoUserRepository implements UserRepositoryInterface
      */
     public function getPreferences(string $login): array
     {
-        $stmt = $this->pdo->prepare('SELECT * FROM webcal_user_pref WHERE cal_login = :login');
+        $stmt = $this->pdo->prepare("SELECT * FROM {$this->tablePrefix}webcal_user_pref WHERE cal_login = :login");
         $stmt->execute(['login' => $login]);
         $prefs = [];
 
@@ -111,11 +112,17 @@ final readonly class PdoUserRepository implements UserRepositoryInterface
 
     public function getPasswordHash(string $login): ?string
     {
-        $stmt = $this->pdo->prepare('SELECT cal_passwd FROM webcal_user WHERE cal_login = :login');
+        $stmt = $this->pdo->prepare("SELECT cal_passwd FROM {$this->tablePrefix}webcal_user WHERE cal_login = :login");
         $stmt->execute(['login' => $login]);
         $hash = $stmt->fetchColumn();
 
         return is_string($hash) ? $hash : null;
+    }
+
+    public function setPassword(string $login, string $hash): void
+    {
+        $stmt = $this->pdo->prepare("UPDATE {$this->tablePrefix}webcal_user SET cal_passwd = :hash WHERE cal_login = :login");
+        $stmt->execute(['login' => $login, 'hash' => $hash]);
     }
 
     public function savePreference(string $login, UserPreference $preference): void
@@ -126,15 +133,15 @@ final readonly class PdoUserRepository implements UserRepositoryInterface
             'value' => $preference->value(),
         ];
 
-        $stmt = $this->pdo->prepare('SELECT 1 FROM webcal_user_pref WHERE cal_login = :login AND cal_setting = :setting');
+        $stmt = $this->pdo->prepare("SELECT 1 FROM {$this->tablePrefix}webcal_user_pref WHERE cal_login = :login AND cal_setting = :setting");
         $stmt->execute(['login' => $login, 'setting' => $preference->key()]);
         
         if ($stmt->fetch()) {
-            $sql = 'UPDATE webcal_user_pref SET cal_value = :value 
-                    WHERE cal_login = :login AND cal_setting = :setting';
+            $sql = "UPDATE {$this->tablePrefix}webcal_user_pref SET cal_value = :value
+                    WHERE cal_login = :login AND cal_setting = :setting";
         } else {
-            $sql = 'INSERT INTO webcal_user_pref (cal_login, cal_setting, cal_value)
-                    VALUES (:login, :setting, :value)';
+            $sql = "INSERT INTO {$this->tablePrefix}webcal_user_pref (cal_login, cal_setting, cal_value)
+                    VALUES (:login, :setting, :value)";
         }
         
         $this->pdo->prepare($sql)->execute($data);

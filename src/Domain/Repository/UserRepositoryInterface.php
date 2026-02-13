@@ -48,4 +48,9 @@ interface UserRepositoryInterface
      * Gets the password hash for a user.
      */
     public function getPasswordHash(string $login): ?string;
+
+    /**
+     * Sets the password hash for a user.
+     */
+    public function setPassword(string $login, string $hash): void;
 }

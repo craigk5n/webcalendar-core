@@ -49,4 +49,9 @@ interface EventRepositoryInterface
      * Deletes an event by its identifier.
      */
     public function delete(EventId $id): void;
+
+    /**
+     * Updates the status of a participant for an event.
+     */
+    public function updateParticipantStatus(EventId $eventId, string $userLogin, string $status): void;
 }
