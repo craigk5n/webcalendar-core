@@ -152,7 +152,7 @@ final readonly class PdoEventRepository implements EventRepositoryInterface
             'id' => $idValue,
             'create_by' => $event->createdBy(),
             'date' => (int)$event->start()->format('Ymd'),
-            'time' => (int)$event->start()->format('His'),
+            'time' => $event->isAllDay() ? -1 : (int)$event->start()->format('His'),
             'duration' => $event->duration(),
             'name' => $event->name(),
             'description' => $event->description(),
@@ -231,14 +231,24 @@ final readonly class PdoEventRepository implements EventRepositoryInterface
     {
         $rawDate = $row['cal_date'] ?? '';
         $dateStr = is_scalar($rawDate) ? (string)$rawDate : '';
-        
+
         $rawTime = $row['cal_time'] ?? 0;
         $timeInt = is_numeric($rawTime) ? (int)$rawTime : 0;
-        $timeStr = str_pad((string)$timeInt, 6, '0', STR_PAD_LEFT);
-        
-        $start = \DateTimeImmutable::createFromFormat('YmdHis', $dateStr . $timeStr);
-        if ($start === false) {
-            $start = new \DateTimeImmutable($dateStr !== '' ? $dateStr : 'now');
+        $allDay = ($timeInt === -1);
+
+        if ($allDay) {
+            // All-day event: start at midnight, no time component
+            $start = \DateTimeImmutable::createFromFormat('Ymd', $dateStr);
+            if ($start === false) {
+                $start = new \DateTimeImmutable($dateStr !== '' ? $dateStr : 'now');
+            }
+            $start = $start->setTime(0, 0, 0);
+        } else {
+            $timeStr = str_pad((string)$timeInt, 6, '0', STR_PAD_LEFT);
+            $start = \DateTimeImmutable::createFromFormat('YmdHis', $dateStr . $timeStr);
+            if ($start === false) {
+                $start = new \DateTimeImmutable($dateStr !== '' ? $dateStr : 'now');
+            }
         }
 
         $id = is_numeric($row['cal_id'] ?? null) ? (int)$row['cal_id'] : 0;
@@ -268,7 +278,8 @@ final readonly class PdoEventRepository implements EventRepositoryInterface
             access: AccessLevel::from($access),
             recurrence: $recurrence,
             sequence: $sequence,
-            status: $status
+            status: $status,
+            allDay: $allDay,
         );
     }
 

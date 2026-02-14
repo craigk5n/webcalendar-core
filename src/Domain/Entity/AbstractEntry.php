@@ -28,6 +28,7 @@ abstract readonly class AbstractEntry
      * @param Recurrence $recurrence Recurrence rules, exclusions, and additions.
      * @param int $sequence Revision sequence number (RFC 5545).
      * @param string|null $status Entry status.
+     * @param bool $allDay Whether this is an all-day event (RFC 5545 VALUE=DATE).
      * @throws \InvalidArgumentException If name is empty or duration is negative.
      */
     public function __construct(
@@ -43,7 +44,8 @@ abstract readonly class AbstractEntry
         protected AccessLevel $access,
         protected Recurrence $recurrence = new Recurrence(),
         protected int $sequence = 0,
-        protected ?string $status = null
+        protected ?string $status = null,
+        protected bool $allDay = false,
     ) {
         if (empty(trim($this->name))) {
             throw new \InvalidArgumentException('Name cannot be empty.');
@@ -117,6 +119,14 @@ abstract readonly class AbstractEntry
     public function status(): ?string
     {
         return $this->status;
+    }
+
+    /**
+     * Whether this is an all-day event (RFC 5545 VALUE=DATE).
+     */
+    public function isAllDay(): bool
+    {
+        return $this->allDay;
     }
 
     /**
