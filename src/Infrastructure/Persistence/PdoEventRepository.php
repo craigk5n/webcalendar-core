@@ -84,10 +84,15 @@ final readonly class PdoEventRepository implements EventRepositoryInterface
     }
 
     /**
+     * @param string[]|null $users
      * @return Event[]
      */
-    public function findByDateRange(DateRange $range, ?User $user = null): array
-    {
+    public function findByDateRange(
+        DateRange $range,
+        ?User $user = null,
+        ?string $accessLevel = null,
+        ?array $users = null,
+    ): array {
         $startDateInt = (int)$range->startDate()->format('Ymd');
         $endDateInt = (int)$range->endDate()->format('Ymd');
 
@@ -98,9 +103,27 @@ final readonly class PdoEventRepository implements EventRepositoryInterface
             'end' => $endDateInt
         ];
 
+        // Access level filtering
         if ($user !== null) {
-            $sql .= ' AND cal_create_by = :login';
+            // Logged-in non-admin: see public events + own events
+            $sql .= " AND (cal_access = 'P' OR cal_create_by = :login)";
             $params['login'] = $user->login();
+        } elseif ($accessLevel !== null) {
+            // Anonymous visitor: only see events matching access level (typically 'P')
+            $sql .= ' AND cal_access = :access_level';
+            $params['access_level'] = $accessLevel;
+        }
+        // When both $user and $accessLevel are null: admin path, no access filter
+
+        // Optional users filter (restrict to specific creators)
+        if ($users !== null && $users !== []) {
+            $placeholders = [];
+            foreach ($users as $i => $login) {
+                $key = 'user_' . $i;
+                $placeholders[] = ':' . $key;
+                $params[$key] = $login;
+            }
+            $sql .= ' AND cal_create_by IN (' . implode(', ', $placeholders) . ')';
         }
 
         $stmt = $this->pdo->prepare($sql);

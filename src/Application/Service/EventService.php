@@ -22,10 +22,16 @@ final readonly class EventService
 
     /**
      * Finds events within a date range.
+     *
+     * @param string[]|null $users Optional list of user logins to restrict results to.
      */
-    public function getEventsInDateRange(DateRange $range, ?\WebCalendar\Core\Domain\Entity\User $user = null): EventCollection
-    {
-        $events = $this->eventRepository->findByDateRange($range, $user);
+    public function getEventsInDateRange(
+        DateRange $range,
+        ?\WebCalendar\Core\Domain\Entity\User $user = null,
+        ?string $accessLevel = null,
+        ?array $users = null,
+    ): EventCollection {
+        $events = $this->eventRepository->findByDateRange($range, $user, $accessLevel, $users);
         return new EventCollection($events);
     }
 

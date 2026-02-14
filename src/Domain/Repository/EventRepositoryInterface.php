@@ -25,13 +25,20 @@ interface EventRepositoryInterface
 
     /**
      * Finds all events within a specific date range.
-     * Optionally filtered by user.
-     * 
+     * Optionally filtered by user, access level, and/or specific user logins.
+     *
      * @param DateRange $range The date range to search within.
-     * @param \WebCalendar\Core\Domain\Entity\User|null $user Optional user to filter by.
+     * @param \WebCalendar\Core\Domain\Entity\User|null $user Optional user — when set, returns public events + user's own events.
+     * @param string|null $accessLevel Optional access level filter (e.g. 'P' for public only).
+     * @param string[]|null $users Optional list of user logins to restrict results to.
      * @return Event[]
      */
-    public function findByDateRange(DateRange $range, ?\WebCalendar\Core\Domain\Entity\User $user = null): array;
+    public function findByDateRange(
+        DateRange $range,
+        ?\WebCalendar\Core\Domain\Entity\User $user = null,
+        ?string $accessLevel = null,
+        ?array $users = null,
+    ): array;
 
     /**
      * Searches for events by keyword and optional filters.
