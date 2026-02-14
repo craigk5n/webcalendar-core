@@ -164,6 +164,28 @@ final readonly class EventMapper
         return $vevent;
     }
 
+    /**
+     * Extracts category names from a VEvent's CATEGORIES property.
+     *
+     * @return string[]
+     */
+    public function extractCategoryNames(VEvent $vevent): array
+    {
+        return $vevent->getCategories();
+    }
+
+    /**
+     * Adds category names to a VEvent as a CATEGORIES property.
+     *
+     * @param string[] $names
+     */
+    public function addCategoryNames(VEvent $vevent, array $names): void
+    {
+        if (!empty($names)) {
+            $vevent->setCategories(...$names);
+        }
+    }
+
     private function intervalToMinutes(\DateInterval $interval): int
     {
         return (int) ($interval->days * 24 * 60) +

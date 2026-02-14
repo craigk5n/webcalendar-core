@@ -14,6 +14,10 @@ interface CategoryRepositoryInterface
 {
     public function findById(int $id): ?Category;
 
+    public function findByName(string $name): ?Category;
+
+    public function nextId(): int;
+
     /**
      * @return Category[]
      */
@@ -40,4 +44,14 @@ interface CategoryRepositoryInterface
      * @return Category[]
      */
     public function getForEvent(EventId $eventId, string $userLogin): array;
+
+    /**
+     * Gets the number of events assigned to a category.
+     */
+    public function getEventCount(int $catId): int;
+
+    /**
+     * Reassigns all events from one category to another, deduplicating.
+     */
+    public function reassignEvents(int $fromCatId, int $toCatId, string $userLogin): void;
 }

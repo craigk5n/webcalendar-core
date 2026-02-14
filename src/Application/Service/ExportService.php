@@ -24,11 +24,12 @@ final readonly class ExportService
 
     /**
      * Exports a collection of events to an iCalendar (.ics) string.
-     * 
+     *
      * @param EventCollection $events The events to export.
+     * @param array<int, string[]> $categoryMap Optional map of event ID → category names.
      * @return string The generated ICS content.
      */
-    public function exportIcal(EventCollection $events): string
+    public function exportIcal(EventCollection $events, array $categoryMap = []): string
     {
         $vcalendar = new VCalendar();
         $vcalendar->setProductId('-//WebCalendar//NONSGML v4.0//EN');
@@ -36,6 +37,12 @@ final readonly class ExportService
 
         foreach ($events as $event) {
             $vevent = $this->eventMapper->toVEvent($event);
+
+            $eventId = $event->id()->value();
+            if (isset($categoryMap[$eventId]) && !empty($categoryMap[$eventId])) {
+                $this->eventMapper->addCategoryNames($vevent, $categoryMap[$eventId]);
+            }
+
             $vcalendar->addComponent($vevent);
         }
 

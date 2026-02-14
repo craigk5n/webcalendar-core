@@ -33,6 +33,26 @@ final readonly class PdoCategoryRepository implements CategoryRepositoryInterfac
         return $this->mapRowToCategory($row);
     }
 
+    public function findByName(string $name): ?Category
+    {
+        $stmt = $this->pdo->prepare("SELECT * FROM {$this->tablePrefix}webcal_categories WHERE LOWER(cat_name) = LOWER(:name) LIMIT 1");
+        $stmt->execute(['name' => $name]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!is_array($row)) {
+            return null;
+        }
+
+        return $this->mapRowToCategory($row);
+    }
+
+    public function nextId(): int
+    {
+        $stmt = $this->pdo->query("SELECT MAX(cat_id) FROM {$this->tablePrefix}webcal_categories");
+        $max = $stmt ? (int) $stmt->fetchColumn() : 0;
+        return $max + 1;
+    }
+
     /**
      * @return Category[]
      */
@@ -142,6 +162,35 @@ final readonly class PdoCategoryRepository implements CategoryRepositoryInterfac
         }
 
         return $categories;
+    }
+
+    public function getEventCount(int $catId): int
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT COUNT(DISTINCT cal_id) FROM {$this->tablePrefix}webcal_entry_categories WHERE cat_id = :id"
+        );
+        $stmt->execute(['id' => $catId]);
+        return (int) $stmt->fetchColumn();
+    }
+
+    public function reassignEvents(int $fromCatId, int $toCatId, string $userLogin): void
+    {
+        // Delete junction rows that would become duplicates after reassignment
+        $stmt = $this->pdo->prepare(
+            "DELETE FROM {$this->tablePrefix}webcal_entry_categories
+             WHERE cat_id = :from_id AND cal_id IN (
+                 SELECT cal_id FROM (
+                     SELECT cal_id FROM {$this->tablePrefix}webcal_entry_categories WHERE cat_id = :to_id
+                 ) AS existing
+             )"
+        );
+        $stmt->execute(['from_id' => $fromCatId, 'to_id' => $toCatId]);
+
+        // Reassign remaining rows
+        $stmt = $this->pdo->prepare(
+            "UPDATE {$this->tablePrefix}webcal_entry_categories SET cat_id = :to_id WHERE cat_id = :from_id"
+        );
+        $stmt->execute(['to_id' => $toCatId, 'from_id' => $fromCatId]);
     }
 
     /**
