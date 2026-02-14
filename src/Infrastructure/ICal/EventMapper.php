@@ -92,6 +92,14 @@ final readonly class EventMapper
             $recurrence = new Recurrence(rule: new RecurrenceRule($rruleStr));
         }
 
+        // Map CLASS property to AccessLevel (RFC 5545 default is PUBLIC)
+        $classValue = $vevent->getProperty('CLASS')?->getValue()->getRawValue();
+        $access = match (strtoupper($classValue ?? '')) {
+            'PRIVATE' => AccessLevel::PRIVATE,
+            'CONFIDENTIAL' => AccessLevel::CONFIDENTIAL,
+            default => AccessLevel::PUBLIC,
+        };
+
         return new Event(
             id: new EventId(0),
             uid: $uid,
@@ -102,7 +110,7 @@ final readonly class EventMapper
             duration: $durationMinutes,
             createdBy: $createdBy,
             type: EventType::EVENT,
-            access: AccessLevel::PUBLIC,
+            access: $access,
             recurrence: $recurrence,
             sequence: (int) ($vevent->getProperty('SEQUENCE')?->getValue()->getRawValue() ?? 0),
             status: $vevent->getProperty('STATUS')?->getValue()->getRawValue(),
@@ -144,6 +152,14 @@ final readonly class EventMapper
         if ($event->recurrence()->rule() !== null) {
             $vevent->setRrule($event->recurrence()->rule()->toString());
         }
+
+        // Map AccessLevel to CLASS property
+        $classValue = match ($event->access()) {
+            AccessLevel::PRIVATE => 'PRIVATE',
+            AccessLevel::CONFIDENTIAL => 'CONFIDENTIAL',
+            AccessLevel::PUBLIC => 'PUBLIC',
+        };
+        $vevent->addProperty(GenericProperty::create('CLASS', $classValue));
 
         return $vevent;
     }
