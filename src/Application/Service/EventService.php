@@ -38,8 +38,8 @@ final readonly class EventService
         ?array $users = null,
     ): EventCollection {
         $this->logger->debug('Fetching events in date range', [
-            'start' => $range->start()->format('c'),
-            'end' => $range->end()->format('c'),
+            'start' => $range->startDate()->format('c'),
+            'end' => $range->endDate()->format('c'),
             'user' => $user?->login(),
             'access' => $accessLevel
         ]);
@@ -61,7 +61,7 @@ final readonly class EventService
     public function createEvent(Event $event): void
     {
         $this->logger->info('Creating new event', ['uid' => $event->uid(), 'name' => $event->name()]);
-        $this->eventRepository->create($event);
+        $this->eventRepository->save($event);
     }
 
     /**
@@ -70,7 +70,7 @@ final readonly class EventService
     public function updateEvent(Event $event): void
     {
         $this->logger->info('Updating event', ['id' => $event->id()->value(), 'name' => $event->name()]);
-        $this->eventRepository->update($event);
+        $this->eventRepository->save($event);
     }
 
     /**
