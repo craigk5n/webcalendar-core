@@ -12,6 +12,8 @@ use WebCalendar\Core\Domain\ValueObject\EventId;
 use WebCalendar\Core\Infrastructure\ICal\EventMapper;
 use Icalendar\Parser\Parser;
 use Icalendar\Component\VEvent;
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 
 /**
  * Service for importing calendar data from external formats.
@@ -19,13 +21,16 @@ use Icalendar\Component\VEvent;
 final readonly class ImportService
 {
     private Parser $parser;
+    private LoggerInterface $logger;
 
     public function __construct(
         private EventRepositoryInterface $eventRepository,
         private EventMapper $eventMapper,
         private ?CategoryRepositoryInterface $categoryRepository = null,
+        ?LoggerInterface $logger = null,
     ) {
         $this->parser = new Parser(Parser::LENIENT);
+        $this->logger = $logger ?? new NullLogger();
     }
 
     /**
@@ -36,72 +41,61 @@ final readonly class ImportService
      */
     public function importIcal(string $icsContent, User $user): void
     {
-        $vcalendar = $this->parser->parse($icsContent);
+        $this->logger->info('Starting iCal import', ['user' => $user->login(), 'content_length' => strlen($icsContent)]);
 
+        try {
+            $vcalendar = $this->parser->parse($icsContent);
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to parse iCal content', ['error' => $e->getMessage()]);
+            throw $e;
+        }
+
+        $count = 0;
         foreach ($vcalendar->getComponents() as $component) {
             if ($component instanceof VEvent) {
-                $event = $this->eventMapper->fromVEvent($component, $user->login());
+                try {
+                    $event = $this->eventMapper->fromVEvent($component, $user->login());
 
-                // Update detection: check if an event with the same UID already exists
-                $existingEvent = $this->eventRepository->findByUid($event->uid());
+                    // Update detection: check if an event with the same UID already exists
+                    $existingEvent = $this->eventRepository->findByUid($event->uid());
 
-                if ($existingEvent !== null) {
-                    continue;
-                }
+                    if ($existingEvent !== null) {
+                        $this->logger->debug('Skipping existing event', ['uid' => $event->uid()]);
+                        continue;
+                    }
 
-                $this->eventRepository->save($event);
+                    $this->eventRepository->create($event);
+                    $count++;
 
-                // Handle categories from iCal CATEGORIES property
-                if ($this->categoryRepository !== null) {
-                    $categoryNames = $this->eventMapper->extractCategoryNames($component);
-                    if (!empty($categoryNames)) {
-                        $savedEvent = $this->eventRepository->findByUid($event->uid());
-                        if ($savedEvent !== null) {
-                            $categoryIds = $this->resolveCategories($categoryNames);
-                            $this->categoryRepository->assignToEvent(
-                                $savedEvent->id(),
-                                $user->login(),
-                                $categoryIds
-                            );
+                    // Handle categories if present in the component and repo is available
+                    if ($this->categoryRepository !== null) {
+                        $categories = $component->getProperty('CATEGORIES');
+                        if ($categories !== null) {
+                            $catNames = explode(',', $categories->getValue()->getRawValue());
+                            foreach ($catNames as $catName) {
+                                $catName = trim($catName);
+                                if ($catName === '') continue;
+
+                                $category = $this->categoryRepository->findByName($catName, $user->login());
+                                if ($category === null) {
+                                    $category = new Category(0, $user->login(), $catName);
+                                    $this->categoryRepository->create($category);
+                                    // Need to find it again to get the ID if created
+                                    $category = $this->categoryRepository->findByName($catName, $user->login());
+                                }
+
+                                if ($category !== null) {
+                                    $this->categoryRepository->assignToEvent($event->id(), $user->login(), [$category->id()]);
+                                }
+                            }
                         }
                     }
+                } catch (\Exception $e) {
+                    $this->logger->warning('Failed to import VEVENT', ['error' => $e->getMessage(), 'uid' => $component->getProperty('UID')?->getValue()->getRawValue()]);
                 }
             }
         }
-    }
 
-    /**
-     * Resolves category names to IDs, auto-creating global categories as needed.
-     *
-     * @param string[] $names
-     * @return int[]
-     */
-    private function resolveCategories(array $names): array
-    {
-        assert($this->categoryRepository !== null);
-
-        $ids = [];
-        foreach ($names as $name) {
-            $name = trim($name);
-            if ($name === '') {
-                continue;
-            }
-
-            $existing = $this->categoryRepository->findByName($name);
-            if ($existing !== null) {
-                $ids[] = $existing->id();
-            } else {
-                $newId = $this->categoryRepository->nextId();
-                $category = new Category(
-                    id: $newId,
-                    owner: null,
-                    name: $name,
-                    color: null,
-                );
-                $this->categoryRepository->save($category);
-                $ids[] = $newId;
-            }
-        }
-        return $ids;
+        $this->logger->info('iCal import completed', ['imported_count' => $count]);
     }
 }
