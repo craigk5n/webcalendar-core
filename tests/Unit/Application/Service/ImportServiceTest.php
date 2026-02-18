@@ -50,7 +50,7 @@ ICS;
             ->willReturn(null);
 
         $this->eventRepository->expects($this->once())
-            ->method('save')
+            ->method('create')
             ->with($this->isInstanceOf(Event::class));
 
         $this->importService->importIcal($icsContent, $user);

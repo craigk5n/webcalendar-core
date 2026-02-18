@@ -51,13 +51,37 @@ final readonly class NotificationService
         }
 
         try {
-            $this->webhookProvider->send('event.reminder', [
+            $this->webhookProvider->trigger('event.reminder', [
                 'event_id' => $event->id()->value(),
                 'user_login' => $user->login(),
                 'event_name' => $event->name()
             ]);
         } catch (\Exception $e) {
             $this->logger->warning('Failed to send reminder webhook', ['error' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Notifies participants about an event via webhook.
+     *
+     * @param Event $event The event to notify about.
+     * @param User[] $participants The participants to notify.
+     * @param string $webhookUrl The webhook URL to trigger.
+     */
+    public function notifyParticipants(Event $event, array $participants, string $webhookUrl): void
+    {
+        $this->logger->info('Notifying participants', ['event_id' => $event->id()->value(), 'webhook_url' => $webhookUrl]);
+
+        $payload = [
+            'event_id' => $event->id()->value(),
+            'event_name' => $event->name(),
+            'participants' => array_map(fn(User $u) => $u->login(), $participants),
+        ];
+
+        try {
+            $this->webhookProvider->trigger($webhookUrl, $payload);
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to notify participants via webhook', ['error' => $e->getMessage()]);
         }
     }
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace WebCalendar\Core\Application\Service;
 
 use WebCalendar\Core\Domain\Entity\Event;
+use WebCalendar\Core\Domain\Exception\EventNotFoundException;
 use WebCalendar\Core\Domain\Repository\EventRepositoryInterface;
 use WebCalendar\Core\Domain\ValueObject\EventId;
 use WebCalendar\Core\Domain\ValueObject\DateRange;
@@ -66,19 +67,51 @@ final readonly class EventService
 
     /**
      * Updates an existing event.
+     *
+     * @throws EventNotFoundException if the event does not exist.
      */
     public function updateEvent(Event $event): void
     {
+        $existing = $this->eventRepository->findById($event->id());
+        if ($existing === null) {
+            throw EventNotFoundException::forId($event->id());
+        }
+
         $this->logger->info('Updating event', ['id' => $event->id()->value(), 'name' => $event->name()]);
         $this->eventRepository->save($event);
     }
 
     /**
      * Deletes an event.
+     *
+     * @throws EventNotFoundException if the event does not exist.
      */
     public function deleteEvent(EventId $id): void
     {
+        $existing = $this->eventRepository->findById($id);
+        if ($existing === null) {
+            throw EventNotFoundException::forId($id);
+        }
+
         $this->logger->info('Deleting event', ['id' => $id->value()]);
         $this->eventRepository->delete($id);
+    }
+
+    /**
+     * Approves an event for a participant.
+     */
+    public function approveEvent(EventId $id, string $login): void
+    {
+        $this->logger->info('Approving event', ['id' => $id->value(), 'user' => $login]);
+        $this->eventRepository->updateParticipantStatus($id, $login, 'A');
+    }
+
+    /**
+     * Rejects an event for a participant.
+     */
+    public function rejectEvent(EventId $id, string $login): void
+    {
+        $this->logger->info('Rejecting event', ['id' => $id->value(), 'user' => $login]);
+        $this->eventRepository->updateParticipantStatus($id, $login, 'R');
     }
 }
