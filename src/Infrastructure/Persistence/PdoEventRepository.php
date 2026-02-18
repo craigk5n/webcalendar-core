@@ -96,21 +96,37 @@ final readonly class PdoEventRepository implements EventRepositoryInterface
         $startDateInt = (int)$range->startDate()->format('Ymd');
         $endDateInt = (int)$range->endDate()->format('Ymd');
 
-        $sql = "SELECT * FROM {$this->tablePrefix}webcal_entry
-                WHERE cal_date BETWEEN :start AND :end";
+        // Fetch events whose cal_date falls within the window, PLUS recurring
+        // events whose cal_date is before the window but whose recurrence
+        // extends into or past it.  RecurrenceService::expand() clips
+        // occurrences to the actual date range, so over-fetching is safe.
+        $sql = "SELECT e.* FROM {$this->tablePrefix}webcal_entry e
+                WHERE (
+                    e.cal_date BETWEEN :start AND :end
+                    OR (
+                        e.cal_date < :repeat_cutoff
+                        AND EXISTS (
+                            SELECT 1 FROM {$this->tablePrefix}webcal_entry_repeats r
+                            WHERE r.cal_id = e.cal_id
+                            AND (r.cal_end IS NULL OR r.cal_end = 0 OR r.cal_end >= :repeat_min)
+                        )
+                    )
+                )";
         $params = [
             'start' => $startDateInt,
-            'end' => $endDateInt
+            'end' => $endDateInt,
+            'repeat_cutoff' => $startDateInt,
+            'repeat_min' => $startDateInt,
         ];
 
         // Access level filtering
         if ($user !== null) {
             // Logged-in non-admin: see public events + own events
-            $sql .= " AND (cal_access = 'P' OR cal_create_by = :login)";
+            $sql .= " AND (e.cal_access = 'P' OR e.cal_create_by = :login)";
             $params['login'] = $user->login();
         } elseif ($accessLevel !== null) {
             // Anonymous visitor: only see events matching access level (typically 'P')
-            $sql .= ' AND cal_access = :access_level';
+            $sql .= ' AND e.cal_access = :access_level';
             $params['access_level'] = $accessLevel;
         }
         // When both $user and $accessLevel are null: admin path, no access filter
@@ -123,7 +139,7 @@ final readonly class PdoEventRepository implements EventRepositoryInterface
                 $placeholders[] = ':' . $key;
                 $params[$key] = $login;
             }
-            $sql .= ' AND cal_create_by IN (' . implode(', ', $placeholders) . ')';
+            $sql .= ' AND e.cal_create_by IN (' . implode(', ', $placeholders) . ')';
         }
 
         $stmt = $this->pdo->prepare($sql);
@@ -190,8 +206,13 @@ final readonly class PdoEventRepository implements EventRepositoryInterface
         }
 
         $this->pdo->prepare($sql)->execute($data);
-        
+
         $this->saveRecurrence($idValue, $event->recurrence());
+    }
+
+    public function create(Event $event): void
+    {
+        $this->save($event);
     }
 
     public function delete(EventId $id): void
