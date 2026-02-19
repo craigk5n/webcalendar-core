@@ -18,7 +18,7 @@
   ],
   "require": {
     "php": ">=8.2",
-    "craigk5n/php-icalendar-core": "^1.0",
+    "craigk5n/php-icalendar-core": "^1.1.0",
     "psr/log": "^3.0"
   },
   "require-dev": {
