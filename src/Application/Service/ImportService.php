@@ -78,7 +78,7 @@ final readonly class ImportService
 
                                 $category = $this->categoryRepository->findByName($catName, $user->login());
                                 if ($category === null) {
-                                    $category = new Category(0, $user->login(), $catName);
+                                    $category = new Category(0, $user->login(), $catName, null);
                                     $this->categoryRepository->create($category);
                                     // Need to find it again to get the ID if created
                                     $category = $this->categoryRepository->findByName($catName, $user->login());

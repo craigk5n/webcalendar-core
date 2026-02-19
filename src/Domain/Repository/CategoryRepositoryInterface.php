@@ -14,7 +14,7 @@ interface CategoryRepositoryInterface
 {
     public function findById(int $id): ?Category;
 
-    public function findByName(string $name): ?Category;
+    public function findByName(string $name, ?string $owner = null): ?Category;
 
     public function nextId(): int;
 

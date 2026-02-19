@@ -33,10 +33,15 @@ final readonly class PdoCategoryRepository implements CategoryRepositoryInterfac
         return $this->mapRowToCategory($row);
     }
 
-    public function findByName(string $name): ?Category
+    public function findByName(string $name, ?string $owner = null): ?Category
     {
-        $stmt = $this->pdo->prepare("SELECT * FROM {$this->tablePrefix}webcal_categories WHERE LOWER(cat_name) = LOWER(:name) LIMIT 1");
-        $stmt->execute(['name' => $name]);
+        if ($owner !== null) {
+            $stmt = $this->pdo->prepare("SELECT * FROM {$this->tablePrefix}webcal_categories WHERE LOWER(cat_name) = LOWER(:name) AND cat_owner = :owner LIMIT 1");
+            $stmt->execute(['name' => $name, 'owner' => $owner]);
+        } else {
+            $stmt = $this->pdo->prepare("SELECT * FROM {$this->tablePrefix}webcal_categories WHERE LOWER(cat_name) = LOWER(:name) LIMIT 1");
+            $stmt->execute(['name' => $name]);
+        }
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if (!is_array($row)) {
