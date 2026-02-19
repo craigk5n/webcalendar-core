@@ -8,6 +8,8 @@
 *.swp
 *.swo
 *~
+/1
+/2
 .DS_Store
 Thumbs.db
 /coverage/
