@@ -1,12 +1,12 @@
 # WebCalendar Core
 
-[![PHP Version](https://img.shields.io/badge/php-%3E%3D8.1-8892BF.svg)](https://www.php.net/)
+[![PHP Version](https://img.shields.io/badge/php-%3E%3D8.2-8892BF.svg)](https://www.php.net/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![PHPStan Level 9](https://img.shields.io/badge/phpstan-level%209-brightgreen.svg)](https://phpstan.org/)
 [![PHPUnit Tests](https://github.com/craigk5n/webcalendar-core/actions/workflows/tests.yml/badge.svg)](https://github.com/craigk5n/webcalendar-core/actions)
 [![codecov](https://codecov.io/gh/craigk5n/webcalendar-core/graph/badge.svg)](https://codecov.io/gh/craigk5n/webcalendar-core)
 
-Pure PHP 8.1+ business logic library for [WebCalendar](https://www.k5n.us/webcalendar/), a multi-user calendar and scheduling application. This package provides domain models, application services, and repository interfaces with **zero UI code** -- designed to be consumed by any frontend or framework.
+Pure PHP 8.2+ business logic library for [WebCalendar](https://www.k5n.us/webcalendar/), a multi-user calendar and scheduling application. This package provides domain models, application services, and repository interfaces with **zero UI code** -- designed to be consumed by any frontend or framework.
 
 ## Architecture
 
@@ -42,7 +42,7 @@ This library is part of a ground-up rewrite of [WebCalendar](https://github.com/
 
 ## Requirements
 
-- PHP 8.1 or higher
+- PHP 8.2 or higher
 - PDO extension (with driver for your database)
 - One of: MySQL 5.7+ / MariaDB 10.3+, PostgreSQL 12+, or SQLite 3.25+
 

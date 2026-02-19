@@ -1,6 +1,6 @@
 {
   "name": "craigk5n/webcalendar-core",
-  "description": "WebCalendar Core - PHP 8.1+ business logic library for calendar management",
+  "description": "WebCalendar Core - PHP 8.2+ business logic library for calendar management",
   "type": "library",
   "keywords": ["calendar", "icalendar", "scheduling", "events", "webcalendar"],
   "homepage": "https://github.com/craigk5n/webcalendar-core",
@@ -17,7 +17,7 @@
     }
   ],
   "require": {
-    "php": ">=8.1",
+    "php": ">=8.2",
     "craigk5n/php-icalendar-core": "^1.0",
     "psr/log": "^3.0"
   },
