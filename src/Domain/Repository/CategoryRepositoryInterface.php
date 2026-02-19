@@ -30,6 +30,11 @@ interface CategoryRepositoryInterface
 
     public function save(Category $category): void;
 
+    /**
+     * Creates a new category. Alias for save() used by ImportService.
+     */
+    public function create(Category $category): void;
+
     public function delete(int $id): void;
 
     /**

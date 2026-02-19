@@ -53,6 +53,11 @@ interface EventRepositoryInterface
     public function save(Event $event): void;
 
     /**
+     * Creates a new event. Alias for save() used by ImportService.
+     */
+    public function create(Event $event): void;
+
+    /**
      * Deletes an event by its identifier.
      */
     public function delete(EventId $id): void;

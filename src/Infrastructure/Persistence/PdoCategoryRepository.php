@@ -117,6 +117,11 @@ final readonly class PdoCategoryRepository implements CategoryRepositoryInterfac
         $this->pdo->prepare($sql)->execute($data);
     }
 
+    public function create(Category $category): void
+    {
+        $this->save($category);
+    }
+
     public function delete(int $id): void
     {
         $stmt = $this->pdo->prepare("DELETE FROM {$this->tablePrefix}webcal_categories WHERE cat_id = :id");
