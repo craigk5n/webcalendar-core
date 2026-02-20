@@ -43,7 +43,7 @@ final readonly class EventMapper
     {
         $uid = $vevent->getUid() ?? '';
         $name = $vevent->getSummary() ?? 'Untitled Event';
-        $description = $vevent->getDescription() ?? '';
+        $description = $this->extractDescription($vevent);
         $location = $vevent->getLocation() ?? '';
 
         // Detect all-day event: DTSTART with VALUE=DATE (no time component)
@@ -129,7 +129,7 @@ final readonly class EventMapper
         $vevent = new VEvent();
         $vevent->setUid($event->uid());
         $vevent->setSummary($event->name());
-        $vevent->setDescription($event->description());
+        $this->setDescription($vevent, $event->description());
         $vevent->setLocation($event->location());
 
         if ($event->isAllDay()) {
@@ -184,6 +184,94 @@ final readonly class EventMapper
         if (!empty($names)) {
             $vevent->setCategories(...$names);
         }
+    }
+
+    /**
+     * Extract the best available description from a VEvent.
+     *
+     * Priority: STYLED-DESCRIPTION (RFC 9073) → X-ALT-DESC (Outlook) → DESCRIPTION (plain).
+     */
+    private function extractDescription(VEvent $vevent): string
+    {
+        // 1. RFC 9073 STYLED-DESCRIPTION
+        $styledProp = $vevent->getProperty('STYLED-DESCRIPTION');
+        if ($styledProp !== null) {
+            return $styledProp->getValue()->getRawValue();
+        }
+
+        // 2. Microsoft X-ALT-DESC with FMTTYPE=text/html
+        $xAltProp = $vevent->getProperty('X-ALT-DESC');
+        if ($xAltProp !== null) {
+            $fmtType = $xAltProp->getParameter('FMTTYPE');
+            if ($fmtType !== null && stripos($fmtType, 'text/html') !== false) {
+                return $xAltProp->getValue()->getRawValue();
+            }
+        }
+
+        // 3. Plain DESCRIPTION fallback
+        return $vevent->getDescription() ?? '';
+    }
+
+    /**
+     * Set description on a VEvent, using triple output for HTML content.
+     *
+     * HTML descriptions produce:
+     * 1. STYLED-DESCRIPTION;VALUE=TEXT;FMTTYPE=text/html (RFC 9073)
+     * 2. X-ALT-DESC;FMTTYPE=text/html (Outlook/Thunderbird compat)
+     * 3. DESCRIPTION;DERIVED=TRUE (plain-text fallback)
+     *
+     * Plain-text descriptions produce a single DESCRIPTION property.
+     */
+    private function setDescription(VEvent $vevent, string $description): void
+    {
+        if ($description === '') {
+            $vevent->setDescription('');
+            return;
+        }
+
+        $isHtml = $description !== strip_tags($description);
+
+        if (!$isHtml) {
+            $vevent->setDescription($description);
+            return;
+        }
+
+        // 1. STYLED-DESCRIPTION (RFC 9073)
+        $styledProp = GenericProperty::create('STYLED-DESCRIPTION', $description);
+        $styledProp->setParameter('VALUE', 'TEXT');
+        $styledProp->setParameter('FMTTYPE', 'text/html');
+        $vevent->addProperty($styledProp);
+
+        // 2. X-ALT-DESC (Outlook/Thunderbird)
+        $xAltProp = GenericProperty::create('X-ALT-DESC', $description);
+        $xAltProp->setParameter('FMTTYPE', 'text/html');
+        $vevent->addProperty($xAltProp);
+
+        // 3. Plain-text fallback with DERIVED=TRUE
+        $plainText = $this->htmlToPlainText($description);
+        $plainProp = GenericProperty::create('DESCRIPTION', $plainText);
+        $plainProp->setParameter('DERIVED', 'TRUE');
+        $vevent->addProperty($plainProp);
+    }
+
+    /**
+     * Convert HTML to plain text for the DESCRIPTION fallback.
+     */
+    private function htmlToPlainText(string $html): string
+    {
+        // Convert <br> variants to newlines
+        $text = (string) preg_replace('/<br\s*\/?>/i', "\n", $html);
+        // Convert </p> to double newline
+        $text = (string) preg_replace('/<\/p>/i', "\n\n", $text);
+        // Convert </li> to newline
+        $text = (string) preg_replace('/<\/li>/i', "\n", $text);
+        // Strip remaining tags
+        $text = strip_tags($text);
+        // Decode HTML entities
+        $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        // Normalize whitespace: collapse multiple blank lines
+        $text = (string) preg_replace('/\n{3,}/', "\n\n", $text);
+        return trim($text);
     }
 
     private function intervalToMinutes(\DateInterval $interval): int
