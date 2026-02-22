@@ -142,6 +142,7 @@ final class PdoEventRepositoryTest extends RepositoryTestCase
         $row = $stmt->fetch(\PDO::FETCH_ASSOC);
 
         $this->assertNotFalse($row);
+        $this->assertIsArray($row);
         $this->assertSame('admin', $row['cal_login']);
         $this->assertSame('A', $row['cal_status']);
     }

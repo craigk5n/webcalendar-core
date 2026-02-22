@@ -51,6 +51,14 @@ interface CategoryRepositoryInterface
     public function getForEvent(EventId $eventId, string $userLogin): array;
 
     /**
+     * Gets the primary category for multiple events in a batch query.
+     *
+     * @param EventId[] $eventIds
+     * @return array<int, array{id: int, color: string|null}> Map of event_id => category info.
+     */
+    public function getForEventsBatch(array $eventIds, string $userLogin): array;
+
+    /**
      * Gets the number of events assigned to a category.
      */
     public function getEventCount(int $catId): int;

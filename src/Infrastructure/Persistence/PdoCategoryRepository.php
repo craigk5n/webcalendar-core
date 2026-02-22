@@ -174,6 +174,39 @@ final readonly class PdoCategoryRepository implements CategoryRepositoryInterfac
         return $categories;
     }
 
+    public function getForEventsBatch(array $eventIds, string $userLogin): array
+    {
+        if (empty($eventIds)) {
+            return [];
+        }
+
+        $ids = array_map(fn(EventId $id) => $id->value(), $eventIds);
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $params = array_merge($ids, [$userLogin]);
+
+        $stmt = $this->pdo->prepare(
+            "SELECT ec.cal_id, c.cat_id, c.cat_color
+             FROM {$this->tablePrefix}webcal_entry_categories ec
+             JOIN {$this->tablePrefix}webcal_categories c ON ec.cat_id = c.cat_id AND ec.cat_owner = c.cat_owner
+             WHERE ec.cal_id IN ($placeholders) AND ec.cat_owner = ?
+             ORDER BY ec.cat_order ASC"
+        );
+        $stmt->execute($params);
+
+        $map = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $eid = (int) $row['cal_id'];
+            if (!isset($map[$eid])) {
+                $map[$eid] = [
+                    'id' => (int) $row['cat_id'],
+                    'color' => $row['cat_color'],
+                ];
+            }
+        }
+
+        return $map;
+    }
+
     public function getEventCount(int $catId): int
     {
         $stmt = $this->pdo->prepare(

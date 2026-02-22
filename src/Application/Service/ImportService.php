@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace WebCalendar\Core\Application\Service;
 
+use WebCalendar\Core\Application\DTO\ImportResult;
 use WebCalendar\Core\Domain\Entity\Category;
 use WebCalendar\Core\Domain\Entity\User;
 use WebCalendar\Core\Domain\Repository\CategoryRepositoryInterface;
@@ -39,7 +40,7 @@ final readonly class ImportService
      * @param string $icsContent The ICS file content.
      * @param User $user The user importing the events.
      */
-    public function importIcal(string $icsContent, User $user): void
+    public function importIcal(string $icsContent, User $user): ImportResult
     {
         $this->logger->info('Starting iCal import', ['user' => $user->login(), 'content_length' => strlen($icsContent)]);
 
@@ -51,6 +52,7 @@ final readonly class ImportService
         }
 
         $count = 0;
+        $skipped = 0;
         foreach ($vcalendar->getComponents() as $component) {
             if ($component instanceof VEvent) {
                 try {
@@ -61,6 +63,7 @@ final readonly class ImportService
 
                     if ($existingEvent !== null) {
                         $this->logger->debug('Skipping existing event', ['uid' => $event->uid()]);
+                        $skipped++;
                         continue;
                     }
 
@@ -96,6 +99,8 @@ final readonly class ImportService
             }
         }
 
-        $this->logger->info('iCal import completed', ['imported_count' => $count]);
+        $this->logger->info('iCal import completed', ['imported_count' => $count, 'skipped_count' => $skipped]);
+
+        return new ImportResult($count, $skipped);
     }
 }

@@ -66,4 +66,38 @@ interface EventRepositoryInterface
      * Updates the status of a participant for an event.
      */
     public function updateParticipantStatus(EventId $eventId, string $userLogin, string $status): void;
+
+    /**
+     * Get participant logins for an event.
+     *
+     * @return string[]
+     */
+    public function getParticipants(EventId $id): array;
+
+    /**
+     * Get participant logins for multiple events in a single query.
+     *
+     * @param EventId[] $eventIds
+     * @return array<int, string[]> Map of event_id => participant logins.
+     */
+    public function getParticipantsBatch(array $eventIds): array;
+
+    /**
+     * Replace all participants for an event.
+     *
+     * @param string[] $logins
+     */
+    public function saveParticipants(EventId $id, array $logins): void;
+
+    /**
+     * Get UIDs of events created by a specific login.
+     *
+     * @return string[]
+     */
+    public function findUidsByCreator(string $login): array;
+
+    /**
+     * Delete all events created by a specific login.
+     */
+    public function deleteByCreator(string $login): void;
 }

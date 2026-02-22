@@ -264,6 +264,66 @@ final readonly class PdoEventRepository implements EventRepositoryInterface
         ]);
     }
 
+    public function getParticipants(EventId $id): array
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT cal_login FROM {$this->tablePrefix}webcal_entry_user WHERE cal_id = :id"
+        );
+        $stmt->execute(['id' => $id->value()]);
+        return $stmt->fetchAll(PDO::FETCH_COLUMN);
+    }
+
+    public function getParticipantsBatch(array $eventIds): array
+    {
+        if (empty($eventIds)) {
+            return [];
+        }
+
+        $ids = array_map(fn(EventId $id) => $id->value(), $eventIds);
+        $map = array_fill_keys($ids, []);
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $stmt = $this->pdo->prepare(
+            "SELECT cal_id, cal_login FROM {$this->tablePrefix}webcal_entry_user WHERE cal_id IN ($placeholders)"
+        );
+        $stmt->execute($ids);
+
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $map[(int) $row['cal_id']][] = $row['cal_login'];
+        }
+
+        return $map;
+    }
+
+    public function saveParticipants(EventId $id, array $logins): void
+    {
+        $this->pdo->prepare(
+            "DELETE FROM {$this->tablePrefix}webcal_entry_user WHERE cal_id = :id"
+        )->execute(['id' => $id->value()]);
+
+        $insert = $this->pdo->prepare(
+            "INSERT INTO {$this->tablePrefix}webcal_entry_user (cal_id, cal_login, cal_status) VALUES (:id, :login, 'A')"
+        );
+        foreach ($logins as $login) {
+            $insert->execute(['id' => $id->value(), 'login' => $login]);
+        }
+    }
+
+    public function findUidsByCreator(string $login): array
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT cal_uid FROM {$this->tablePrefix}webcal_entry WHERE cal_create_by = :login AND cal_uid IS NOT NULL"
+        );
+        $stmt->execute(['login' => $login]);
+        return $stmt->fetchAll(PDO::FETCH_COLUMN);
+    }
+
+    public function deleteByCreator(string $login): void
+    {
+        $this->pdo->prepare(
+            "DELETE FROM {$this->tablePrefix}webcal_entry WHERE cal_create_by = :login"
+        )->execute(['login' => $login]);
+    }
+
     private function getNextId(): int
     {
         $stmt = $this->pdo->query("SELECT IFNULL(MAX(cal_id), 0) + 1 FROM {$this->tablePrefix}webcal_entry");
