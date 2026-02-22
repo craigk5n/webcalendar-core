@@ -117,6 +117,76 @@ final class PdoEventRepositoryTest extends RepositoryTestCase
         $this->assertSame('Lunch', $results->all()[0]->name());
     }
 
+    public function testSaveCreatesParticipantRowForCreator(): void
+    {
+        $event = new Event(
+            id: new EventId(0),
+            uid: 'participant-test',
+            name: 'Participant Test',
+            description: '',
+            location: '',
+            start: new \DateTimeImmutable('2026-03-10 10:00:00'),
+            duration: 60,
+            createdBy: 'admin',
+            type: EventType::EVENT,
+            access: AccessLevel::PUBLIC
+        );
+
+        $this->repository->save($event);
+
+        // Verify the participant row was created in webcal_entry_user
+        $stmt = $this->pdo->prepare(
+            'SELECT cal_login, cal_status FROM webcal_entry_user WHERE cal_id = :id'
+        );
+        $stmt->execute(['id' => 1]); // First event gets ID 1
+        $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+
+        $this->assertNotFalse($row);
+        $this->assertSame('admin', $row['cal_login']);
+        $this->assertSame('A', $row['cal_status']);
+    }
+
+    public function testUpdateDoesNotDuplicateParticipantRow(): void
+    {
+        $event = new Event(
+            id: new EventId(0),
+            uid: 'no-dup-test',
+            name: 'Original',
+            description: '',
+            location: '',
+            start: new \DateTimeImmutable('2026-03-10 10:00:00'),
+            duration: 60,
+            createdBy: 'admin',
+            type: EventType::EVENT,
+            access: AccessLevel::PUBLIC
+        );
+
+        $this->repository->save($event);
+
+        // Update the same event (now has ID 1)
+        $updated = new Event(
+            id: new EventId(1),
+            uid: 'no-dup-test',
+            name: 'Updated',
+            description: '',
+            location: '',
+            start: new \DateTimeImmutable('2026-03-10 11:00:00'),
+            duration: 90,
+            createdBy: 'admin',
+            type: EventType::EVENT,
+            access: AccessLevel::PUBLIC
+        );
+
+        $this->repository->save($updated);
+
+        // Should still be exactly 1 participant row, not 2
+        $stmt = $this->pdo->prepare(
+            'SELECT COUNT(*) FROM webcal_entry_user WHERE cal_id = :id'
+        );
+        $stmt->execute(['id' => 1]);
+        $this->assertSame(1, (int) $stmt->fetchColumn());
+    }
+
     public function testRecurrencePersistence(): void
     {
         $start = new \DateTimeImmutable('2026-02-11 10:00:00');

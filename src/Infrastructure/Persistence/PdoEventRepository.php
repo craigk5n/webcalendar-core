@@ -72,12 +72,22 @@ final readonly class PdoEventRepository implements EventRepositoryInterface
 
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute($params);
-        $events = [];
 
+        $rows = [];
+        $ids = [];
         while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
             if (is_array($row)) {
-                $events[] = $this->mapRowToEvent($row);
+                $id = is_numeric($row['cal_id'] ?? null) ? (int)$row['cal_id'] : 0;
+                $rows[] = $row;
+                $ids[] = $id;
             }
+        }
+
+        $recurrences = $this->batchLoadRecurrences($ids);
+        $events = [];
+        foreach ($rows as $row) {
+            $id = is_numeric($row['cal_id'] ?? null) ? (int)$row['cal_id'] : 0;
+            $events[] = $this->mapRowToEvent($row, $recurrences[$id] ?? null);
         }
 
         return new \WebCalendar\Core\Domain\ValueObject\EventCollection($events);
@@ -144,12 +154,22 @@ final readonly class PdoEventRepository implements EventRepositoryInterface
 
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute($params);
-        $events = [];
 
+        $rows = [];
+        $ids = [];
         while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
             if (is_array($row)) {
-                $events[] = $this->mapRowToEvent($row);
+                $id = is_numeric($row['cal_id'] ?? null) ? (int)$row['cal_id'] : 0;
+                $rows[] = $row;
+                $ids[] = $id;
             }
+        }
+
+        $recurrences = $this->batchLoadRecurrences($ids);
+        $events = [];
+        foreach ($rows as $row) {
+            $id = is_numeric($row['cal_id'] ?? null) ? (int)$row['cal_id'] : 0;
+            $events[] = $this->mapRowToEvent($row, $recurrences[$id] ?? null);
         }
 
         return $events;
@@ -207,6 +227,15 @@ final readonly class PdoEventRepository implements EventRepositoryInterface
 
         $this->pdo->prepare($sql)->execute($data);
 
+        // Auto-create participant row for the event creator on new events.
+        // Mirrors PdoTaskRepository behavior and ensures the creator appears
+        // in webcal_entry_user for multi-user features (conflict detection, etc.).
+        if ($isNew) {
+            $this->pdo->prepare(
+                "INSERT INTO {$this->tablePrefix}webcal_entry_user (cal_id, cal_login, cal_status) VALUES (:id, :login, 'A')"
+            )->execute(['id' => $idValue, 'login' => $event->createdBy()]);
+        }
+
         $this->saveRecurrence($idValue, $event->recurrence());
     }
 
@@ -248,7 +277,7 @@ final readonly class PdoEventRepository implements EventRepositoryInterface
     /**
      * @param array<string, mixed> $row
      */
-    private function mapRowToEvent(array $row): Event
+    private function mapRowToEvent(array $row, ?Recurrence $preloadedRecurrence = null): Event
     {
         $rawDate = $row['cal_date'] ?? '';
         $dateStr = is_scalar($rawDate) ? (string)$rawDate : '';
@@ -284,7 +313,7 @@ final readonly class PdoEventRepository implements EventRepositoryInterface
         $sequence = is_numeric($row['cal_sequence'] ?? null) ? (int)$row['cal_sequence'] : 0;
         $status = is_string($row['cal_status'] ?? null) ? $row['cal_status'] : null;
 
-        $recurrence = $this->loadRecurrence($id);
+        $recurrence = $preloadedRecurrence ?? $this->loadRecurrence($id);
 
         return new Event(
             id: new EventId($id),
@@ -318,6 +347,75 @@ final readonly class PdoEventRepository implements EventRepositoryInterface
         [$exDate, $rDate] = $this->loadExceptions($id);
 
         return new Recurrence($rule, $exDate, $rDate);
+    }
+
+    /**
+     * Batch-load recurrence rules and exceptions for multiple event IDs.
+     *
+     * Replaces per-row loadRecurrence() calls with 2 bulk queries,
+     * eliminating the N+1 query problem in findByDateRange()/search().
+     *
+     * @param int[] $ids
+     * @return array<int, Recurrence>
+     */
+    private function batchLoadRecurrences(array $ids): array
+    {
+        if ($ids === []) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+
+        // 1. Batch-load all recurrence rules
+        $stmt = $this->pdo->prepare(
+            "SELECT * FROM {$this->tablePrefix}webcal_entry_repeats WHERE cal_id IN ($placeholders)"
+        );
+        $stmt->execute(array_values($ids));
+
+        $rules = [];
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            if (is_array($row)) {
+                $calId = is_numeric($row['cal_id'] ?? null) ? (int)$row['cal_id'] : 0;
+                $rules[$calId] = $this->mapRowToRecurrenceRule($row);
+            }
+        }
+
+        // 2. Batch-load all exceptions (EXDATE + RDATE)
+        $stmt = $this->pdo->prepare(
+            "SELECT cal_id, cal_date, cal_exdate FROM {$this->tablePrefix}webcal_entry_repeats_not WHERE cal_id IN ($placeholders)"
+        );
+        $stmt->execute(array_values($ids));
+
+        /** @var array<int, \DateTimeImmutable[]> $exDates */
+        $exDates = [];
+        /** @var array<int, \DateTimeImmutable[]> $rDates */
+        $rDates = [];
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            if (is_array($row)) {
+                $calId = is_numeric($row['cal_id'] ?? null) ? (int)$row['cal_id'] : 0;
+                $dateStr = (string)$row['cal_date'];
+                $date = \DateTimeImmutable::createFromFormat('Ymd', $dateStr);
+                if ($date !== false) {
+                    if ((int)$row['cal_exdate'] === 1) {
+                        $exDates[$calId][] = $date;
+                    } else {
+                        $rDates[$calId][] = $date;
+                    }
+                }
+            }
+        }
+
+        // 3. Build Recurrence objects indexed by event ID
+        $result = [];
+        foreach ($ids as $id) {
+            $result[$id] = new Recurrence(
+                $rules[$id] ?? null,
+                new ExDate($exDates[$id] ?? []),
+                new RDate($rDates[$id] ?? [])
+            );
+        }
+
+        return $result;
     }
 
     /**
