@@ -46,6 +46,8 @@ abstract readonly class AbstractEntry
         protected int $sequence = 0,
         protected ?string $status = null,
         protected bool $allDay = false,
+        protected ?int $modDate = null,
+        protected ?int $modTime = null,
     ) {
         if (empty(trim($this->name))) {
             throw new \InvalidArgumentException('Name cannot be empty.');
@@ -127,6 +129,16 @@ abstract readonly class AbstractEntry
     public function isAllDay(): bool
     {
         return $this->allDay;
+    }
+
+    public function modDate(): ?int
+    {
+        return $this->modDate;
+    }
+
+    public function modTime(): ?int
+    {
+        return $this->modTime;
     }
 
     /**

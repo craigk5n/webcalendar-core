@@ -54,7 +54,7 @@ final readonly class PdoEventRepository implements EventRepositoryInterface
         return $this->mapRowToEvent($row);
     }
 
-    public function search(string $keyword, ?DateRange $range = null, ?User $user = null): \WebCalendar\Core\Domain\ValueObject\EventCollection
+    public function search(string $keyword, ?DateRange $range = null, ?User $user = null, ?string $accessLevel = null, ?int $limit = null): \WebCalendar\Core\Domain\ValueObject\EventCollection
     {
         $sql = "SELECT * FROM {$this->tablePrefix}webcal_entry WHERE (cal_name LIKE :keyword OR cal_description LIKE :keyword)";
         $params = ['keyword' => '%' . $keyword . '%'];
@@ -68,6 +68,17 @@ final readonly class PdoEventRepository implements EventRepositoryInterface
         if ($user !== null) {
             $sql .= ' AND cal_create_by = :login';
             $params['login'] = $user->login();
+        }
+
+        if ($accessLevel !== null) {
+            $sql .= ' AND cal_access = :access';
+            $params['access'] = $accessLevel;
+        }
+
+        $sql .= ' ORDER BY cal_date DESC';
+
+        if ($limit !== null) {
+            $sql .= ' LIMIT ' . (int)$limit;
         }
 
         $stmt = $this->pdo->prepare($sql);
@@ -324,6 +335,41 @@ final readonly class PdoEventRepository implements EventRepositoryInterface
         )->execute(['login' => $login]);
     }
 
+    public function findByAccessLevel(string $accessLevel, int $limit, int $offset): array
+    {
+        $sql = "SELECT * FROM {$this->tablePrefix}webcal_entry WHERE cal_access = :access ORDER BY cal_id ASC LIMIT " . (int)$limit . " OFFSET " . (int)$offset;
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute(['access' => $accessLevel]);
+
+        $rows = [];
+        $ids = [];
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            if (is_array($row)) {
+                $id = is_numeric($row['cal_id'] ?? null) ? (int)$row['cal_id'] : 0;
+                $rows[] = $row;
+                $ids[] = $id;
+            }
+        }
+
+        $recurrences = $this->batchLoadRecurrences($ids);
+        $events = [];
+        foreach ($rows as $row) {
+            $id = is_numeric($row['cal_id'] ?? null) ? (int)$row['cal_id'] : 0;
+            $events[] = $this->mapRowToEvent($row, $recurrences[$id] ?? null);
+        }
+
+        return $events;
+    }
+
+    public function countByAccessLevel(string $accessLevel): int
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT COUNT(*) FROM {$this->tablePrefix}webcal_entry WHERE cal_access = :access"
+        );
+        $stmt->execute(['access' => $accessLevel]);
+        return (int)$stmt->fetchColumn();
+    }
+
     private function getNextId(): int
     {
         $stmt = $this->pdo->query("SELECT IFNULL(MAX(cal_id), 0) + 1 FROM {$this->tablePrefix}webcal_entry");
@@ -390,6 +436,8 @@ final readonly class PdoEventRepository implements EventRepositoryInterface
             sequence: $sequence,
             status: $status,
             allDay: $allDay,
+            modDate: is_numeric($row['cal_mod_date'] ?? null) ? (int)$row['cal_mod_date'] : null,
+            modTime: is_numeric($row['cal_mod_time'] ?? null) ? (int)$row['cal_mod_time'] : null,
         );
     }
 

@@ -42,10 +42,16 @@ interface EventRepositoryInterface
 
     /**
      * Searches for events by keyword and optional filters.
-     * 
+     *
      * @return \WebCalendar\Core\Domain\ValueObject\EventCollection
      */
-    public function search(string $keyword, ?DateRange $range = null, ?\WebCalendar\Core\Domain\Entity\User $user = null): \WebCalendar\Core\Domain\ValueObject\EventCollection;
+    public function search(
+        string $keyword,
+        ?DateRange $range = null,
+        ?\WebCalendar\Core\Domain\Entity\User $user = null,
+        ?string $accessLevel = null,
+        ?int $limit = null,
+    ): \WebCalendar\Core\Domain\ValueObject\EventCollection;
 
     /**
      * Persists an event.
@@ -100,4 +106,15 @@ interface EventRepositoryInterface
      * Delete all events created by a specific login.
      */
     public function deleteByCreator(string $login): void;
+
+    /**
+     * Finds events by access level with pagination.
+     * @return Event[]
+     */
+    public function findByAccessLevel(string $accessLevel, int $limit, int $offset): array;
+
+    /**
+     * Counts events with a specific access level.
+     */
+    public function countByAccessLevel(string $accessLevel): int;
 }
