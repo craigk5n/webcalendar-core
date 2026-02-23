@@ -3,7 +3,7 @@
 **Version:** 4.0
 **Date:** 2026-02-09
 **Status:** Planning / Refactoring
-**Purpose:** Feature catalog and architectural blueprint for `webcalendar-core`, the PHP 8.1+ business logic library (Composer package) that provides domain models, services, repository interfaces, and REST API contracts for the WebCalendar ecosystem. This package will first be used as the REST backend service that powers a new WebCalendar plugin for WordPress.  It will also be used as the starting point of the next generation of WebCalendar.
+**Purpose:** Feature catalog and architectural blueprint for `webcalendar-core`, the PHP 8.1+ business logic library (Composer package) that provides domain models, services, and repository interfaces for the WebCalendar ecosystem. This package is consumed by `webcalendar-api` (REST API server), `webcalendar-wp` (WordPress plugin), and `webcalendar-web` (React SPA frontend).
 
 ---
 
@@ -72,49 +72,43 @@ WebCalendar is a multi-user PHP web-based calendar application (current version 
 
 **CURRENT:** Monolithic PHP application with server-rendered HTML, `dbi4php` database abstraction, and global-state-based session management. All business logic, presentation, and data access are intermixed in `includes/functions.php` (~6600 lines) and root-level PHP files. The legacy code is in the `legacy/` directory for reference only — it is excluded from git and not used as a dependency in this Composer-based package.
 
-**TARGET:** `webcalendar-core` is the single source of truth for all business logic, consumed by separate frontend projects via Composer and REST API.
+**TARGET:** `webcalendar-core` is the single source of truth for all business logic, consumed by separate projects via Composer.
 
 **Core Library Characteristics:**
-- **Clean Architecture:** Business logic decoupled from presentation via well-defined API contracts.
-- **REST-First:** Defines REST API contracts (OpenAPI spec) that all frontends consume.
+- **Clean Architecture:** Business logic decoupled from presentation and HTTP concerns.
 - **Interoperability:** Full RFC 5545/5546 compliance for modern device sync via `php-icalendar-core`.
-- **Deployment-Agnostic:** Usable as a Composer dependency by standalone web apps, WordPress plugins, or headless API servers.
-- **Zero UI:** Contains no HTML, CSS, JavaScript, or rendering logic.
+- **Deployment-Agnostic:** Usable as a Composer dependency by API servers (`webcalendar-api`), WordPress plugins (`webcalendar-wp`), or any PHP application.
+- **Zero UI, Zero HTTP:** Contains no HTML, CSS, JavaScript, rendering logic, or HTTP routing. REST API controllers and middleware belong in `webcalendar-api`.
 
 ---
 
 ## 2. Architecture Overview
 
-**TARGET:** The WebCalendar ecosystem is split into **three distinct projects** with clear boundaries and contracts. This PRD covers `webcalendar-core` only.
+**TARGET:** The WebCalendar ecosystem is split into **four distinct projects** with clear boundaries and contracts. This PRD covers `webcalendar-core` only.
 
 ### 2.1 Project Separation
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    WebCalendar Ecosystem                     │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  ┌──────────────────┐      ┌──────────────────────────┐    │
-│  │ webcalendar-core │      │   Frontend Implementations│    │
-│  │   (Composer      │◄────►│                          │    │
-│  │    Package)      │ REST │  ┌────────────────────┐  │    │
-│  │                  │ API  │  │ webcalendar-web    │  │    │
-│  │ - Business Logic │      │  │ (React SPA)        │  │    │
-│  │ - Domain Models  │      │  └────────────────────┘  │    │
-│  │ - Services       │      │                          │    │
-│  │ - Repositories   │      │  ┌────────────────────┐  │    │
-│  │ - Validation     │      │  │ webcalendar-classic│  │    │
-│  └──────────────────┘      │  │ (Bootstrap/PHP)    │  │    │
-│         ▲                  │  └────────────────────┘  │    │
-│         │ Composer         │                          │    │
-│         │ Dependency       │  ┌────────────────────┐  │    │
-│  ┌──────┴───────────┐      │  │ WordPress Plugin   │  │    │
-│  │  webcalendar-wp  │      │  │ (WP Block Editor)  │  │    │
-│  │  (WordPress      │      │  └────────────────────┘  │    │
-│  │   Plugin)        │      │                          │    │
-│  └──────────────────┘      └──────────────────────────┘    │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                     WebCalendar Ecosystem                      │
+├──────────────────────────────────────────────────────────────┤
+│                                                                │
+│  ┌──────────────────┐                                        │
+│  │ webcalendar-core │  Pure PHP business logic library        │
+│  │  (Composer Pkg)  │  Domain models, services, repositories  │
+│  └────────┬─────────┘                                        │
+│           │ Composer dependency                               │
+│     ┌─────┴─────┬─────────────────┐                          │
+│     ▼           ▼                 ▼                           │
+│  ┌──────────┐ ┌──────────────┐ ┌──────────────┐             │
+│  │ wc-api   │ │ wc-wp        │ │ wc-web       │             │
+│  │ (REST    │ │ (WordPress   │ │ (React SPA)  │             │
+│  │  Server) │ │  Plugin)     │ │              │             │
+│  │ Slim /   │ │ WP bridges   │ │ Consumes     │             │
+│  │ Mezzio   │ │ + WP REST    │ │ wc-api       │             │
+│  └──────────┘ └──────────────┘ └──────────────┘             │
+│                                                                │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 ### 2.2 Project: webcalendar-core
@@ -129,13 +123,14 @@ WebCalendar is a multi-user PHP web-based calendar application (current version 
 - Service layer (EventService, UserService, etc.)
 - RFC 5545 iCal parsing and generation
 - Authentication abstractions (interface-based)
-- REST API contract definitions (OpenAPI spec)
 
-**Key Principle:** Contains **zero** UI code, HTML, CSS, or JavaScript. Pure PHP business logic only.
+**Key Principle:** Contains **zero** UI code, HTML, CSS, JavaScript, or HTTP routing. Pure PHP business logic only. REST API controllers, middleware, and OpenAPI specs belong in `webcalendar-api`.
 
 ### 2.3 External Projects (Out of Scope)
 
-**webcalendar-web** — Standalone full-stack PHP application that provides HTTP routing, REST API controllers, session management, and frontend asset delivery. Consumes `webcalendar-core` via Composer.
+**webcalendar-api** — REST API server (Slim or Mezzio framework) providing thin HTTP controllers that wrap core services, authentication middleware, OpenAPI 3.0 specification, rate limiting headers, and JSON response formatting. Consumes `webcalendar-core` via Composer.
+
+**webcalendar-web** — React SPA frontend that consumes `webcalendar-api` for all data operations. No direct dependency on `webcalendar-core`.
 
 **webcalendar-wp** — WordPress plugin that bridges `webcalendar-core` into WordPress via `WpAuthenticationProvider`, `WpDatabaseConnection`, and `WpLogger` implementations of core's contract interfaces. Consumes `webcalendar-core` via Composer (bundled).
 
@@ -181,15 +176,13 @@ WebCalendar\Core\
 │   │   └── (Request/Response objects)
 │   └── Contract\
 │       └── (Interfaces for external dependencies)
-├── Infrastructure\
-│   ├── Persistence\
-│   │   └── (Repository implementations)
-│   └── ICal\
-│       ├── EventMapper.php    (Event ↔ VEvent)
-│       ├── TaskMapper.php     (Event[Task] ↔ VTodo)
-│       └── JournalMapper.php  (Event[Journal] ↔ VJournal)
-└── Contract\
-    └── (API contracts, OpenAPI specs)
+└── Infrastructure\
+    ├── Persistence\
+    │   └── (Repository implementations)
+    └── ICal\
+        ├── EventMapper.php    (Event ↔ VEvent)
+        ├── TaskMapper.php     (Event[Task] ↔ VTodo)
+        └── JournalMapper.php  (Event[Journal] ↔ VJournal)
 ```
 
 ### 3.2 Core Services
@@ -630,7 +623,7 @@ POST   /api/v2/journals
 
 ### 8.2 TARGET: Interface-Based Authentication (Inversion of Control)
 
-**TARGET:** `webcalendar-core` adopts a stateless, interface-driven authentication strategy. The core library defines the **contracts** for authentication and user retrieval, while the **host application** (WordPress, standalone web app, etc.) provides the concrete implementation.
+**TARGET:** `webcalendar-core` adopts a stateless, interface-driven authentication strategy. The core library defines the **contracts** for authentication and user retrieval, while the **host application** (`webcalendar-api`, `webcalendar-wp`, etc.) provides the concrete implementation.
 
 #### 8.2.1 Core Interfaces
 
@@ -706,7 +699,7 @@ public function getEventsForUser(User $currentUser, DateRange $range): array;
 - [ ] Legacy MD5 passwords auto-upgrade on successful login
 - [ ] Admin can enable/disable user accounts
 - [ ] User preferences persist across sessions and implementations
-- [ ] API token generation works for MCP/REST access regardless of auth backend
+- [ ] API token generation works for MCP access regardless of auth backend (REST access handled by webcalendar-api)
 
 ---
 
@@ -1634,9 +1627,11 @@ The core library provides a `ConfigService` for reading and writing system setti
 
 ## 27. REST API Architecture
 
+> **Note:** The REST API implementation (controllers, middleware, routing, OpenAPI spec) belongs in the **webcalendar-api** project. This section is retained here as a reference for the API contract that webcalendar-api will implement on top of webcalendar-core services.
+
 ### 27.1 Overview
 
-**TARGET:** All frontends consume JSON REST API. No direct database access from UI layer.
+**TARGET:** All frontends consume a JSON REST API provided by `webcalendar-api`. No direct database access from the UI layer. The API server uses `webcalendar-core` services for all business logic.
 
 ### 27.2 API Endpoints (Complete)
 
@@ -1726,7 +1721,7 @@ GET    /api/v2/admin/activity-log?start=YYYYMMDD&end=YYYYMMDD&user={login}
 
 ### 27.4 OpenAPI Specification
 
-- Complete OpenAPI 3.0 spec in `webcalendar-core/contract/openapi.yaml`
+- Complete OpenAPI 3.0 spec maintained in `webcalendar-api` (not in this repo)
 - Auto-generated API documentation
 - Client SDK generation support
 
@@ -1737,6 +1732,8 @@ GET    /api/v2/admin/activity-log?start=YYYYMMDD&end=YYYYMMDD&user={login}
 - Integration with Zapier/Make
 
 ### 27.6 Recurrence Handling in API
+
+> **Note:** Recurrence expansion logic resides in `webcalendar-core`'s `RecurrenceService`. The API response formatting described below is implemented in `webcalendar-api`.
 
 **TARGET:** To ensure compatibility with modern frontend libraries (e.g., Toast UI Calendar, FullCalendar) and simplify client-side logic, the API employs a hybrid expansion strategy.
 
@@ -2068,11 +2065,10 @@ Allows per-user customization of page header, footer, and CSS. The core library 
 3. Implement core services with 100% unit test coverage
 4. Publish webcalendar-core as Composer package
 
-### Phase 2: REST API Contracts
-1. Define OpenAPI specification for all endpoints
-2. Implement request/response DTO classes
-3. Define authentication contract interfaces
-4. Token-based and session-based auth abstractions
+### Phase 2: Application Contracts
+1. Implement request/response DTO classes
+2. Define authentication contract interfaces
+3. Token-based and session-based auth abstractions
 
 ### Phase 3: Database Modernization
 1. Replace `dbi4php` with PDO-based repository implementations
@@ -2082,7 +2078,8 @@ Allows per-user customization of page header, footer, and CSS. The core library 
 ### Subsequent Phases (External Projects)
 
 The following phases are handled by separate projects and are listed here for context only:
-- **webcalendar-web:** REST API controllers, React SPA, Bootstrap classic mode
+- **webcalendar-api:** REST API server (Slim/Mezzio), controllers, middleware, OpenAPI spec
+- **webcalendar-web:** React SPA frontend consuming webcalendar-api
 - **webcalendar-wp:** WordPress bridge implementations, Gutenberg blocks
 - **Legacy deprecation:** Migration tools, archive of legacy repository
 
@@ -2376,7 +2373,7 @@ This appendix provides a complete, prioritized backlog of epics and user stories
 - **User** — authenticated calendar user
 - **Admin** — system administrator
 - **External Visitor** — unauthenticated person (booking pages, public feeds)
-- **API Consumer** — external system or AI agent calling the REST/MCP API
+- **API Consumer** — external system or AI agent calling the REST API (via webcalendar-api) or MCP API
 - **WP Admin** — WordPress site administrator
 
 **Priority:**
@@ -2396,7 +2393,7 @@ This appendix provides a complete, prioritized backlog of epics and user stories
 3. No PHPStan Level 6+ errors introduced
 4. All existing tests still pass
 5. Database changes include migration SQL for MySQL, PostgreSQL, and SQLite3
-6. API changes include updated OpenAPI spec
+6. API contract changes communicated to webcalendar-api for OpenAPI spec updates
 7. `> For AI Agents:` notes in related PRD sections are satisfied
 
 **Story ID format:** `S-{epic}.{sequence}` (e.g., S-1.3 = Epic 1, Story 3)
@@ -2551,10 +2548,12 @@ This appendix provides a complete, prioritized backlog of epics and user stories
 
 ---
 
-### Epic 3: REST API
+### Epic 3: REST API (webcalendar-api)
+
+> **Note:** This epic belongs in the **webcalendar-api** project, not webcalendar-core. It is retained here for cross-reference and dependency tracking.
 
 **Goal:** Build a complete JSON REST API consumed by all frontends.
-**Phase:** 2 (Months 2–4) | **PRD Refs:** Section 27
+**Phase:** 2 (Months 2–4) | **PRD Refs:** Section 27 | **Project:** webcalendar-api
 
 #### S-3.1: API router and middleware framework
 
@@ -3021,8 +3020,9 @@ This appendix provides a complete, prioritized backlog of epics and user stories
 
 The following epics are documented in their respective project repositories:
 
+- **Epic 3: REST API** (6 stories: S-3.1–S-3.6) — Build REST API server in `webcalendar-api`. Depends on core Epics 1-2 being complete.
 - **Epic 10: WordPress Plugin** (5 stories: S-10.1–S-10.5) — Build `webcalendar-wp` WordPress plugin. Depends on core Epics 1-2 being complete.
-- **Epic 11: React Frontend** (5 stories: S-11.1–S-11.5) — Build React SPA in `webcalendar-web`. Depends on core Epic 3 (REST API) being complete.
+- **Epic 11: React Frontend** (5 stories: S-11.1–S-11.5) — Build React SPA in `webcalendar-web`. Depends on `webcalendar-api` Epic 3 (REST API) being complete.
 - **Epic 12: New Features** (4 stories: S-12.1–S-12.4) — Public booking pages, booking configuration, natural language event creation, location mapping. The booking business logic (S-12.1, S-12.2) has core components; the UI is a frontend concern.
 
 ---
@@ -3044,7 +3044,7 @@ S-1.1 (package init)
         ├── S-5.1 (UserService) ── S-5.2 (PermissionService)
         └── S-6.1 (CategoryService)
 
-S-3.1 (API router)
+S-3.1 (API router) ─── webcalendar-api project
   └── S-3.2 (auth middleware)
         ├── S-3.3 (event endpoints)
         ├── S-3.4 (supporting endpoints)
@@ -3058,7 +3058,7 @@ S-3.1 (API router)
 |------|------|----|----|----|-------|
 | 1 | Core Library Foundation | 7 | 0 | 0 | 7 |
 | 2 | Database Layer Modernization | 4 | 1 | 0 | 5 |
-| 3 | REST API | 4 | 2 | 0 | 6 |
+| 3 | REST API *(webcalendar-api)* | 4 | 2 | 0 | 6 |
 | 4 | Event Lifecycle | 3 | 3 | 0 | 6 |
 | 5 | User & Access Management | 1 | 3 | 0 | 4 |
 | 6 | Calendar Features | 2 | 3 | 1 | 6 |
@@ -3080,8 +3080,8 @@ S-3.1 (API router)
 | 5 | S-1.6, S-1.7 | iCal integration complete |
 | 6 | S-4.1, S-5.1, S-5.2, S-6.1 | Core services implemented |
 | 7 | S-4.2, S-4.3, S-4.4, S-4.5, S-4.6 | Full event lifecycle |
-| 8 | S-3.1, S-3.2, S-9.3 | API framework + auth + security |
-| 9 | S-3.3, S-3.4, S-3.5, S-3.6 | All API endpoints |
+| 8 | S-3.1, S-3.2, S-9.3 | API framework + auth + security *(webcalendar-api)* |
+| 9 | S-3.3, S-3.4, S-3.5, S-3.6 | All API endpoints *(webcalendar-api)* |
 | 10 | S-5.3, S-5.4, S-6.2, S-6.3, S-6.4, S-6.5 | Supporting features |
 | 11 | S-7.1, S-7.2, S-7.3, S-7.4 | Data exchange |
 | 12 | S-8.1, S-8.2, S-8.3, S-9.1, S-9.2, S-9.4 | Notifications + admin |
@@ -3172,9 +3172,11 @@ This section provides architectural and implementation recommendations to ensure
 
 ### 32.1 API Versioning Strategy
 
+> **Note:** API versioning is the responsibility of `webcalendar-api`. These recommendations are retained here for reference.
+
 **CURRENT:** Single version (`/api/v2`) with no documented migration path.
 
-**TARGET:** Implement a clear versioning strategy for API evolution:
+**TARGET:** Implement a clear versioning strategy for API evolution (in webcalendar-api):
 
 1. **URL-based versioning:** Continue using `/api/v{major}` for breaking changes
 2. **Deprecation headers:** Include `Deprecation: true` and `Sunset: <date>` headers in responses for deprecated endpoints
@@ -3260,7 +3262,7 @@ This section provides architectural and implementation recommendations to ensure
 
 **TARGET:** Comprehensive testing pyramid:
 
-1. **Contract tests:** Validate API responses match OpenAPI spec using tools like Schemathesis
+1. **Contract tests:** Validate API responses match OpenAPI spec using tools like Schemathesis (in webcalendar-api)
 2. **Performance tests:** Load testing with k6 or Artillery for critical paths
    - 1000 concurrent users
    - 95th percentile response time < 200ms
@@ -3280,7 +3282,7 @@ This section provides architectural and implementation recommendations to ensure
 
 **TARGET:** API documentation best practices:
 
-1. **OpenAPI specification:** Maintain `Contract/openapi.yaml` as single source of truth
+1. **OpenAPI specification:** Maintain `openapi.yaml` in webcalendar-api as single source of truth
 2. **Request/response examples:** Every endpoint must have realistic examples
 3. **Error catalog:** Document all possible error codes and their meanings
 4. **Changelog:** Keep detailed changelog for API consumers

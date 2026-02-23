@@ -1,6 +1,8 @@
 # WebCalendar Core API Documentation
 
-This document defines the REST API for the `webcalendar-core` library. It covers all functionality required to replace the legacy WebCalendar v1.9.13 application, supporting modern frontends and integrations.
+> **Note:** The REST API implementation (controllers, middleware, routing, OpenAPI spec) belongs in the **webcalendar-api** project. This document is retained here as a reference for the API contract that `webcalendar-api` will implement on top of `webcalendar-core` services. When `webcalendar-api` is created, this file should be migrated there.
+
+This document defines the REST API contract for the WebCalendar ecosystem. It covers all functionality required to replace the legacy WebCalendar v1.9.13 application, supporting modern frontends and integrations.
 
 ## 1. General Conventions
 

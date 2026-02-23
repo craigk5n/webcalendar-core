@@ -6,9 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 WebCalendar is a multi-user PHP calendar application (legacy v1.9.13) being rewritten as a modern PHP 8.1+ system. This repository (`webcalendar-core`) is the **core business logic library** — a Composer package containing domain models, services, and repository interfaces with **zero** UI code.
 
-The full ecosystem is three projects:
+The full ecosystem is four projects:
 - **webcalendar-core** (this repo) — Pure PHP business logic, domain models, services, repository interfaces
-- **webcalendar-web** — Standalone frontend (React SPA or Bootstrap+PHP) consuming the REST API
+- **webcalendar-api** — REST API server (Slim or Mezzio), thin controllers wrapping core services, OpenAPI spec
+- **webcalendar-web** — React SPA frontend consuming the REST API via webcalendar-api
 - **webcalendar-wp** — WordPress plugin using core as a Composer dependency
 
 The `legacy/` directory contains the original monolithic PHP application **for reference only** during migration. It is excluded from git (see `.gitignore`) and must not be used as a dependency or imported into the new codebase.
@@ -53,10 +54,9 @@ WebCalendar\Core\
 │   ├── Service\         # EventService, UserService, PermissionService, etc.
 │   ├── DTO\             # Request/Response objects
 │   └── Contract\        # Interfaces for external dependencies
-├── Infrastructure\
-│   ├── Persistence\     # Repository implementations
-│   └── ICal\            # RFC 5545 handling via craigk5n/php-icalendar-core
-└── Contract\            # API contracts, OpenAPI specs
+└── Infrastructure\
+    ├── Persistence\     # Repository implementations
+    └── ICal\            # RFC 5545 handling via craigk5n/php-icalendar-core
 ```
 
 ### Key Design Principles
@@ -65,12 +65,6 @@ WebCalendar\Core\
 - **Contract interfaces** for external deps: `AuthenticationProvider`, `DatabaseConnection`, `Logger` (PSR-3)
 - All services are **stateless**
 - WordPress integration via bridge classes (WpAuthenticationProvider, WpDatabaseConnection, WpLogger)
-
-### REST API
-- All endpoints under `/api/v2/`
-- JSON responses with consistent envelope format
-- Auth: session-based (Cookie+CSRF) for browsers, Bearer token for API clients, X-API-Key for MCP
-- OpenAPI 3.0 spec in `Contract/openapi.yaml`
 
 ## Database Conventions
 
@@ -97,22 +91,22 @@ Key tables: `webcal_entry` (events), `webcal_entry_user` (participants), `webcal
 
 - **Unit:** PHPUnit 9.x for Domain/Application layers. Target 95% line coverage.
 - **Integration:** Test repository implementations against SQLite (in-memory).
-- **Contract:** Validate API responses against OpenAPI spec (e.g., Schemathesis).
+- **Contract:** Validate API responses against OpenAPI spec (in webcalendar-api).
 - **Performance:** Benchmark critical paths (target p95 < 200ms).
 - **Mutation:** Use Infection PHP to verify test quality (target score > 80%).
 
 ## Security Standards
 
 - **Input Validation:** Strict type checking on all inputs. Sanitize HTML in descriptions (if `ALLOW_HTML_DESCRIPTION` is enabled). Validate file uploads (MIME type, size).
-- **Output Encoding:** Ensure proper JSON encoding/escaping. Implement Content Security Policy (CSP) headers.
+- **Output Encoding:** Ensure proper JSON encoding/escaping. Content Security Policy (CSP) headers are the responsibility of webcalendar-api and webcalendar-web.
 - **Secrets Management:** Never commit secrets to git. Use environment variables for sensitive config.
 - **Audit Logging:** Log all administrative actions, authentication events, and permission changes to `webcal_entry_log`.
 
 ## Observability Standards
 
-- **Metrics:** Track response times (p50, p95, p99), error rates by endpoint, request volume, and DB query performance.
+- **Metrics:** Track DB query performance. HTTP response times, error rates by endpoint, and request volume are the responsibility of webcalendar-api.
 - **Logging:** Use structured JSON logging (PSR-3) with correlation IDs for request tracing.
-- **Tracing:** Implement distributed tracing for multi-service interactions.
+- **Tracing:** Distributed tracing for multi-service interactions is the responsibility of webcalendar-api.
 
 ## Legacy Codebase Reference (legacy/)
 
@@ -146,7 +140,7 @@ The `craigk5n/php-icalendar-core` Composer package (namespace `Icalendar\`) hand
 
 ## PRD Reference
 
-`PRD.md` is the requirements document for this project (webcalendar-core only; frontend and WordPress plugin are out of scope). It has 31 sections plus 7 appendices. Sections are marked:
+`PRD.md` is the requirements document for this project (webcalendar-core only; REST API, frontend, and WordPress plugin are out of scope — they belong in webcalendar-api, webcalendar-web, and webcalendar-wp respectively). It has 31 sections plus 7 appendices. Sections are marked:
 - **CURRENT:** Legacy behavior to preserve
 - **TARGET:** Modern implementation goals
 - **NEW:** Features to build from scratch
@@ -154,10 +148,10 @@ The `craigk5n/php-icalendar-core` Composer package (namespace `Icalendar\`) hand
 Key sections for implementation:
 - Section 3: Namespace structure, core services, dependency injection, contracts
 - Sections 5-23: Feature-specific data models, business logic, and API contracts
-- Section 27: Complete REST API endpoint definitions
+- Section 27: REST API Architecture (implementation belongs in webcalendar-api; endpoint definitions retained here for reference)
 - Section 29: Database support and PDO migration
 - Section 31: Database schema reference
 - Appendix F: RFC 5545 gap analysis
-- Appendix G: 47 user stories across 9 epics (Epics 1-9), with dependency graph and implementation order
+- Appendix G: 47 user stories across 9 epics (Epics 1-9), with dependency graph and implementation order. Note: Epic 3 (REST API) belongs in webcalendar-api.
 
 Each section includes explicit data models with field names/types. Match these exactly when implementing. User stories follow format `S-{epic}.{sequence}` with sizes S/M/L/XL and priorities P0 (MVP) / P1 (parity) / P2 (enhancement).

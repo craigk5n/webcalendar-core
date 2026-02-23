@@ -37,7 +37,8 @@ This library is part of a ground-up rewrite of [WebCalendar](https://github.com/
 |---------|--------|---------|
 | [**webcalendar**](https://github.com/craigk5n/webcalendar) | Legacy | Original monolithic PHP application |
 | **webcalendar-core** (this repo) | In development | Business logic library (Composer package) |
-| **webcalendar-web** | Planned | Standalone frontend consuming the REST API |
+| **webcalendar-api** | Planned | REST API server (Slim/Mezzio) wrapping core services |
+| **webcalendar-web** | Planned | React SPA frontend consuming the REST API |
 | **webcalendar-wp** | In development | WordPress plugin using core as a dependency |
 
 ## Requirements

@@ -6,7 +6,7 @@
 
 *   **Type:** PHP Library (Composer Package)
 *   **Purpose:** Provides domain models, services, repository interfaces, and RFC 5545 iCalendar handling.
-*   **Scope:** **Zero UI.** This library contains *only* business logic. Presentation is handled by consuming projects (`webcalendar-web`, `webcalendar-wp`).
+*   **Scope:** **Zero UI, Zero HTTP.** This library contains *only* business logic. REST API lives in `webcalendar-api`, frontend in `webcalendar-web`, WordPress plugin in `webcalendar-wp`.
 *   **Status:** Active development / Refactoring.
 
 ## Architecture
@@ -66,5 +66,5 @@ For infrastructure layer tests (repositories, etc.), we use an in-memory SQLite 
 ## Reference Documentation
 
 *   **Data Models:** See `PRD.md` (Sections 5-31) for exact field names and types.
-*   **API Contracts:** See `PRD.md` (Section 27) and `Contract/openapi.yaml`.
-*   **User Stories:** See `PRD.md` (Appendix G).
+*   **API Contracts:** See `PRD.md` (Section 27) and `API.md` for reference. OpenAPI spec and implementation belong in `webcalendar-api`.
+*   **User Stories:** See `PRD.md` (Appendix G). Note: Epic 3 (REST API) belongs in `webcalendar-api`.

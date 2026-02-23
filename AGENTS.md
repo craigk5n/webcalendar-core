@@ -111,12 +111,14 @@ TBD: verify no PHP syntax errors
 ## Key Files Reference
 
 - `PRD.md` — Requirements document (31 sections, 7 appendices)
-- `Contract/openapi.yaml` — REST API spec
+- `API.md` — REST API contract reference (implementation belongs in `webcalendar-api`)
 - `legacy/includes/functions.php` — Legacy business logic reference (for reference only, see below)
 - `legacy/wizard/shared/tables-*.sql` — Database schema (for reference only)
 - `legacy/docs/WebCalendar-Database.md` - Database schema documentation (for reference only)
 
 **Note:** All files in `legacy/` are from the original WebCalendar application and are for reference only. Do not import or use them in the new codebase.
+
+**Note:** REST API controllers, middleware, and OpenAPI specs belong in the `webcalendar-api` project, not here.
 
 ## What NOT to Do
 
