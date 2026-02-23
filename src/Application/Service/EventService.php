@@ -199,6 +199,6 @@ final readonly class EventService
             'participant' => $participantLogin
         ]);
 
-        throw AuthorizationException::notOwner('modify participant status', 0, $actor->login());
+        throw AuthorizationException::notSelf('modify participant status', $participantLogin, $actor->login());
     }
 }

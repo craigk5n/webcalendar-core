@@ -14,6 +14,7 @@ use WebCalendar\Core\Domain\ValueObject\EventId;
  */
 final readonly class PdoCategoryRepository implements CategoryRepositoryInterface
 {
+    use TransactionalTrait;
     public function __construct(
         private PDO $pdo,
         private string $tablePrefix = '',
@@ -259,24 +260,4 @@ final readonly class PdoCategoryRepository implements CategoryRepositoryInterfac
         );
     }
 
-    private function executeInTransaction(callable $callback): void
-    {
-        $inTransaction = $this->pdo->inTransaction();
-        
-        if (!$inTransaction) {
-            $this->pdo->beginTransaction();
-        }
-
-        try {
-            $callback();
-            if (!$inTransaction) {
-                $this->pdo->commit();
-            }
-        } catch (\Throwable $e) {
-            if (!$inTransaction) {
-                $this->pdo->rollBack();
-            }
-            throw $e;
-        }
-    }
 }

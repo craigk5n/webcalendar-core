@@ -115,11 +115,15 @@ final readonly class SecurityService
     public function validateCsrfToken(string $token, string $sessionId = ''): bool
     {
         $valid = $this->tokenRepository->validate($token, 'csrf', $sessionId);
-        
-        if (!$valid) {
+
+        if ($valid) {
+            // Consume the token so it cannot be reused
+            $this->tokenRepository->delete($token, 'csrf');
+            $this->logger->debug('CSRF token consumed');
+        } else {
             $this->logger->warning('Invalid CSRF token');
         }
-        
+
         return $valid;
     }
 

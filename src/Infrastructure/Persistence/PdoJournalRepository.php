@@ -18,6 +18,7 @@ use WebCalendar\Core\Domain\ValueObject\Recurrence;
  */
 final readonly class PdoJournalRepository implements JournalRepositoryInterface
 {
+    use TransactionalTrait;
     public function __construct(
         private PDO $pdo,
         private string $tablePrefix = '',
@@ -188,24 +189,4 @@ final readonly class PdoJournalRepository implements JournalRepositoryInterface
         );
     }
 
-    private function executeInTransaction(callable $callback): void
-    {
-        $inTransaction = $this->pdo->inTransaction();
-        
-        if (!$inTransaction) {
-            $this->pdo->beginTransaction();
-        }
-
-        try {
-            $callback();
-            if (!$inTransaction) {
-                $this->pdo->commit();
-            }
-        } catch (\Throwable $e) {
-            if (!$inTransaction) {
-                $this->pdo->rollBack();
-            }
-            throw $e;
-        }
-    }
 }

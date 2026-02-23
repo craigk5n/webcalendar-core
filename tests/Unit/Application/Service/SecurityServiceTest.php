@@ -74,6 +74,11 @@ final class SecurityServiceTest extends TestCase
             ->with($this->isType('string'), 'csrf', '')
             ->willReturn(true);
 
+        // CSRF token is consumed on successful validation
+        $this->tokenRepository->expects($this->once())
+            ->method('delete')
+            ->with($this->isType('string'), 'csrf');
+
         $token = $this->securityService->generateCsrfToken();
         $this->assertNotEmpty($token);
         $this->assertTrue($this->securityService->validateCsrfToken($token));
@@ -131,7 +136,25 @@ final class SecurityServiceTest extends TestCase
             ->with($this->isType('string'), 'csrf', $sessionId)
             ->willReturn(true);
 
+        // CSRF token is consumed on successful validation
+        $this->tokenRepository->expects($this->once())
+            ->method('delete')
+            ->with($this->isType('string'), 'csrf');
+
         $token = $this->securityService->generateCsrfToken($sessionId);
         $this->assertTrue($this->securityService->validateCsrfToken($token, $sessionId));
+    }
+
+    public function testCsrfTokenNotDeletedOnFailedValidation(): void
+    {
+        $this->tokenRepository->expects($this->once())
+            ->method('validate')
+            ->willReturn(false);
+
+        // Token should NOT be deleted when validation fails
+        $this->tokenRepository->expects($this->never())
+            ->method('delete');
+
+        $this->assertFalse($this->securityService->validateCsrfToken('invalid-token'));
     }
 }

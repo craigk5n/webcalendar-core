@@ -22,6 +22,7 @@ use WebCalendar\Core\Domain\ValueObject\RDate;
  */
 final readonly class PdoEventRepository implements EventRepositoryInterface
 {
+    use TransactionalTrait;
     public function __construct(
         private PDO $pdo,
         private string $tablePrefix = '',
@@ -757,30 +758,4 @@ final readonly class PdoEventRepository implements EventRepositoryInterface
         return implode(',', $parts);
     }
 
-    /**
-     * Executes a callback within a database transaction.
-     * 
-     * @param callable $callback The operation to execute
-     * @throws \Throwable Re-throws any exception after rollback
-     */
-    private function executeInTransaction(callable $callback): void
-    {
-        $inTransaction = $this->pdo->inTransaction();
-        
-        if (!$inTransaction) {
-            $this->pdo->beginTransaction();
-        }
-
-        try {
-            $callback();
-            if (!$inTransaction) {
-                $this->pdo->commit();
-            }
-        } catch (\Throwable $e) {
-            if (!$inTransaction) {
-                $this->pdo->rollBack();
-            }
-            throw $e;
-        }
-    }
 }

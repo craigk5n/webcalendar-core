@@ -137,6 +137,6 @@ final readonly class UserService
             return;
         }
 
-        throw AuthorizationException::notOwner($action, 0, $actor->login());
+        throw AuthorizationException::notSelf($action, $targetLogin, $actor->login());
     }
 }
