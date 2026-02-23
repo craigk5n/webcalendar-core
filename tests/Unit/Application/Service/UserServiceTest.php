@@ -187,11 +187,58 @@ final class UserServiceTest extends TestCase
     public function testUserCannotUpdateOthersPreference(): void
     {
         $actor = $this->createUser('actor');
-        
+
         $this->userRepository->expects($this->never())
             ->method('savePreference');
 
         $this->expectException(AuthorizationException::class);
         $this->userService->updatePreference('target', 'TIMEZONE', 'UTC', $actor);
+    }
+
+    public function testHashPassword(): void
+    {
+        $hash = $this->userService->hashPassword('secret123');
+
+        $this->assertNotEmpty($hash);
+        $this->assertNotSame('secret123', $hash);
+        $this->assertTrue(password_verify('secret123', $hash));
+        $this->assertFalse(password_verify('wrong', $hash));
+    }
+
+    public function testAdminCanViewAnyUserPreferences(): void
+    {
+        $admin = $this->createUser('admin', isAdmin: true);
+
+        $this->userRepository->expects($this->once())
+            ->method('getPreferences')
+            ->with('target');
+
+        $this->userService->getPreferences('target', $admin);
+    }
+
+    public function testAdminCanUpdateAnyUserPreference(): void
+    {
+        $admin = $this->createUser('admin', isAdmin: true);
+
+        $this->userRepository->expects($this->once())
+            ->method('savePreference')
+            ->with('target', $this->callback(function ($pref) {
+                return $pref instanceof \WebCalendar\Core\Domain\ValueObject\UserPreference
+                    && $pref->key() === 'TIMEZONE'
+                    && $pref->value() === 'UTC';
+            }));
+
+        $this->userService->updatePreference('target', 'TIMEZONE', 'UTC', $admin);
+    }
+
+    public function testAdminCanUpdateOwnRecord(): void
+    {
+        $admin = $this->createUser('admin', isAdmin: true);
+
+        $this->userRepository->expects($this->once())
+            ->method('save')
+            ->with($admin);
+
+        $this->userService->updateUser($admin, $admin);
     }
 }

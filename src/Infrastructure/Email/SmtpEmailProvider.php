@@ -45,7 +45,7 @@ final readonly class SmtpEmailProvider implements EmailProviderInterface
 
     public function sendSimple(string $to, string $subject, string $body): void
     {
-        $this->send(EmailMessage::html($to, $subject, $body));
+        $this->send(EmailMessage::text($to, $subject, $body));
     }
 
     private function validateRecipient(string $email): void

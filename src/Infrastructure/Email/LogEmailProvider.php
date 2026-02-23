@@ -34,6 +34,6 @@ final readonly class LogEmailProvider implements EmailProviderInterface
 
     public function sendSimple(string $to, string $subject, string $body): void
     {
-        $this->send(EmailMessage::html($to, $subject, $body));
+        $this->send(EmailMessage::text($to, $subject, $body));
     }
 }

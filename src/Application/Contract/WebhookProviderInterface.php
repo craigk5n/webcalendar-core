@@ -11,8 +11,10 @@ interface WebhookProviderInterface
 {
     /**
      * Sends a webhook notification.
-     * 
-     * @param array<string, mixed> $payload
+     *
+     * @param string $url The webhook endpoint URL
+     * @param array<string, mixed> $payload The data to send
+     * @throws WebhookException If the webhook delivery fails
      */
     public function trigger(string $url, array $payload): void;
 }

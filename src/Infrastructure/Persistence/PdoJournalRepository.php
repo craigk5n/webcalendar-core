@@ -126,8 +126,10 @@ final readonly class PdoJournalRepository implements JournalRepositoryInterface
     public function delete(EventId $id): void
     {
         $idValue = $id->value();
-        
+
         $this->executeInTransaction(function () use ($idValue): void {
+            $this->pdo->prepare("DELETE FROM {$this->tablePrefix}webcal_entry_user WHERE cal_id = :id")
+                ->execute(['id' => $idValue]);
             $this->pdo->prepare("DELETE FROM {$this->tablePrefix}webcal_entry WHERE cal_id = :id")
                 ->execute(['id' => $idValue]);
         });

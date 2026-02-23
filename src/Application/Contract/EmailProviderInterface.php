@@ -18,8 +18,11 @@ interface EmailProviderInterface
     public function send(EmailMessage $message): void;
 
     /**
-     * Sends a simple email (convenience method).
+     * Sends a simple plain-text email (convenience method).
      *
+     * @param string $to Recipient email address
+     * @param string $subject Email subject line
+     * @param string $body Plain text body content
      * @throws EmailException If the email cannot be sent
      */
     public function sendSimple(string $to, string $subject, string $body): void;
