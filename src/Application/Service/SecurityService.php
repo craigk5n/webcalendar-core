@@ -4,48 +4,132 @@ declare(strict_types=1);
 
 namespace WebCalendar\Core\Application\Service;
 
+use WebCalendar\Core\Domain\Repository\TokenRepositoryInterface;
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
+
 /**
  * Service for security utilities (tokens, CSRF, sanitization).
  */
-final class SecurityService
+final readonly class SecurityService
 {
-    /** @var array<string, string> Simple in-memory storage for valid tokens [token => user] */
-    private array $validTokens = [];
+    private LoggerInterface $logger;
 
     public function __construct(
-        private readonly string $secretKey
+        private readonly string $secretKey,
+        private readonly TokenRepositoryInterface $tokenRepository,
+        private readonly int $sessionTtl = 86400,
+        private readonly int $csrfTtl = 3600,
+        ?LoggerInterface $logger = null,
     ) {
+        $this->logger = $logger ?? new NullLogger();
     }
 
     /**
-     * Generates a stateless session token for a user.
+     * Generates a session token for a user.
+     *
+     * @param string $login The user's login identifier
+     * @return string The generated token
      */
     public function generateToken(string $login): string
     {
         $token = hash_hmac('sha256', bin2hex(random_bytes(32)), $this->secretKey);
-        $this->validTokens[$token] = $login;
+        
+        $this->tokenRepository->store(
+            $token,
+            'session',
+            $login,
+            $this->sessionTtl
+        );
+
+        $this->logger->debug('Generated session token', ['login' => $login]);
         
         return $token;
     }
 
+    /**
+     * Validates a session token.
+     *
+     * @param string $token The token to validate
+     * @param string $login The expected user login
+     * @return bool True if the token is valid
+     */
     public function validateToken(string $token, string $login): bool
     {
-        return isset($this->validTokens[$token]) && $this->validTokens[$token] === $login;
+        $valid = $this->tokenRepository->validate($token, 'session', $login);
+        
+        if (!$valid) {
+            $this->logger->warning('Invalid session token', ['login' => $login]);
+        }
+        
+        return $valid;
+    }
+
+    /**
+     * Invalidates a session token.
+     */
+    public function invalidateToken(string $token): void
+    {
+        $this->tokenRepository->delete($token, 'session');
+        $this->logger->debug('Invalidated session token');
+    }
+
+    /**
+     * Invalidates all sessions for a user.
+     */
+    public function invalidateAllSessionsForUser(string $login): void
+    {
+        $this->tokenRepository->deleteByData('session', $login);
+        $this->logger->info('Invalidated all sessions for user', ['login' => $login]);
     }
 
     /**
      * Generates a CSRF token.
+     *
+     * @param string $sessionId Optional session identifier to bind token to
+     * @return string The generated CSRF token
      */
-    public function generateCsrfToken(): string
+    public function generateCsrfToken(string $sessionId = ''): string
     {
-        $token = bin2hex(random_bytes(16));
-        $this->validTokens['csrf_' . $token] = 'csrf_user';
+        $token = bin2hex(random_bytes(32));
+        
+        $this->tokenRepository->store(
+            $token,
+            'csrf',
+            $sessionId,
+            $this->csrfTtl
+        );
+
+        $this->logger->debug('Generated CSRF token');
+        
         return $token;
     }
 
-    public function validateCsrfToken(string $token): bool
+    /**
+     * Validates a CSRF token.
+     *
+     * @param string $token The token to validate
+     * @param string $sessionId Optional session identifier to match
+     * @return bool True if the token is valid
+     */
+    public function validateCsrfToken(string $token, string $sessionId = ''): bool
     {
-        return isset($this->validTokens['csrf_' . $token]);
+        $valid = $this->tokenRepository->validate($token, 'csrf', $sessionId);
+        
+        if (!$valid) {
+            $this->logger->warning('Invalid CSRF token');
+        }
+        
+        return $valid;
+    }
+
+    /**
+     * Cleans up expired tokens.
+     */
+    public function cleanupExpiredTokens(): void
+    {
+        $this->tokenRepository->deleteExpired();
+        $this->logger->debug('Cleaned up expired tokens');
     }
 
     /**

@@ -22,7 +22,7 @@ final class FeedServiceTest extends TestCase
     {
         $this->eventRepository = $this->createMock(EventRepositoryInterface::class);
         $eventService = new EventService($this->eventRepository);
-        $this->feedService = new FeedService($eventService);
+        $this->feedService = new FeedService($eventService, 'https://example.com/calendar');
     }
 
     public function testGenerateFreeBusy(): void
@@ -40,5 +40,36 @@ final class FeedServiceTest extends TestCase
         $this->assertStringContainsString('BEGIN:VFREEBUSY', $result);
         $this->assertStringContainsString('END:VFREEBUSY', $result);
         $this->assertStringContainsString('END:VCALENDAR', $result);
+    }
+
+    public function testRssFeedEscapesUserContent(): void
+    {
+        $user = new User('jdoe', 'John<script>alert(1)</script>', 'Doe', 'john@example.com', false, true);
+        $range = new DateRange(new \DateTimeImmutable('2026-02-01'), new \DateTimeImmutable('2026-02-28'));
+
+        $this->eventRepository->expects($this->once())
+            ->method('findByDateRange')
+            ->willReturn([]);
+
+        $result = $this->feedService->generateRss($user, $range);
+        
+        // Content should be in CDATA sections, not raw script tags
+        $this->assertStringContainsString('<![CDATA[Upcoming Events for John<script>alert(1)</script> Doe]]>', $result);
+        // Verify the script tag is inside CDATA, not as raw XML
+        $this->assertMatchesRegularExpression('/<title><!\[CDATA\[.*<script>.*<\/script>.*\]\]><\/title>/s', $result);
+    }
+
+    public function testRssFeedUsesConfigurableBaseUrl(): void
+    {
+        $user = new User('jdoe', 'John', 'Doe', 'john@example.com', false, true);
+        $range = new DateRange(new \DateTimeImmutable('2026-02-01'), new \DateTimeImmutable('2026-02-28'));
+
+        $this->eventRepository->expects($this->once())
+            ->method('findByDateRange')
+            ->willReturn([]);
+
+        $result = $this->feedService->generateRss($user, $range);
+        
+        $this->assertStringContainsString('https://example.com/calendar', $result);
     }
 }

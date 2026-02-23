@@ -191,63 +191,63 @@ final readonly class PdoEventRepository implements EventRepositoryInterface
         $idValue = $event->id()->value();
         $isNew = ($idValue === 0);
 
-        if ($isNew) {
-            $idValue = $this->getNextId();
-        }
+        $this->executeInTransaction(function () use ($event, &$idValue, $isNew): void {
+            if ($isNew) {
+                $idValue = $this->getNextId();
+            }
 
-        $data = [
-            'id' => $idValue,
-            'create_by' => $event->createdBy(),
-            'date' => (int)$event->start()->format('Ymd'),
-            'time' => $event->isAllDay() ? -1 : (int)$event->start()->format('His'),
-            'duration' => $event->duration(),
-            'name' => $event->name(),
-            'description' => $event->description(),
-            'location' => $event->location(),
-            'type' => $event->type()->value,
-            'access' => $event->access()->value,
-            'uid' => $event->uid(),
-            'sequence' => $event->sequence(),
-            'status' => $event->status()
-        ];
+            $data = [
+                'id' => $idValue,
+                'create_by' => $event->createdBy(),
+                'date' => (int)$event->start()->format('Ymd'),
+                'time' => $event->isAllDay() ? -1 : (int)$event->start()->format('His'),
+                'duration' => $event->duration(),
+                'name' => $event->name(),
+                'description' => $event->description(),
+                'location' => $event->location(),
+                'type' => $event->type()->value,
+                'access' => $event->access()->value,
+                'uid' => $event->uid(),
+                'sequence' => $event->sequence(),
+                'status' => $event->status()
+            ];
 
-        if ($isNew) {
-            $sql = "INSERT INTO {$this->tablePrefix}webcal_entry
-                    (cal_id, cal_create_by, cal_date, cal_time, cal_duration, cal_name,
-                     cal_description, cal_location, cal_type, cal_access, cal_uid,
-                     cal_sequence, cal_status)
-                    VALUES (:id, :create_by, :date, :time, :duration, :name,
-                            :description, :location, :type, :access, :uid,
-                            :sequence, :status)";
-        } else {
-            $sql = "UPDATE {$this->tablePrefix}webcal_entry SET 
-                    cal_create_by = :create_by, 
-                    cal_date = :date, 
-                    cal_time = :time, 
-                    cal_duration = :duration, 
-                    cal_name = :name, 
-                    cal_description = :description, 
-                    cal_location = :location, 
-                    cal_type = :type, 
-                    cal_access = :access, 
-                    cal_uid = :uid, 
-                    cal_sequence = :sequence, 
-                    cal_status = :status
-                    WHERE cal_id = :id";
-        }
+            if ($isNew) {
+                $sql = "INSERT INTO {$this->tablePrefix}webcal_entry
+                        (cal_id, cal_create_by, cal_date, cal_time, cal_duration, cal_name,
+                         cal_description, cal_location, cal_type, cal_access, cal_uid,
+                         cal_sequence, cal_status)
+                        VALUES (:id, :create_by, :date, :time, :duration, :name,
+                                :description, :location, :type, :access, :uid,
+                                :sequence, :status)";
+            } else {
+                $sql = "UPDATE {$this->tablePrefix}webcal_entry SET 
+                        cal_create_by = :create_by, 
+                        cal_date = :date, 
+                        cal_time = :time, 
+                        cal_duration = :duration, 
+                        cal_name = :name, 
+                        cal_description = :description, 
+                        cal_location = :location, 
+                        cal_type = :type, 
+                        cal_access = :access, 
+                        cal_uid = :uid, 
+                        cal_sequence = :sequence, 
+                        cal_status = :status
+                        WHERE cal_id = :id";
+            }
 
-        $this->pdo->prepare($sql)->execute($data);
+            $this->pdo->prepare($sql)->execute($data);
 
-        // Auto-create participant row for the event creator on new events.
-        // Mirrors PdoTaskRepository behavior and ensures the creator appears
-        // in webcal_entry_user for multi-user features (conflict detection, etc.).
-        if ($isNew) {
-            $this->pdo->prepare(
-                "INSERT INTO {$this->tablePrefix}webcal_entry_user (cal_id, cal_login, cal_status) VALUES (:id, :login, 'A')"
-            )->execute(['id' => $idValue, 'login' => $event->createdBy()]);
-        }
+            // Auto-create participant row for the event creator on new events.
+            if ($isNew) {
+                $this->pdo->prepare(
+                    "INSERT INTO {$this->tablePrefix}webcal_entry_user (cal_id, cal_login, cal_status) VALUES (:id, :login, 'A')"
+                )->execute(['id' => $idValue, 'login' => $event->createdBy()]);
+            }
 
-        $this->saveRecurrence($idValue, $event->recurrence());
+            $this->saveRecurrence($idValue, $event->recurrence());
+        });
     }
 
     public function create(Event $event): void
@@ -257,10 +257,19 @@ final readonly class PdoEventRepository implements EventRepositoryInterface
 
     public function delete(EventId $id): void
     {
-        $this->pdo->prepare("DELETE FROM {$this->tablePrefix}webcal_entry WHERE cal_id = :id")
-            ->execute(['id' => $id->value()]);
-        $this->pdo->prepare("DELETE FROM {$this->tablePrefix}webcal_entry_repeats WHERE cal_id = :id")
-            ->execute(['id' => $id->value()]);
+        $idValue = $id->value();
+        
+        $this->executeInTransaction(function () use ($idValue): void {
+            // Delete from all related tables
+            $this->pdo->prepare("DELETE FROM {$this->tablePrefix}webcal_entry_user WHERE cal_id = :id")
+                ->execute(['id' => $idValue]);
+            $this->pdo->prepare("DELETE FROM {$this->tablePrefix}webcal_entry_repeats WHERE cal_id = :id")
+                ->execute(['id' => $idValue]);
+            $this->pdo->prepare("DELETE FROM {$this->tablePrefix}webcal_entry_repeats_not WHERE cal_id = :id")
+                ->execute(['id' => $idValue]);
+            $this->pdo->prepare("DELETE FROM {$this->tablePrefix}webcal_entry WHERE cal_id = :id")
+                ->execute(['id' => $idValue]);
+        });
     }
 
     public function updateParticipantStatus(EventId $eventId, string $userLogin, string $status): void
@@ -746,5 +755,32 @@ final readonly class PdoEventRepository implements EventRepositoryInterface
         }
 
         return implode(',', $parts);
+    }
+
+    /**
+     * Executes a callback within a database transaction.
+     * 
+     * @param callable $callback The operation to execute
+     * @throws \Throwable Re-throws any exception after rollback
+     */
+    private function executeInTransaction(callable $callback): void
+    {
+        $inTransaction = $this->pdo->inTransaction();
+        
+        if (!$inTransaction) {
+            $this->pdo->beginTransaction();
+        }
+
+        try {
+            $callback();
+            if (!$inTransaction) {
+                $this->pdo->commit();
+            }
+        } catch (\Throwable $e) {
+            if (!$inTransaction) {
+                $this->pdo->rollBack();
+            }
+            throw $e;
+        }
     }
 }

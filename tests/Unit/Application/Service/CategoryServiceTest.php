@@ -49,11 +49,12 @@ final class CategoryServiceTest extends TestCase
         $eventId = new EventId(123);
         $login = 'jdoe';
         $catIds = [1, 2];
+        $user = new \WebCalendar\Core\Domain\Entity\User($login, 'John', 'Doe', 'john@example.com', false, true);
 
         $this->categoryRepository->expects($this->once())
             ->method('assignToEvent')
             ->with($eventId, $login, $catIds);
 
-        $this->categoryService->assignToEvent($eventId, $login, $catIds);
+        $this->categoryService->assignToEvent($eventId, $login, $catIds, $user);
     }
 }

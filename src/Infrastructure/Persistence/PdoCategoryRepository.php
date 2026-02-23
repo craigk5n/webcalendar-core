@@ -135,21 +135,25 @@ final readonly class PdoCategoryRepository implements CategoryRepositoryInterfac
 
     public function assignToEvent(EventId $eventId, string $userLogin, array $categoryIds): void
     {
-        $stmt = $this->pdo->prepare("DELETE FROM {$this->tablePrefix}webcal_entry_categories WHERE cal_id = :cal_id AND cat_owner = :owner");
-        $stmt->execute(['cal_id' => $eventId->value(), 'owner' => $userLogin]);
+        $eventIdValue = $eventId->value();
+        
+        $this->executeInTransaction(function () use ($eventIdValue, $userLogin, $categoryIds): void {
+            $stmt = $this->pdo->prepare("DELETE FROM {$this->tablePrefix}webcal_entry_categories WHERE cal_id = :cal_id AND cat_owner = :owner");
+            $stmt->execute(['cal_id' => $eventIdValue, 'owner' => $userLogin]);
 
-        $sql = "INSERT INTO {$this->tablePrefix}webcal_entry_categories (cal_id, cat_id, cat_owner, cat_order)
-                VALUES (:cal_id, :cat_id, :owner, :order)";
-        $stmt = $this->pdo->prepare($sql);
+            $sql = "INSERT INTO {$this->tablePrefix}webcal_entry_categories (cal_id, cat_id, cat_owner, cat_order)
+                    VALUES (:cal_id, :cat_id, :owner, :order)";
+            $stmt = $this->pdo->prepare($sql);
 
-        foreach ($categoryIds as $index => $catId) {
-            $stmt->execute([
-                'cal_id' => $eventId->value(),
-                'cat_id' => $catId,
-                'owner' => $userLogin,
-                'order' => $index
-            ]);
-        }
+            foreach ($categoryIds as $index => $catId) {
+                $stmt->execute([
+                    'cal_id' => $eventIdValue,
+                    'cat_id' => $catId,
+                    'owner' => $userLogin,
+                    'order' => $index
+                ]);
+            }
+        });
     }
 
     /**
@@ -253,5 +257,26 @@ final readonly class PdoCategoryRepository implements CategoryRepositoryInterfac
             color: $color,
             enabled: ($row['cat_status'] ?? 'A') === 'A'
         );
+    }
+
+    private function executeInTransaction(callable $callback): void
+    {
+        $inTransaction = $this->pdo->inTransaction();
+        
+        if (!$inTransaction) {
+            $this->pdo->beginTransaction();
+        }
+
+        try {
+            $callback();
+            if (!$inTransaction) {
+                $this->pdo->commit();
+            }
+        } catch (\Throwable $e) {
+            if (!$inTransaction) {
+                $this->pdo->rollBack();
+            }
+            throw $e;
+        }
     }
 }

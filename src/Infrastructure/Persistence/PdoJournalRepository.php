@@ -72,58 +72,64 @@ final readonly class PdoJournalRepository implements JournalRepositoryInterface
         $idValue = $journal->id()->value();
         $isNew = ($idValue === 0);
 
-        if ($isNew) {
-            $idValue = $this->getNextId();
-        }
+        $this->executeInTransaction(function () use ($journal, &$idValue, $isNew): void {
+            if ($isNew) {
+                $idValue = $this->getNextId();
+            }
 
-        $data = [
-            'id' => $idValue,
-            'create_by' => $journal->createdBy(),
-            'date' => (int)$journal->start()->format('Ymd'),
-            'time' => (int)$journal->start()->format('His'),
-            'duration' => $journal->duration(),
-            'name' => $journal->name(),
-            'description' => $journal->description(),
-            'location' => $journal->location(),
-            'type' => $journal->type()->value,
-            'access' => $journal->access()->value,
-            'uid' => $journal->uid(),
-            'sequence' => $journal->sequence(),
-            'status' => $journal->status()
-        ];
+            $data = [
+                'id' => $idValue,
+                'create_by' => $journal->createdBy(),
+                'date' => (int)$journal->start()->format('Ymd'),
+                'time' => (int)$journal->start()->format('His'),
+                'duration' => $journal->duration(),
+                'name' => $journal->name(),
+                'description' => $journal->description(),
+                'location' => $journal->location(),
+                'type' => $journal->type()->value,
+                'access' => $journal->access()->value,
+                'uid' => $journal->uid(),
+                'sequence' => $journal->sequence(),
+                'status' => $journal->status()
+            ];
 
-        if ($isNew) {
-            $sql = "INSERT INTO {$this->tablePrefix}webcal_entry
-                    (cal_id, cal_create_by, cal_date, cal_time, cal_duration, cal_name,
-                     cal_description, cal_location, cal_type, cal_access, cal_uid,
-                     cal_sequence, cal_status)
-                    VALUES (:id, :create_by, :date, :time, :duration, :name,
-                            :description, :location, :type, :access, :uid,
-                            :sequence, :status)";
-        } else {
-            $sql = "UPDATE {$this->tablePrefix}webcal_entry SET
-                    cal_create_by = :create_by,
-                    cal_date = :date,
-                    cal_time = :time,
-                    cal_duration = :duration,
-                    cal_name = :name,
-                    cal_description = :description,
-                    cal_location = :location,
-                    cal_type = :type,
-                    cal_access = :access,
-                    cal_uid = :uid,
-                    cal_sequence = :sequence,
-                    cal_status = :status
-                    WHERE cal_id = :id";
-        }
+            if ($isNew) {
+                $sql = "INSERT INTO {$this->tablePrefix}webcal_entry
+                        (cal_id, cal_create_by, cal_date, cal_time, cal_duration, cal_name,
+                         cal_description, cal_location, cal_type, cal_access, cal_uid,
+                         cal_sequence, cal_status)
+                        VALUES (:id, :create_by, :date, :time, :duration, :name,
+                                :description, :location, :type, :access, :uid,
+                                :sequence, :status)";
+            } else {
+                $sql = "UPDATE {$this->tablePrefix}webcal_entry SET
+                        cal_create_by = :create_by,
+                        cal_date = :date,
+                        cal_time = :time,
+                        cal_duration = :duration,
+                        cal_name = :name,
+                        cal_description = :description,
+                        cal_location = :location,
+                        cal_type = :type,
+                        cal_access = :access,
+                        cal_uid = :uid,
+                        cal_sequence = :sequence,
+                        cal_status = :status
+                        WHERE cal_id = :id";
+            }
 
-        $this->pdo->prepare($sql)->execute($data);
+            $this->pdo->prepare($sql)->execute($data);
+        });
     }
 
     public function delete(EventId $id): void
     {
-        $this->pdo->prepare("DELETE FROM {$this->tablePrefix}webcal_entry WHERE cal_id = :id")
-            ->execute(['id' => $id->value()]);
+        $idValue = $id->value();
+        
+        $this->executeInTransaction(function () use ($idValue): void {
+            $this->pdo->prepare("DELETE FROM {$this->tablePrefix}webcal_entry WHERE cal_id = :id")
+                ->execute(['id' => $idValue]);
+        });
     }
 
     private function getNextId(): int
@@ -180,5 +186,26 @@ final readonly class PdoJournalRepository implements JournalRepositoryInterface
             sequence: $sequence,
             status: $status
         );
+    }
+
+    private function executeInTransaction(callable $callback): void
+    {
+        $inTransaction = $this->pdo->inTransaction();
+        
+        if (!$inTransaction) {
+            $this->pdo->beginTransaction();
+        }
+
+        try {
+            $callback();
+            if (!$inTransaction) {
+                $this->pdo->commit();
+            }
+        } catch (\Throwable $e) {
+            if (!$inTransaction) {
+                $this->pdo->rollBack();
+            }
+            throw $e;
+        }
     }
 }

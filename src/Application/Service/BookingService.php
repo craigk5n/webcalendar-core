@@ -11,15 +11,21 @@ use WebCalendar\Core\Domain\ValueObject\DateRange;
 use WebCalendar\Core\Domain\ValueObject\EventType;
 use WebCalendar\Core\Domain\ValueObject\AccessLevel;
 use WebCalendar\Core\Domain\ValueObject\Recurrence;
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 
 /**
  * Service for handling public scheduling/booking.
  */
 final readonly class BookingService
 {
+    private LoggerInterface $logger;
+
     public function __construct(
-        private EventService $eventService
+        private EventService $eventService,
+        ?LoggerInterface $logger = null
     ) {
+        $this->logger = $logger ?? new NullLogger();
     }
 
     /**
@@ -84,6 +90,14 @@ final readonly class BookingService
             status: 'TENTATIVE' // Pending approval
         );
 
-        $this->eventService->createEvent($event);
+        $this->logger->info('Booking created', [
+            'name' => $name,
+            'email' => $email,
+            'start' => $start->format('Y-m-d H:i'),
+            'duration' => $duration,
+            'user' => $user->login()
+        ]);
+
+        $this->eventService->createEvent($event, $user);
     }
 }

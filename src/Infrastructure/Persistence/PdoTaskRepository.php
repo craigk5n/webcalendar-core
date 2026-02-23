@@ -75,78 +75,82 @@ final readonly class PdoTaskRepository implements TaskRepositoryInterface
         $idValue = $task->id()->value();
         $isNew = ($idValue === 0);
 
-        if ($isNew) {
-            $idValue = $this->getNextId();
-        }
+        $this->executeInTransaction(function () use ($task, &$idValue, $isNew): void {
+            if ($isNew) {
+                $idValue = $this->getNextId();
+            }
 
-        $data = [
-            'id' => $idValue,
-            'create_by' => $task->createdBy(),
-            'date' => (int)$task->start()->format('Ymd'),
-            'time' => (int)$task->start()->format('His'),
-            'duration' => $task->duration(),
-            'due_date' => $task->dueDate()?->format('Ymd'),
-            'due_time' => $task->dueDate()?->format('His'),
-            'name' => $task->name(),
-            'description' => $task->description(),
-            'location' => $task->location(),
-            'type' => $task->type()->value,
-            'access' => $task->access()->value,
-            'uid' => $task->uid(),
-            'sequence' => $task->sequence(),
-            'status' => $task->status()
-        ];
+            $data = [
+                'id' => $idValue,
+                'create_by' => $task->createdBy(),
+                'date' => (int)$task->start()->format('Ymd'),
+                'time' => (int)$task->start()->format('His'),
+                'duration' => $task->duration(),
+                'due_date' => $task->dueDate()?->format('Ymd'),
+                'due_time' => $task->dueDate()?->format('His'),
+                'name' => $task->name(),
+                'description' => $task->description(),
+                'location' => $task->location(),
+                'type' => $task->type()->value,
+                'access' => $task->access()->value,
+                'uid' => $task->uid(),
+                'sequence' => $task->sequence(),
+                'status' => $task->status()
+            ];
 
-        if ($isNew) {
-            $sql = "INSERT INTO {$this->tablePrefix}webcal_entry
-                    (cal_id, cal_create_by, cal_date, cal_time, cal_duration,
-                     cal_due_date, cal_due_time, cal_name,
-                     cal_description, cal_location, cal_type, cal_access, cal_uid,
-                     cal_sequence, cal_status)
-                    VALUES (:id, :create_by, :date, :time, :duration,
-                            :due_date, :due_time, :name,
-                            :description, :location, :type, :access, :uid,
-                            :sequence, :status)";
-        } else {
-            $sql = "UPDATE {$this->tablePrefix}webcal_entry SET
-                    cal_create_by = :create_by,
-                    cal_date = :date,
-                    cal_time = :time,
-                    cal_duration = :duration,
-                    cal_due_date = :due_date,
-                    cal_due_time = :due_time,
-                    cal_name = :name,
-                    cal_description = :description,
-                    cal_location = :location,
-                    cal_type = :type,
-                    cal_access = :access,
-                    cal_uid = :uid,
-                    cal_sequence = :sequence,
-                    cal_status = :status
-                    WHERE cal_id = :id";
-        }
+            if ($isNew) {
+                $sql = "INSERT INTO {$this->tablePrefix}webcal_entry
+                        (cal_id, cal_create_by, cal_date, cal_time, cal_duration,
+                         cal_due_date, cal_due_time, cal_name,
+                         cal_description, cal_location, cal_type, cal_access, cal_uid,
+                         cal_sequence, cal_status)
+                        VALUES (:id, :create_by, :date, :time, :duration,
+                                :due_date, :due_time, :name,
+                                :description, :location, :type, :access, :uid,
+                                :sequence, :status)";
+            } else {
+                $sql = "UPDATE {$this->tablePrefix}webcal_entry SET
+                        cal_create_by = :create_by,
+                        cal_date = :date,
+                        cal_time = :time,
+                        cal_duration = :duration,
+                        cal_due_date = :due_date,
+                        cal_due_time = :due_time,
+                        cal_name = :name,
+                        cal_description = :description,
+                        cal_location = :location,
+                        cal_type = :type,
+                        cal_access = :access,
+                        cal_uid = :uid,
+                        cal_sequence = :sequence,
+                        cal_status = :status
+                        WHERE cal_id = :id";
+            }
 
-        $this->pdo->prepare($sql)->execute($data);
-        
-        // Handle percent in webcal_entry_user? 
-        // For simplicity now, let's assume we don't have per-user percent here or we use creator's percent
-        $stmt = $this->pdo->prepare("SELECT 1 FROM {$this->tablePrefix}webcal_entry_user WHERE cal_id = :id AND cal_login = :login");
-        $stmt->execute(['id' => $idValue, 'login' => $task->createdBy()]);
-        if ($stmt->fetch()) {
-            $this->pdo->prepare("UPDATE {$this->tablePrefix}webcal_entry_user SET cal_percent = :percent WHERE cal_id = :id AND cal_login = :login")
-                ->execute(['id' => $idValue, 'login' => $task->createdBy(), 'percent' => $task->percentComplete()]);
-        } else {
-            $this->pdo->prepare("INSERT INTO {$this->tablePrefix}webcal_entry_user (cal_id, cal_login, cal_percent) VALUES (:id, :login, :percent)")
-                ->execute(['id' => $idValue, 'login' => $task->createdBy(), 'percent' => $task->percentComplete()]);
-        }
+            $this->pdo->prepare($sql)->execute($data);
+            
+            $stmt = $this->pdo->prepare("SELECT 1 FROM {$this->tablePrefix}webcal_entry_user WHERE cal_id = :id AND cal_login = :login");
+            $stmt->execute(['id' => $idValue, 'login' => $task->createdBy()]);
+            if ($stmt->fetch()) {
+                $this->pdo->prepare("UPDATE {$this->tablePrefix}webcal_entry_user SET cal_percent = :percent WHERE cal_id = :id AND cal_login = :login")
+                    ->execute(['id' => $idValue, 'login' => $task->createdBy(), 'percent' => $task->percentComplete()]);
+            } else {
+                $this->pdo->prepare("INSERT INTO {$this->tablePrefix}webcal_entry_user (cal_id, cal_login, cal_percent) VALUES (:id, :login, :percent)")
+                    ->execute(['id' => $idValue, 'login' => $task->createdBy(), 'percent' => $task->percentComplete()]);
+            }
+        });
     }
 
     public function delete(EventId $id): void
     {
-        $this->pdo->prepare("DELETE FROM {$this->tablePrefix}webcal_entry WHERE cal_id = :id")
-            ->execute(['id' => $id->value()]);
-        $this->pdo->prepare("DELETE FROM {$this->tablePrefix}webcal_entry_user WHERE cal_id = :id")
-            ->execute(['id' => $id->value()]);
+        $idValue = $id->value();
+        
+        $this->executeInTransaction(function () use ($idValue): void {
+            $this->pdo->prepare("DELETE FROM {$this->tablePrefix}webcal_entry_user WHERE cal_id = :id")
+                ->execute(['id' => $idValue]);
+            $this->pdo->prepare("DELETE FROM {$this->tablePrefix}webcal_entry WHERE cal_id = :id")
+                ->execute(['id' => $idValue]);
+        });
     }
 
     private function getNextId(): int
@@ -222,5 +226,26 @@ final readonly class PdoTaskRepository implements TaskRepositoryInterface
             sequence: $sequence,
             status: $status
         );
+    }
+
+    private function executeInTransaction(callable $callback): void
+    {
+        $inTransaction = $this->pdo->inTransaction();
+        
+        if (!$inTransaction) {
+            $this->pdo->beginTransaction();
+        }
+
+        try {
+            $callback();
+            if (!$inTransaction) {
+                $this->pdo->commit();
+            }
+        } catch (\Throwable $e) {
+            if (!$inTransaction) {
+                $this->pdo->rollBack();
+            }
+            throw $e;
+        }
     }
 }

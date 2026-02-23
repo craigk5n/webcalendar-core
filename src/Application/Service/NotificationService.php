@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace WebCalendar\Core\Application\Service;
 
+use WebCalendar\Core\Application\Contract\EmailMessage;
 use WebCalendar\Core\Application\Contract\EmailProviderInterface;
 use WebCalendar\Core\Application\Contract\WebhookProviderInterface;
 use WebCalendar\Core\Domain\Entity\Event;
@@ -34,7 +35,7 @@ final readonly class NotificationService
         $this->logger->info('Sending reminder', ['event_id' => $event->id()->value(), 'user' => $user->login()]);
         
         $subject = 'Reminder: ' . $event->name();
-        $body = sprintf(
+        $textBody = sprintf(
             "Hello %s,\n\nThis is a reminder for the following event:\n\nTitle: %s\nDate: %s\nLocation: %s\n\nDescription: %s",
             $user->firstName(),
             $event->name(),
@@ -43,8 +44,24 @@ final readonly class NotificationService
             $event->description()
         );
 
+        $htmlBody = sprintf(
+            "<p>Hello %s,</p><p>This is a reminder for the following event:</p><ul><li><strong>Title:</strong> %s</li><li><strong>Date:</strong> %s</li><li><strong>Location:</strong> %s</li></ul><p>%s</p>",
+            htmlspecialchars($user->firstName(), ENT_QUOTES, 'UTF-8'),
+            htmlspecialchars($event->name(), ENT_QUOTES, 'UTF-8'),
+            $event->start()->format('Y-m-d H:i'),
+            htmlspecialchars($event->location(), ENT_QUOTES, 'UTF-8'),
+            nl2br(htmlspecialchars($event->description(), ENT_QUOTES, 'UTF-8'))
+        );
+
+        $message = new EmailMessage(
+            to: $user->email(),
+            subject: $subject,
+            htmlBody: $htmlBody,
+            textBody: $textBody
+        );
+
         try {
-            $this->emailProvider->send($user->email(), $subject, $body);
+            $this->emailProvider->send($message);
             $this->logger->debug('Reminder email sent', ['to' => $user->email()]);
         } catch (\Exception $e) {
             $this->logger->error('Failed to send reminder email', ['to' => $user->email(), 'error' => $e->getMessage()]);

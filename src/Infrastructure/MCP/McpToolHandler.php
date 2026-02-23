@@ -135,7 +135,7 @@ final readonly class McpToolHandler
             access: AccessLevel::PUBLIC
         );
 
-        $this->eventService->createEvent($event);
+        $this->eventService->createEvent($event, $user);
 
         return ['success' => true, 'event_id' => $event->id()->value()];
     }

@@ -9,15 +9,22 @@ use WebCalendar\Core\Domain\ValueObject\DateRange;
 use Icalendar\Component\VCalendar;
 use Icalendar\Component\VFreeBusy;
 use Icalendar\Writer\Writer;
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 
 /**
  * Service for generating calendar feeds (RSS, Free/Busy).
  */
 final readonly class FeedService
 {
+    private LoggerInterface $logger;
+
     public function __construct(
-        private EventService $eventService
+        private EventService $eventService,
+        private string $baseUrl = 'https://example.com/calendar',
+        ?LoggerInterface $logger = null
     ) {
+        $this->logger = $logger ?? new NullLogger();
     }
 
     /**
@@ -25,6 +32,8 @@ final readonly class FeedService
      */
     public function generateFreeBusy(User $user, DateRange $range): string
     {
+        $this->logger->debug('Generating FreeBusy feed', ['user' => $user->login()]);
+
         $vcalendar = new VCalendar();
         $vcalendar->setProductId('-//WebCalendar//NONSGML v4.0//EN');
         $vcalendar->setVersion('2.0');
@@ -57,20 +66,22 @@ final readonly class FeedService
      */
     public function generateRss(User $user, DateRange $range): string
     {
+        $this->logger->debug('Generating RSS feed', ['user' => $user->login()]);
+
         $events = $this->eventService->getEventsInDateRange($range, $user);
         
         $xml = new \SimpleXMLElement('<?xml version="1.0" encoding="UTF-8" ?><rss version="2.0"></rss>');
         $channel = $xml->addChild('channel');
-        $channel->addChild('title', 'Upcoming Events for ' . $user->fullName());
-        $channel->addChild('link', 'https://example.com/calendar');
-        $channel->addChild('description', 'Calendar events feed');
+        $this->addTextChild($channel, 'title', 'Upcoming Events for ' . $user->fullName());
+        $this->addTextChild($channel, 'link', $this->baseUrl);
+        $this->addTextChild($channel, 'description', 'Calendar events feed');
 
         foreach ($events as $event) {
             $item = $channel->addChild('item');
-            $item->addChild('title', $event->name());
-            $item->addChild('description', $event->description());
+            $this->addTextChild($item, 'title', $event->name());
+            $this->addTextChild($item, 'description', $event->description());
             $item->addChild('pubDate', $event->start()->format(\DateTimeInterface::RSS));
-            $item->addChild('guid', $event->uid());
+            $this->addTextChild($item, 'guid', $event->uid());
         }
 
         $dom = dom_import_simplexml($xml)->ownerDocument;
@@ -79,5 +90,31 @@ final readonly class FeedService
         }
         $dom->formatOutput = true;
         return (string)$dom->saveXML();
+    }
+
+    /**
+     * Adds a text child with proper XML escaping to prevent XSS.
+     * 
+     * Uses CDATA sections to safely include user-generated content.
+     */
+    private function addTextChild(\SimpleXMLElement $parent, string $name, string $value): void
+    {
+        $child = $parent->addChild($name);
+        if ($child === null) {
+            return;
+        }
+        
+        $domChild = dom_import_simplexml($child);
+        $ownerDocument = $domChild->ownerDocument;
+        if ($ownerDocument === null) {
+            return;
+        }
+        
+        $cdata = $ownerDocument->createCDATASection($value);
+        if ($cdata === false) {
+            return;
+        }
+        
+        $domChild->appendChild($cdata);
     }
 }

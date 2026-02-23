@@ -6,6 +6,7 @@ namespace WebCalendar\Core\Tests\Unit\Application\Service;
 
 use PHPUnit\Framework\TestCase;
 use WebCalendar\Core\Application\Service\NotificationService;
+use WebCalendar\Core\Application\Contract\EmailMessage;
 use WebCalendar\Core\Application\Contract\EmailProviderInterface;
 use WebCalendar\Core\Application\Contract\WebhookProviderInterface;
 use WebCalendar\Core\Domain\Entity\Event;
@@ -36,7 +37,11 @@ final class NotificationServiceTest extends TestCase
 
         $this->emailProvider->expects($this->once())
             ->method('send')
-            ->with('john@example.com', $this->stringContains('Reminder'), $this->stringContains('Meeting'));
+            ->with($this->callback(function (EmailMessage $message) {
+                return $message->to === 'john@example.com'
+                    && str_contains($message->subject, 'Reminder')
+                    && str_contains($message->textBody, 'Meeting');
+            }));
 
         $this->notificationService->sendReminder($event, $user);
     }

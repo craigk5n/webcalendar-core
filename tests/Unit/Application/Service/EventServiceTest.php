@@ -7,6 +7,9 @@ namespace WebCalendar\Core\Tests\Unit\Application\Service;
 use PHPUnit\Framework\TestCase;
 use WebCalendar\Core\Application\Service\EventService;
 use WebCalendar\Core\Domain\Entity\Event;
+use WebCalendar\Core\Domain\Entity\User;
+use WebCalendar\Core\Domain\Exception\AuthorizationException;
+use WebCalendar\Core\Domain\Exception\EventNotFoundException;
 use WebCalendar\Core\Domain\Repository\EventRepositoryInterface;
 use WebCalendar\Core\Domain\ValueObject\EventId;
 use WebCalendar\Core\Domain\ValueObject\DateRange;
@@ -25,6 +28,27 @@ final class EventServiceTest extends TestCase
         $this->eventService = new EventService($this->eventRepository);
     }
 
+    private function createUser(string $login, bool $isAdmin = false): User
+    {
+        return new User($login, 'First', 'Last', $login . '@example.com', $isAdmin, true);
+    }
+
+    private function createEvent(int $id, string $createdBy): Event
+    {
+        return new Event(
+            id: new EventId($id),
+            uid: 'uid-' . $id,
+            name: 'Test Event',
+            description: '',
+            location: '',
+            start: new \DateTimeImmutable(),
+            duration: 60,
+            createdBy: $createdBy,
+            type: EventType::EVENT,
+            access: AccessLevel::PUBLIC
+        );
+    }
+
     public function testGetEventsInDateRange(): void
     {
         $range = new DateRange(
@@ -32,8 +56,8 @@ final class EventServiceTest extends TestCase
             new \DateTimeImmutable('2026-02-11 23:59:59')
         );
         
-        $user = new \WebCalendar\Core\Domain\Entity\User('jdoe', 'John', 'Doe', 'john@example.com', false, true);
-        $events = []; // Mock events could go here
+        $user = $this->createUser('jdoe');
+        $events = [];
         
         $this->eventRepository->expects($this->once())
             ->method('findByDateRange')
@@ -47,85 +71,189 @@ final class EventServiceTest extends TestCase
 
     public function testCreateEvent(): void
     {
-        $event = new Event(
-            id: new EventId(1),
-            uid: 'uid',
-            name: 'Meeting',
-            description: '',
-            location: '',
-            start: new \DateTimeImmutable(),
-            duration: 30,
-            createdBy: 'admin',
-            type: EventType::EVENT,
-            access: AccessLevel::PUBLIC
-        );
+        $actor = $this->createUser('admin');
+        $event = $this->createEvent(1, 'admin');
         
         $this->eventRepository->expects($this->once())
             ->method('save')
             ->with($event);
 
-        $this->eventService->createEvent($event);
+        $this->eventService->createEvent($event, $actor);
     }
 
     public function testDeleteEventThrowsExceptionIfNotFound(): void
     {
         $id = new EventId(999);
+        $actor = $this->createUser('admin');
         
         $this->eventRepository->expects($this->once())
             ->method('findById')
             ->with($id)
             ->willReturn(null);
 
-        $this->expectException(\WebCalendar\Core\Domain\Exception\EventNotFoundException::class);
-        $this->eventService->deleteEvent($id);
+        $this->expectException(EventNotFoundException::class);
+        $this->eventService->deleteEvent($id, $actor);
     }
 
     public function testUpdateEventThrowsExceptionIfNotFound(): void
     {
         $id = new EventId(999);
-        $event = new Event(
-            id: $id,
-            uid: 'uid',
-            name: 'Meeting',
-            description: '',
-            location: '',
-            start: new \DateTimeImmutable(),
-            duration: 30,
-            createdBy: 'admin',
-            type: EventType::EVENT,
-            access: AccessLevel::PUBLIC
-        );
+        $actor = $this->createUser('admin');
+        $event = $this->createEvent(999, 'admin');
         
         $this->eventRepository->expects($this->once())
             ->method('findById')
             ->with($id)
             ->willReturn(null);
 
-        $this->expectException(\WebCalendar\Core\Domain\Exception\EventNotFoundException::class);
-        $this->eventService->updateEvent($event);
+        $this->expectException(EventNotFoundException::class);
+        $this->eventService->updateEvent($event, $actor);
     }
 
-    public function testApproveEvent(): void
+    public function testOwnerCanDeleteOwnEvent(): void
     {
-        $id = new EventId(123);
-        $login = 'jdoe';
+        $event = $this->createEvent(1, 'jdoe');
+        $actor = $this->createUser('jdoe');
+        
+        $this->eventRepository->expects($this->once())
+            ->method('findById')
+            ->willReturn($event);
+        
+        $this->eventRepository->expects($this->once())
+            ->method('delete');
+
+        $this->eventService->deleteEvent(new EventId(1), $actor);
+    }
+
+    public function testOwnerCanUpdateOwnEvent(): void
+    {
+        $event = $this->createEvent(1, 'jdoe');
+        $actor = $this->createUser('jdoe');
+        
+        $this->eventRepository->expects($this->once())
+            ->method('findById')
+            ->willReturn($event);
+        
+        $this->eventRepository->expects($this->once())
+            ->method('save');
+
+        $this->eventService->updateEvent($event, $actor);
+    }
+
+    public function testAdminCanDeleteAnyEvent(): void
+    {
+        $event = $this->createEvent(1, 'otheruser');
+        $admin = $this->createUser('admin', isAdmin: true);
+        
+        $this->eventRepository->expects($this->once())
+            ->method('findById')
+            ->willReturn($event);
+        
+        $this->eventRepository->expects($this->once())
+            ->method('delete');
+
+        $this->eventService->deleteEvent(new EventId(1), $admin);
+    }
+
+    public function testAdminCanUpdateAnyEvent(): void
+    {
+        $event = $this->createEvent(1, 'otheruser');
+        $admin = $this->createUser('admin', isAdmin: true);
+        
+        $this->eventRepository->expects($this->once())
+            ->method('findById')
+            ->willReturn($event);
+        
+        $this->eventRepository->expects($this->once())
+            ->method('save');
+
+        $this->eventService->updateEvent($event, $admin);
+    }
+
+    public function testNonOwnerCannotDeleteOthersEvent(): void
+    {
+        $event = $this->createEvent(1, 'owner');
+        $actor = $this->createUser('attacker');
+        
+        $this->eventRepository->expects($this->once())
+            ->method('findById')
+            ->willReturn($event);
+        
+        $this->eventRepository->expects($this->never())
+            ->method('delete');
+
+        $this->expectException(AuthorizationException::class);
+        $this->eventService->deleteEvent(new EventId(1), $actor);
+    }
+
+    public function testNonOwnerCannotUpdateOthersEvent(): void
+    {
+        $event = $this->createEvent(1, 'owner');
+        $actor = $this->createUser('attacker');
+        
+        $this->eventRepository->expects($this->once())
+            ->method('findById')
+            ->willReturn($event);
+        
+        $this->eventRepository->expects($this->never())
+            ->method('save');
+
+        $this->expectException(AuthorizationException::class);
+        $this->eventService->updateEvent($event, $actor);
+    }
+
+    public function testUserCanApproveForThemselves(): void
+    {
+        $actor = $this->createUser('jdoe');
         
         $this->eventRepository->expects($this->once())
             ->method('updateParticipantStatus')
-            ->with($id, $login, 'A');
+            ->with(new EventId(123), 'jdoe', 'A');
 
-        $this->eventService->approveEvent($id, $login);
+        $this->eventService->approveEvent(new EventId(123), 'jdoe', $actor);
     }
 
-    public function testRejectEvent(): void
+    public function testUserCanRejectForThemselves(): void
     {
-        $id = new EventId(123);
-        $login = 'jdoe';
+        $actor = $this->createUser('jdoe');
         
         $this->eventRepository->expects($this->once())
             ->method('updateParticipantStatus')
-            ->with($id, $login, 'R');
+            ->with(new EventId(123), 'jdoe', 'R');
 
-        $this->eventService->rejectEvent($id, $login);
+        $this->eventService->rejectEvent(new EventId(123), 'jdoe', $actor);
+    }
+
+    public function testAdminCanApproveForAnyone(): void
+    {
+        $admin = $this->createUser('admin', isAdmin: true);
+        
+        $this->eventRepository->expects($this->once())
+            ->method('updateParticipantStatus')
+            ->with(new EventId(123), 'jdoe', 'A');
+
+        $this->eventService->approveEvent(new EventId(123), 'jdoe', $admin);
+    }
+
+    public function testUserCannotApproveForOthers(): void
+    {
+        $actor = $this->createUser('attacker');
+        
+        $this->eventRepository->expects($this->never())
+            ->method('updateParticipantStatus');
+
+        $this->expectException(AuthorizationException::class);
+        $this->eventService->approveEvent(new EventId(123), 'victim', $actor);
+    }
+
+    public function testUserCannotRejectForOthers(): void
+    {
+        $actor = $this->createUser('attacker');
+        
+        $this->eventRepository->expects($this->never())
+            ->method('updateParticipantStatus');
+
+        $this->expectException(AuthorizationException::class);
+        $this->eventService->rejectEvent(new EventId(123), 'victim', $actor);
     }
 }

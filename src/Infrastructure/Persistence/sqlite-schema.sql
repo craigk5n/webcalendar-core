@@ -18,8 +18,9 @@ CREATE TABLE webcal_user (
     PRIMARY KEY (cal_login)
 );
 
-INSERT INTO webcal_user (cal_login, cal_passwd, cal_lastname, cal_firstname, cal_is_admin, cal_email)
-VALUES ('admin', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Administrator', 'Default', 'Y', 'admin@example.com');
+-- IMPORTANT: Do NOT create a default admin account in the schema.
+-- The admin user should be created during installation with a secure password.
+-- See the installation wizard or run: INSERT INTO webcal_user ... with a securely hashed password.
 
 CREATE TABLE webcal_entry (
     cal_id INT NOT NULL,
@@ -324,3 +325,26 @@ CREATE TABLE webcal_timezones (
     vtimezone TEXT,
     PRIMARY KEY (tzid)
 );
+
+-- Token storage for sessions and CSRF protection
+CREATE TABLE webcal_tokens (
+    cal_token VARCHAR(128) NOT NULL,
+    cal_type VARCHAR(32) NOT NULL,
+    cal_data VARCHAR(255) NOT NULL,
+    cal_created_at INT NOT NULL,
+    cal_expires_at INT DEFAULT NULL,
+    PRIMARY KEY (cal_token, cal_type)
+);
+
+CREATE INDEX idx_webcal_tokens_expires ON webcal_tokens(cal_expires_at);
+CREATE INDEX idx_webcal_tokens_type_data ON webcal_tokens(cal_type, cal_data);
+
+-- Rate limiting for security (login attempts, API, etc.)
+CREATE TABLE webcal_rate_limits (
+    cal_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cal_identifier VARCHAR(64) NOT NULL,
+    cal_action VARCHAR(32) NOT NULL,
+    cal_attempt_at INT NOT NULL
+);
+
+CREATE INDEX idx_webcal_rate_limits_lookup ON webcal_rate_limits(cal_identifier, cal_action, cal_attempt_at);
