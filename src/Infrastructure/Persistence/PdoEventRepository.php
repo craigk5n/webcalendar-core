@@ -317,16 +317,50 @@ final readonly class PdoEventRepository implements EventRepositoryInterface
 
     public function saveParticipants(EventId $id, array $logins): void
     {
-        $this->pdo->prepare(
-            "DELETE FROM {$this->tablePrefix}webcal_entry_user WHERE cal_id = :id"
-        )->execute(['id' => $id->value()]);
+        $this->executeInTransaction(function () use ($id, $logins): void {
+            $this->pdo->prepare(
+                "DELETE FROM {$this->tablePrefix}webcal_entry_user WHERE cal_id = :id"
+            )->execute(['id' => $id->value()]);
 
-        $insert = $this->pdo->prepare(
-            "INSERT INTO {$this->tablePrefix}webcal_entry_user (cal_id, cal_login, cal_status) VALUES (:id, :login, 'A')"
+            $insert = $this->pdo->prepare(
+                "INSERT INTO {$this->tablePrefix}webcal_entry_user (cal_id, cal_login, cal_status) VALUES (:id, :login, 'A')"
+            );
+            foreach ($logins as $login) {
+                $insert->execute(['id' => $id->value(), 'login' => $login]);
+            }
+        });
+    }
+
+    public function getParticipantsWithStatus(EventId $id): array
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT cal_login, cal_status FROM {$this->tablePrefix}webcal_entry_user WHERE cal_id = :id"
         );
-        foreach ($logins as $login) {
-            $insert->execute(['id' => $id->value(), 'login' => $login]);
+        $stmt->execute(['id' => $id->value()]);
+
+        $result = [];
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            if (is_array($row)) {
+                $result[(string) $row['cal_login']] = (string) $row['cal_status'];
+            }
         }
+        return $result;
+    }
+
+    public function saveParticipantsWithStatus(EventId $id, array $participants): void
+    {
+        $this->executeInTransaction(function () use ($id, $participants): void {
+            $this->pdo->prepare(
+                "DELETE FROM {$this->tablePrefix}webcal_entry_user WHERE cal_id = :id"
+            )->execute(['id' => $id->value()]);
+
+            $insert = $this->pdo->prepare(
+                "INSERT INTO {$this->tablePrefix}webcal_entry_user (cal_id, cal_login, cal_status) VALUES (:id, :login, :status)"
+            );
+            foreach ($participants as $login => $status) {
+                $insert->execute(['id' => $id->value(), 'login' => $login, 'status' => $status]);
+            }
+        });
     }
 
     public function findUidsByCreator(string $login): array

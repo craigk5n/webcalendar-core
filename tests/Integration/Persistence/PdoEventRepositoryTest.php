@@ -219,4 +219,56 @@ final class PdoEventRepositoryTest extends RepositoryTestCase
         $this->assertCount(1, $foundEvent->recurrence()->exDate()->dates());
         $this->assertSame('2026-02-16', $foundEvent->recurrence()->exDate()->dates()[0]->format('Y-m-d'));
     }
+
+    public function testGetParticipantsWithStatus(): void
+    {
+        $event = new Event(
+            id: new EventId(0),
+            uid: 'status-test',
+            name: 'Status Test',
+            description: '',
+            location: '',
+            start: new \DateTimeImmutable('2026-03-10 10:00:00'),
+            duration: 60,
+            createdBy: 'admin',
+            type: EventType::EVENT,
+            access: AccessLevel::PUBLIC
+        );
+        $this->repository->save($event);
+
+        // Creator auto-added with 'A' status
+        $id = new EventId(1);
+        $result = $this->repository->getParticipantsWithStatus($id);
+
+        $this->assertCount(1, $result);
+        $this->assertSame('A', $result['admin']);
+    }
+
+    public function testSaveParticipantsWithStatus(): void
+    {
+        $event = new Event(
+            id: new EventId(0),
+            uid: 'save-status-test',
+            name: 'Save Status Test',
+            description: '',
+            location: '',
+            start: new \DateTimeImmutable('2026-03-10 10:00:00'),
+            duration: 60,
+            createdBy: 'admin',
+            type: EventType::EVENT,
+            access: AccessLevel::PUBLIC
+        );
+        $this->repository->save($event);
+
+        $id = new EventId(1);
+        $this->repository->saveParticipantsWithStatus($id, [
+            'admin' => 'A',
+            'jdoe' => 'W',
+        ]);
+
+        $result = $this->repository->getParticipantsWithStatus($id);
+        $this->assertCount(2, $result);
+        $this->assertSame('A', $result['admin']);
+        $this->assertSame('W', $result['jdoe']);
+    }
 }

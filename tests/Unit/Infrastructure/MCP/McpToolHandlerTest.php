@@ -27,7 +27,7 @@ final class McpToolHandlerTest extends TestCase
         $this->eventRepository = $this->createMock(EventRepositoryInterface::class);
         $this->userRepository = $this->createMock(UserRepositoryInterface::class);
         
-        $eventService = new EventService($this->eventRepository);
+        $eventService = new EventService($this->eventRepository, $this->userRepository);
         $searchService = new SearchService($this->eventRepository);
         $userService = new UserService($this->userRepository);
 

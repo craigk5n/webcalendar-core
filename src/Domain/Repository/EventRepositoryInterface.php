@@ -96,6 +96,20 @@ interface EventRepositoryInterface
     public function saveParticipants(EventId $id, array $logins): void;
 
     /**
+     * Get participant logins with their statuses for an event.
+     *
+     * @return array<string, string> Map of login => status code
+     */
+    public function getParticipantsWithStatus(EventId $id): array;
+
+    /**
+     * Replace all participants for an event with specific statuses.
+     *
+     * @param array<string, string> $participants Map of login => status code
+     */
+    public function saveParticipantsWithStatus(EventId $id, array $participants): void;
+
+    /**
      * Get UIDs of events created by a specific login.
      *
      * @return string[]

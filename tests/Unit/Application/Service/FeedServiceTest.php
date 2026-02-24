@@ -15,6 +15,7 @@ use WebCalendar\Core\Domain\ValueObject\DateRange;
 use WebCalendar\Core\Domain\ValueObject\EventCollection;
 use WebCalendar\Core\Domain\ValueObject\EventId;
 use WebCalendar\Core\Domain\ValueObject\EventType;
+use WebCalendar\Core\Domain\Repository\UserRepositoryInterface;
 
 final class FeedServiceTest extends TestCase
 {
@@ -25,7 +26,8 @@ final class FeedServiceTest extends TestCase
   protected function setUp(): void
   {
     $this->eventRepository = $this->createMock(EventRepositoryInterface::class);
-    $eventService = new EventService($this->eventRepository);
+    $userRepository = $this->createMock(UserRepositoryInterface::class);
+    $eventService = new EventService($this->eventRepository, $userRepository);
     $this->feedService = new FeedService($eventService, 'https://example.com/calendar');
   }
 

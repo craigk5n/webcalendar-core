@@ -10,6 +10,7 @@ use WebCalendar\Core\Application\Service\EventService;
 use WebCalendar\Core\Domain\Repository\EventRepositoryInterface;
 use WebCalendar\Core\Domain\Entity\User;
 use WebCalendar\Core\Domain\Entity\Event;
+use WebCalendar\Core\Domain\Repository\UserRepositoryInterface;
 use WebCalendar\Core\Domain\ValueObject\DateRange;
 use WebCalendar\Core\Domain\ValueObject\EventCollection;
 
@@ -22,7 +23,8 @@ final class BookingServiceTest extends TestCase
     protected function setUp(): void
     {
         $this->eventRepository = $this->createMock(EventRepositoryInterface::class);
-        $eventService = new EventService($this->eventRepository);
+        $userRepository = $this->createMock(UserRepositoryInterface::class);
+        $eventService = new EventService($this->eventRepository, $userRepository);
         $this->bookingService = new BookingService($eventService);
     }
 

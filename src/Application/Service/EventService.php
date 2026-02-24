@@ -9,9 +9,11 @@ use WebCalendar\Core\Domain\Entity\User;
 use WebCalendar\Core\Domain\Exception\AuthorizationException;
 use WebCalendar\Core\Domain\Exception\EventNotFoundException;
 use WebCalendar\Core\Domain\Repository\EventRepositoryInterface;
+use WebCalendar\Core\Domain\Repository\UserRepositoryInterface;
 use WebCalendar\Core\Domain\ValueObject\EventId;
 use WebCalendar\Core\Domain\ValueObject\DateRange;
 use WebCalendar\Core\Domain\ValueObject\EventCollection;
+use WebCalendar\Core\Domain\ValueObject\ParticipantStatus;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 
@@ -24,6 +26,7 @@ final readonly class EventService
 
     public function __construct(
         private EventRepositoryInterface $eventRepository,
+        private UserRepositoryInterface $userRepository,
         ?LoggerInterface $logger = null
     ) {
         $this->logger = $logger ?? new NullLogger();
@@ -119,35 +122,171 @@ final readonly class EventService
     /**
      * Approves an event for a participant.
      *
+     * @throws EventNotFoundException if the event does not exist.
+     * @throws \InvalidArgumentException if the participant is not on the event.
      * @throws AuthorizationException if the actor is not the participant or admin.
      */
     public function approveEvent(EventId $id, string $participantLogin, User $actor): void
     {
         $this->assertCanApproveForParticipant($participantLogin, $actor);
-
-        $this->logger->info('Approving event', [
-            'id' => $id->value(),
-            'participant' => $participantLogin,
-            'actor' => $actor->login()
-        ]);
-        $this->eventRepository->updateParticipantStatus($id, $participantLogin, 'A');
+        $this->setParticipantStatus($id, $participantLogin, ParticipantStatus::ACCEPTED, $actor);
     }
 
     /**
      * Rejects an event for a participant.
      *
+     * @throws EventNotFoundException if the event does not exist.
+     * @throws \InvalidArgumentException if the participant is not on the event.
      * @throws AuthorizationException if the actor is not the participant or admin.
      */
     public function rejectEvent(EventId $id, string $participantLogin, User $actor): void
     {
         $this->assertCanApproveForParticipant($participantLogin, $actor);
+        $this->setParticipantStatus($id, $participantLogin, ParticipantStatus::REJECTED, $actor);
+    }
 
-        $this->logger->info('Rejecting event', [
-            'id' => $id->value(),
-            'participant' => $participantLogin,
+    /**
+     * Replaces participants on an event.
+     *
+     * - Validates all logins exist
+     * - Deduplicates
+     * - Ensures the event creator stays as a participant
+     * - New participants get status 'W' (Waiting)
+     * - Existing participants keep their current status
+     *
+     * @param string[] $logins
+     * @throws EventNotFoundException if the event does not exist.
+     * @throws \InvalidArgumentException if any login does not exist.
+     * @throws AuthorizationException if the actor is not authorized.
+     */
+    public function setParticipants(EventId $id, array $logins, User $actor): void
+    {
+        $event = $this->findEventOrFail($id);
+        $this->assertCanModify($event, $actor, 'set participants');
+
+        $logins = array_values(array_unique($logins));
+        $this->assertLoginsExist($logins);
+
+        // Ensure creator is always included
+        $creator = $event->createdBy();
+        if (!in_array($creator, $logins, true)) {
+            $logins[] = $creator;
+        }
+
+        $existing = $this->eventRepository->getParticipantsWithStatus($id);
+
+        $merged = [];
+        foreach ($logins as $login) {
+            $merged[$login] = $existing[$login] ?? ParticipantStatus::WAITING->value;
+        }
+
+        $this->logger->info('Setting participants', [
+            'event_id' => $id->value(),
+            'count' => count($merged),
             'actor' => $actor->login()
         ]);
-        $this->eventRepository->updateParticipantStatus($id, $participantLogin, 'R');
+
+        $this->eventRepository->saveParticipantsWithStatus($id, $merged);
+    }
+
+    /**
+     * Adds a single participant to an event.
+     *
+     * No-op if the participant is already on the event.
+     * New participants get status 'W' (Waiting).
+     *
+     * @throws EventNotFoundException if the event does not exist.
+     * @throws \InvalidArgumentException if the login does not exist.
+     * @throws AuthorizationException if the actor is not authorized.
+     */
+    public function addParticipant(EventId $id, string $login, User $actor): void
+    {
+        $event = $this->findEventOrFail($id);
+        $this->assertCanModify($event, $actor, 'add participant');
+        $this->assertLoginsExist([$login]);
+
+        $existing = $this->eventRepository->getParticipantsWithStatus($id);
+        if (isset($existing[$login])) {
+            return;
+        }
+
+        $existing[$login] = ParticipantStatus::WAITING->value;
+
+        $this->logger->info('Adding participant', [
+            'event_id' => $id->value(),
+            'login' => $login,
+            'actor' => $actor->login()
+        ]);
+
+        $this->eventRepository->saveParticipantsWithStatus($id, $existing);
+    }
+
+    /**
+     * Removes a participant from an event.
+     *
+     * No-op if the participant is not on the event.
+     * Cannot remove the event creator.
+     *
+     * @throws EventNotFoundException if the event does not exist.
+     * @throws \InvalidArgumentException if attempting to remove the event creator.
+     * @throws AuthorizationException if the actor is not authorized.
+     */
+    public function removeParticipant(EventId $id, string $login, User $actor): void
+    {
+        $event = $this->findEventOrFail($id);
+        $this->assertCanModify($event, $actor, 'remove participant');
+
+        if ($event->createdBy() === $login) {
+            throw new \InvalidArgumentException(
+                sprintf('Cannot remove event creator "%s" from participants.', $login)
+            );
+        }
+
+        $existing = $this->eventRepository->getParticipantsWithStatus($id);
+        if (!isset($existing[$login])) {
+            return;
+        }
+
+        unset($existing[$login]);
+
+        $this->logger->info('Removing participant', [
+            'event_id' => $id->value(),
+            'login' => $login,
+            'actor' => $actor->login()
+        ]);
+
+        $this->eventRepository->saveParticipantsWithStatus($id, $existing);
+    }
+
+    /**
+     * Sets the status of a specific participant on an event.
+     *
+     * @throws EventNotFoundException if the event does not exist.
+     * @throws \InvalidArgumentException if the participant is not on the event.
+     */
+    public function setParticipantStatus(
+        EventId $id,
+        string $login,
+        ParticipantStatus $status,
+        User $actor
+    ): void {
+        $this->findEventOrFail($id);
+
+        $existing = $this->eventRepository->getParticipantsWithStatus($id);
+        if (!isset($existing[$login])) {
+            throw new \InvalidArgumentException(
+                sprintf('User "%s" is not a participant on event %d.', $login, $id->value())
+            );
+        }
+
+        $this->logger->info('Setting participant status', [
+            'event_id' => $id->value(),
+            'login' => $login,
+            'status' => $status->value,
+            'actor' => $actor->login()
+        ]);
+
+        $this->eventRepository->updateParticipantStatus($id, $login, $status->value);
     }
 
     /**
@@ -200,5 +339,41 @@ final readonly class EventService
         ]);
 
         throw AuthorizationException::notSelf('modify participant status', $participantLogin, $actor->login());
+    }
+
+    /**
+     * Finds an event by ID or throws.
+     *
+     * @throws EventNotFoundException
+     */
+    private function findEventOrFail(EventId $id): Event
+    {
+        $event = $this->eventRepository->findById($id);
+        if ($event === null) {
+            throw EventNotFoundException::forId($id);
+        }
+        return $event;
+    }
+
+    /**
+     * Validates that all given logins correspond to existing users.
+     *
+     * @param string[] $logins
+     * @throws \InvalidArgumentException if any login does not exist.
+     */
+    private function assertLoginsExist(array $logins): void
+    {
+        $invalid = [];
+        foreach ($logins as $login) {
+            if ($this->userRepository->findByLogin($login) === null) {
+                $invalid[] = $login;
+            }
+        }
+
+        if ($invalid !== []) {
+            throw new \InvalidArgumentException(
+                sprintf('Unknown user login(s): %s', implode(', ', $invalid))
+            );
+        }
     }
 }

@@ -7,6 +7,7 @@ namespace WebCalendar\Core\Tests\Unit\Domain\ValueObject;
 use PHPUnit\Framework\TestCase;
 use WebCalendar\Core\Domain\ValueObject\EventType;
 use WebCalendar\Core\Domain\ValueObject\AccessLevel;
+use WebCalendar\Core\Domain\ValueObject\ParticipantStatus;
 
 final class EnumsTest extends TestCase
 {
@@ -32,5 +33,25 @@ final class EnumsTest extends TestCase
         $this->assertSame('P', AccessLevel::PUBLIC->value);
         $this->assertSame('C', AccessLevel::CONFIDENTIAL->value);
         $this->assertSame('R', AccessLevel::PRIVATE->value);
+    }
+
+    public function testParticipantStatusEnum(): void
+    {
+        $this->assertSame('A', ParticipantStatus::ACCEPTED->value);
+        $this->assertSame('C', ParticipantStatus::COMPLETED->value);
+        $this->assertSame('D', ParticipantStatus::DELETED->value);
+        $this->assertSame('P', ParticipantStatus::IN_PROGRESS->value);
+        $this->assertSame('R', ParticipantStatus::REJECTED->value);
+        $this->assertSame('W', ParticipantStatus::WAITING->value);
+    }
+
+    public function testParticipantStatusIsActive(): void
+    {
+        $this->assertTrue(ParticipantStatus::ACCEPTED->isActive());
+        $this->assertTrue(ParticipantStatus::COMPLETED->isActive());
+        $this->assertTrue(ParticipantStatus::IN_PROGRESS->isActive());
+        $this->assertTrue(ParticipantStatus::WAITING->isActive());
+        $this->assertFalse(ParticipantStatus::DELETED->isActive());
+        $this->assertFalse(ParticipantStatus::REJECTED->isActive());
     }
 }

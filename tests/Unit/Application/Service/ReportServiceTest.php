@@ -14,6 +14,7 @@ use WebCalendar\Core\Domain\Entity\Event;
 use WebCalendar\Core\Domain\ValueObject\EventId;
 use WebCalendar\Core\Domain\ValueObject\EventType;
 use WebCalendar\Core\Domain\ValueObject\AccessLevel;
+use WebCalendar\Core\Domain\Repository\UserRepositoryInterface;
 
 final class ReportServiceTest extends TestCase
 {
@@ -27,7 +28,8 @@ final class ReportServiceTest extends TestCase
     {
         $this->reportRepository = $this->createMock(ReportRepositoryInterface::class);
         $this->eventRepository = $this->createMock(EventRepositoryInterface::class);
-        $eventService = new EventService($this->eventRepository);
+        $userRepository = $this->createMock(UserRepositoryInterface::class);
+        $eventService = new EventService($this->eventRepository, $userRepository);
         $this->reportService = new ReportService($this->reportRepository, $eventService);
     }
 
