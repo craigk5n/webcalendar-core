@@ -193,7 +193,7 @@ CREATE TABLE webcal_config (
   PRIMARY KEY ( cal_setting )
 );
 
-INSERT INTO webcal_config (cal_setting, cal_value) VALUES ('WEBCALENDAR_PROGRAM_VERSION', 'v4.0.0');
+INSERT INTO webcal_config (cal_setting, cal_value) VALUES ('WEBCALENDAR_PROGRAM_VERSION', 'v4.0.1');
 
 CREATE TABLE webcal_entry_log (
   cal_log_id INT NOT NULL AUTO_INCREMENT,
