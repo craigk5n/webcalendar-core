@@ -31,7 +31,9 @@ welcome: Bienvenue sur WebCalendar
     {
         $files = glob("$this->tempTransDir/*.*");
         if ($files !== false) {
-            array_map('unlink', $files);
+            foreach ($files as $file) {
+                unlink($file);
+            }
         }
         rmdir($this->tempTransDir);
     }

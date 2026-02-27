@@ -72,20 +72,27 @@ final readonly class FeedService
         
         $xml = new \SimpleXMLElement('<?xml version="1.0" encoding="UTF-8" ?><rss version="2.0"></rss>');
         $channel = $xml->addChild('channel');
+        if ($channel === null) {
+            return '';
+        }
         $this->addTextChild($channel, 'title', 'Upcoming Events for ' . $user->fullName());
         $this->addTextChild($channel, 'link', $this->baseUrl);
         $this->addTextChild($channel, 'description', 'Calendar events feed');
 
         foreach ($events as $event) {
             $item = $channel->addChild('item');
+            if ($item === null) {
+                continue;
+            }
             $this->addTextChild($item, 'title', $event->name());
             $this->addTextChild($item, 'description', $event->description());
             $item->addChild('pubDate', $event->start()->format(\DateTimeInterface::RSS));
             $this->addTextChild($item, 'guid', $event->uid());
         }
 
-        $dom = dom_import_simplexml($xml)->ownerDocument;
-        if ($dom === null) {
+        $domElement = dom_import_simplexml($xml);
+        $dom = $domElement->ownerDocument;
+        if (!$dom instanceof \DOMDocument) {
             return '';
         }
         $dom->formatOutput = true;
@@ -101,20 +108,16 @@ final readonly class FeedService
     {
         $child = $parent->addChild($name);
         if ($child === null) {
-            return;
+            return; // @codeCoverageIgnore
         }
-        
+
         $domChild = dom_import_simplexml($child);
         $ownerDocument = $domChild->ownerDocument;
-        if ($ownerDocument === null) {
-            return;
+        if (!$ownerDocument instanceof \DOMDocument) {
+            return; // @codeCoverageIgnore
         }
-        
+
         $cdata = $ownerDocument->createCDATASection($value);
-        if ($cdata === false) {
-            return;
-        }
-        
         $domChild->appendChild($cdata);
     }
 }

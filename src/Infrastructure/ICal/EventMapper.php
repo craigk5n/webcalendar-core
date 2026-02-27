@@ -93,8 +93,9 @@ final readonly class EventMapper
         }
 
         // Map CLASS property to AccessLevel (RFC 5545 default is PUBLIC)
-        $classValue = $vevent->getProperty('CLASS')?->getValue()->getRawValue();
-        $access = match (strtoupper($classValue ?? '')) {
+        $classProp = $vevent->getProperty('CLASS');
+        $classValue = $classProp !== null ? $classProp->getValue()->getRawValue() : '';
+        $access = match (strtoupper($classValue)) {
             'PRIVATE' => AccessLevel::PRIVATE,
             'CONFIDENTIAL' => AccessLevel::CONFIDENTIAL,
             default => AccessLevel::PUBLIC,
@@ -112,8 +113,8 @@ final readonly class EventMapper
             type: EventType::EVENT,
             access: $access,
             recurrence: $recurrence,
-            sequence: (int) ($vevent->getProperty('SEQUENCE')?->getValue()->getRawValue() ?? 0),
-            status: $vevent->getProperty('STATUS')?->getValue()->getRawValue(),
+            sequence: $this->extractIntProperty($vevent, 'SEQUENCE'),
+            status: $this->extractStringProperty($vevent, 'STATUS'),
             allDay: $allDay,
         );
     }
@@ -149,8 +150,9 @@ final readonly class EventMapper
             $vevent->setDuration(sprintf('PT%dM', $event->duration()));
         }
 
-        if ($event->recurrence()->rule() !== null) {
-            $vevent->setRrule($event->recurrence()->rule()->toString());
+        $rule = $event->recurrence()->rule();
+        if ($rule !== null) {
+            $vevent->setRrule($rule->toString());
         }
 
         // Map AccessLevel to CLASS property
@@ -276,8 +278,20 @@ final readonly class EventMapper
 
     private function intervalToMinutes(\DateInterval $interval): int
     {
-        return (int) ($interval->days * 24 * 60) +
-               (int) ($interval->h * 60) +
-               (int) ($interval->i);
+        return ($interval->days !== false ? $interval->days * 24 * 60 : 0) +
+               $interval->h * 60 +
+               $interval->i;
+    }
+
+    private function extractIntProperty(VEvent $vevent, string $name): int
+    {
+        $prop = $vevent->getProperty($name);
+        return $prop !== null ? (int) $prop->getValue()->getRawValue() : 0;
+    }
+
+    private function extractStringProperty(VEvent $vevent, string $name): ?string
+    {
+        $prop = $vevent->getProperty($name);
+        return $prop !== null ? $prop->getValue()->getRawValue() : null;
     }
 }

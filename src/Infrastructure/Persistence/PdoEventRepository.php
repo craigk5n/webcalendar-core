@@ -79,7 +79,7 @@ final readonly class PdoEventRepository implements EventRepositoryInterface
         $sql .= ' ORDER BY cal_date DESC';
 
         if ($limit !== null) {
-            $sql .= ' LIMIT ' . (int)$limit;
+            $sql .= ' LIMIT ' . $limit;
         }
 
         $stmt = $this->pdo->prepare($sql);
@@ -381,7 +381,7 @@ final readonly class PdoEventRepository implements EventRepositoryInterface
 
     public function findByAccessLevel(string $accessLevel, int $limit, int $offset): array
     {
-        $sql = "SELECT * FROM {$this->tablePrefix}webcal_entry WHERE cal_access = :access ORDER BY cal_id ASC LIMIT " . (int)$limit . " OFFSET " . (int)$offset;
+        $sql = "SELECT * FROM {$this->tablePrefix}webcal_entry WHERE cal_access = :access ORDER BY cal_id ASC LIMIT " . $limit . " OFFSET " . $offset;
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute(['access' => $accessLevel]);
 
@@ -604,27 +604,27 @@ final readonly class PdoEventRepository implements EventRepositoryInterface
         }
 
         $byDay = is_string($row['cal_byday'] ?? null) ? $row['cal_byday'] : '';
-        if (!empty($byDay)) {
+        if ($byDay !== '') {
             $parts['BYDAY'] = $byDay;
         }
 
         $byMonth = is_string($row['cal_bymonth'] ?? null) ? $row['cal_bymonth'] : '';
-        if (!empty($byMonth)) {
+        if ($byMonth !== '') {
             $parts['BYMONTH'] = $byMonth;
         }
 
         $byMonthDay = is_string($row['cal_bymonthday'] ?? null) ? $row['cal_bymonthday'] : '';
-        if (!empty($byMonthDay)) {
+        if ($byMonthDay !== '') {
             $parts['BYMONTHDAY'] = $byMonthDay;
         }
 
         $bySetPos = is_string($row['cal_bysetpos'] ?? null) ? $row['cal_bysetpos'] : '';
-        if (!empty($bySetPos)) {
+        if ($bySetPos !== '') {
             $parts['BYSETPOS'] = $bySetPos;
         }
 
         $wkst = is_string($row['cal_wkst'] ?? null) ? $row['cal_wkst'] : '';
-        if (!empty($wkst)) {
+        if ($wkst !== '') {
             $parts['WKST'] = $wkst;
         }
 

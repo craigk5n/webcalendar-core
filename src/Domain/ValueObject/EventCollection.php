@@ -22,7 +22,7 @@ final readonly class EventCollection implements \IteratorAggregate, \Countable
     }
 
     /**
-     * @return \Traversable<Event>
+     * @return \Traversable<int, Event>
      */
     public function getIterator(): \Traversable
     {

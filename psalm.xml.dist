@@ -1,0 +1,63 @@
+<?xml version="1.0"?>
+<psalm
+    errorLevel="2"
+    resolveFromConfigFile="true"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns="https://getpsalm.org/schema/config"
+    xsi:schemaLocation="https://getpsalm.org/schema/config vendor/vimeo/psalm/config.xsd"
+    cacheDirectory="build/psalm"
+    findUnusedBaselineEntry="true"
+    findUnusedCode="true"
+>
+    <projectFiles>
+        <directory name="src" />
+        <directory name="tests" />
+        <ignoreFiles>
+            <directory name="vendor" />
+        </ignoreFiles>
+    </projectFiles>
+
+    <plugins>
+        <pluginClass class="Psalm\PhpUnitPlugin\Plugin" />
+    </plugins>
+
+    <issueHandlers>
+        <!-- PHP 8.3 #[\Override] attribute — project targets PHP 8.2+ -->
+        <MissingOverrideAttribute errorLevel="suppress" />
+
+        <!-- Library code: public API methods/classes/properties are consumed
+             by webcalendar-api, webcalendar-wp, etc. — not internally. -->
+        <PossiblyUnusedMethod>
+            <errorLevel type="suppress">
+                <directory name="src" />
+            </errorLevel>
+        </PossiblyUnusedMethod>
+        <UnusedClass>
+            <errorLevel type="suppress">
+                <directory name="src" />
+            </errorLevel>
+        </UnusedClass>
+        <PossiblyUnusedProperty>
+            <errorLevel type="suppress">
+                <directory name="src" />
+            </errorLevel>
+        </PossiblyUnusedProperty>
+        <PossiblyUnusedReturnValue>
+            <errorLevel type="suppress">
+                <directory name="src" />
+            </errorLevel>
+        </PossiblyUnusedReturnValue>
+
+        <!-- Test files: relax some checks -->
+        <RedundantCondition>
+            <errorLevel type="info">
+                <directory name="tests" />
+            </errorLevel>
+        </RedundantCondition>
+        <UnusedForeachValue>
+            <errorLevel type="info">
+                <directory name="tests" />
+            </errorLevel>
+        </UnusedForeachValue>
+    </issueHandlers>
+</psalm>

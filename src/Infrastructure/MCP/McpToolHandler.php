@@ -49,7 +49,7 @@ final readonly class McpToolHandler
      */
     private function handleListEvents(array $params, User $user): array
     {
-        $startStr = is_string($params['start_date'] ?? null) ? $params['start_date'] : (string)date('Ymd');
+        $startStr = is_string($params['start_date'] ?? null) ? $params['start_date'] : date('Ymd');
         $endStr = is_string($params['end_date'] ?? null) ? $params['end_date'] : $startStr;
 
         $range = new DateRange(
@@ -117,7 +117,7 @@ final readonly class McpToolHandler
     private function handleAddEvent(array $params, User $user): array
     {
         $name = is_string($params['name'] ?? null) ? $params['name'] : '';
-        $dateStr = is_string($params['date'] ?? null) ? $params['date'] : (string)date('Ymd');
+        $dateStr = is_string($params['date'] ?? null) ? $params['date'] : date('Ymd');
         $description = is_string($params['description'] ?? null) ? $params['description'] : '';
         $location = is_string($params['location'] ?? null) ? $params['location'] : '';
         $duration = is_numeric($params['duration'] ?? null) ? (int)$params['duration'] : 60;

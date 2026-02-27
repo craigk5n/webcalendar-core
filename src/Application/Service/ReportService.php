@@ -44,11 +44,11 @@ final readonly class ReportService
     /**
      * Generates a full report for a date range.
      */
+    /** @psalm-suppress UnusedParam -- $userLogin will filter events when user-scoped reports are implemented */
     public function generateFullReport(Report $report, DateRange $range, ?string $userLogin = null): string
     {
-        // For now, simpler implementation just listing events.
         // Section 18.2 says Page Template: ${days}, Date Template: ${events}, ${date}, ${fulldate}
-        
+
         $events = $this->eventService->getEventsInDateRange($range);
         $output = '';
 

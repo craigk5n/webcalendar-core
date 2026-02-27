@@ -68,7 +68,7 @@ final readonly class CurlWebhookProvider implements WebhookProviderInterface
                 CURLOPT_MAXREDIRS => 0,
             ]);
 
-            $response = curl_exec($ch);
+            curl_exec($ch);
             $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
             $error = curl_error($ch);
 

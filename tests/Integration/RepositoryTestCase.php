@@ -13,10 +13,14 @@ abstract class RepositoryTestCase extends TestCase
 
     protected function setUp(): void
     {
-        $dbType = getenv('DB_TYPE') ?: 'sqlite';
-        $dbUrl = getenv('DB_URL') ?: 'sqlite::memory:';
-        $dbUser = getenv('DB_USER') ?: null;
-        $dbPass = getenv('DB_PASS') ?: null;
+        $dbTypeEnv = getenv('DB_TYPE');
+        $dbType = $dbTypeEnv !== false ? $dbTypeEnv : 'sqlite';
+        $dbUrlEnv = getenv('DB_URL');
+        $dbUrl = $dbUrlEnv !== false ? $dbUrlEnv : 'sqlite::memory:';
+        $dbUserEnv = getenv('DB_USER');
+        $dbUser = $dbUserEnv !== false ? $dbUserEnv : null;
+        $dbPassEnv = getenv('DB_PASS');
+        $dbPass = $dbPassEnv !== false ? $dbPassEnv : null;
 
         $this->pdo = new PDO($dbUrl, $dbUser, $dbPass);
         $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
