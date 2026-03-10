@@ -414,6 +414,42 @@ final readonly class PdoEventRepository implements EventRepositoryInterface
         return (int)$stmt->fetchColumn();
     }
 
+    public function findByStatus(string $status): array
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT * FROM {$this->tablePrefix}webcal_entry WHERE cal_status = :status ORDER BY cal_id DESC"
+        );
+        $stmt->execute(['status' => $status]);
+
+        $rows = [];
+        $ids = [];
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            if (is_array($row)) {
+                $id = is_numeric($row['cal_id'] ?? null) ? (int)$row['cal_id'] : 0;
+                $rows[] = $row;
+                $ids[] = $id;
+            }
+        }
+
+        $recurrences = $this->batchLoadRecurrences($ids);
+        $events = [];
+        foreach ($rows as $row) {
+            $id = is_numeric($row['cal_id'] ?? null) ? (int)$row['cal_id'] : 0;
+            $events[] = $this->mapRowToEvent($row, $recurrences[$id] ?? null);
+        }
+
+        return $events;
+    }
+
+    public function countByStatus(string $status): int
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT COUNT(*) FROM {$this->tablePrefix}webcal_entry WHERE cal_status = :status"
+        );
+        $stmt->execute(['status' => $status]);
+        return (int)$stmt->fetchColumn();
+    }
+
     private function getNextId(): int
     {
         $stmt = $this->pdo->query("SELECT IFNULL(MAX(cal_id), 0) + 1 FROM {$this->tablePrefix}webcal_entry");

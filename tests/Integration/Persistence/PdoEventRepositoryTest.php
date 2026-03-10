@@ -244,6 +244,37 @@ final class PdoEventRepositoryTest extends RepositoryTestCase
         $this->assertSame('A', $result['admin']);
     }
 
+    public function testFindByStatus(): void
+    {
+        $date = new \DateTimeImmutable('2026-03-10 10:00:00');
+        $tentative = new Event(new EventId(0), 'u1', 'Pending Event', '', '', $date, 60, 'admin', EventType::EVENT, AccessLevel::PUBLIC, status: 'TENTATIVE');
+        $confirmed = new Event(new EventId(0), 'u2', 'Confirmed Event', '', '', $date, 60, 'admin', EventType::EVENT, AccessLevel::PUBLIC);
+
+        $this->repository->save($tentative);
+        $this->repository->save($confirmed);
+
+        $results = $this->repository->findByStatus('TENTATIVE');
+
+        $this->assertCount(1, $results);
+        $this->assertSame('Pending Event', $results[0]->name());
+        $this->assertSame('TENTATIVE', $results[0]->status());
+    }
+
+    public function testCountByStatus(): void
+    {
+        $date = new \DateTimeImmutable('2026-03-10 10:00:00');
+        $t1 = new Event(new EventId(0), 'u1', 'T1', '', '', $date, 60, 'admin', EventType::EVENT, AccessLevel::PUBLIC, status: 'TENTATIVE');
+        $t2 = new Event(new EventId(0), 'u2', 'T2', '', '', $date, 60, 'admin', EventType::EVENT, AccessLevel::PUBLIC, status: 'TENTATIVE');
+        $confirmed = new Event(new EventId(0), 'u3', 'C1', '', '', $date, 60, 'admin', EventType::EVENT, AccessLevel::PUBLIC);
+
+        $this->repository->save($t1);
+        $this->repository->save($t2);
+        $this->repository->save($confirmed);
+
+        $this->assertSame(2, $this->repository->countByStatus('TENTATIVE'));
+        $this->assertSame(0, $this->repository->countByStatus('CANCELLED'));
+    }
+
     public function testSaveParticipantsWithStatus(): void
     {
         $event = new Event(

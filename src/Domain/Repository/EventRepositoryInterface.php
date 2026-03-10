@@ -131,4 +131,16 @@ interface EventRepositoryInterface
      * Counts events with a specific access level.
      */
     public function countByAccessLevel(string $accessLevel): int;
+
+    /**
+     * Finds events by status (e.g. RFC 5545 TENTATIVE, CONFIRMED, CANCELLED).
+     *
+     * @return Event[]
+     */
+    public function findByStatus(string $status): array;
+
+    /**
+     * Counts events with a specific status.
+     */
+    public function countByStatus(string $status): int;
 }
