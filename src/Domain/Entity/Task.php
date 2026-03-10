@@ -15,21 +15,6 @@ use WebCalendar\Core\Domain\ValueObject\Recurrence;
 final readonly class Task extends AbstractEntry
 {
     /**
-     * @param EventId $id The unique identifier.
-     * @param string $uid Globally unique identifier (RFC 5545 UID).
-     * @param string $name Title of the task.
-     * @param string $description Detailed description.
-     * @param string $location Location text.
-     * @param \DateTimeImmutable $start Start date and time.
-     * @param int $duration Duration in minutes.
-     * @param string $createdBy Login of the creator.
-     * @param EventType $type Type of the entry.
-     * @param AccessLevel $access Access level.
-     * @param \DateTimeImmutable|null $dueDate Due date and time.
-     * @param int $percentComplete Percentage of completion (0-100).
-     * @param Recurrence $recurrence Recurrence rules.
-     * @param int $sequence Revision sequence number.
-     * @param string|null $status Task status.
      * @throws \InvalidArgumentException If name is empty, duration is negative, or percent is invalid.
      */
     public function __construct(

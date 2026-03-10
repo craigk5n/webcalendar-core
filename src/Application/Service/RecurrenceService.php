@@ -23,10 +23,8 @@ final readonly class RecurrenceService
     }
 
     /**
-     * Expands a repeating event into a list of occurrences within the given date range.
-     * 
-     * @param Event $event The event to expand.
-     * @param DateRange $range The date range for expansion.
+     * Expands a repeating event into occurrences within the given date range.
+     *
      * @return Occurrence[]
      */
     public function expand(Event $event, DateRange $range): array

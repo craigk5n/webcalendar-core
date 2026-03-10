@@ -40,7 +40,6 @@ final class EventTest extends TestCase
         $this->assertSame('admin', $event->createdBy());
         $this->assertSame(EventType::EVENT, $event->type());
         $this->assertSame(AccessLevel::PUBLIC, $event->access());
-        $this->assertInstanceOf(\WebCalendar\Core\Domain\ValueObject\Recurrence::class, $event->recurrence());
         $this->assertFalse($event->recurrence()->isRepeating());
         
         // Calculated end time

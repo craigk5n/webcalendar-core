@@ -44,9 +44,6 @@ final readonly class RecurrenceRule
         return new self(implode(';', $stringParts));
     }
 
-    /**
-     * Returns the RRULE as a standard RFC 5545 string.
-     */
     public function toString(): string
     {
         return $this->rrule->toString();

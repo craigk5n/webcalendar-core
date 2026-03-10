@@ -2291,7 +2291,7 @@ These RFC 5545 properties are low-priority and do not warrant dedicated columns.
 ## Appendix H: Test-Driven Development (TDD) Guidelines
 
 ### H.1 Core Philosophy
-This project adopts a **strict TDD** approach to ensure the new `webcalendar-core` library is robust, regression-free, and adheres to the "Clean Architecture" pattern.
+This project adopts a **strict TDD** approach to ensure the new `webcalendar-core` library is well-tested, regression-free, and adheres to the "Clean Architecture" pattern.
 
 **The Golden Rule:** *Write a failing test before writing any production code.*
 
@@ -3091,7 +3091,7 @@ S-3.1 (API router) ─── webcalendar-api project
 ## Appendix H: Test-Driven Development (TDD) Guidelines
 
 ### H.1 Core Philosophy
-This project adopts a **strict TDD** approach to ensure the new `webcalendar-core` library is robust, regression-free, and adheres to the "Clean Architecture" pattern.
+This project adopts a **strict TDD** approach to ensure the new `webcalendar-core` library is well-tested, regression-free, and adheres to the "Clean Architecture" pattern.
 
 **The Golden Rule:** *Write a failing test before writing any production code.*
 
@@ -3260,7 +3260,7 @@ This section provides architectural and implementation recommendations to ensure
 
 **CURRENT:** Basic unit and integration tests mentioned.
 
-**TARGET:** Comprehensive testing pyramid:
+**TARGET:** Full testing pyramid:
 
 1. **Contract tests:** Validate API responses match OpenAPI spec using tools like Schemathesis (in webcalendar-api)
 2. **Performance tests:** Load testing with k6 or Artillery for critical paths
@@ -3336,7 +3336,7 @@ This section provides architectural and implementation recommendations to ensure
 **Acceptance Criteria:**
 - [ ] Input validation on all endpoints
 - [ ] Secrets management system implemented
-- [ ] Comprehensive audit logging
+- [ ] Full audit logging
 - [ ] Security headers (CSP, HSTS, X-Frame-Options)
 
 ---

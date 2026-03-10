@@ -30,9 +30,8 @@ final readonly class ExportService
     /**
      * Exports a collection of events to an iCalendar (.ics) string.
      *
-     * @param EventCollection $events The events to export.
-     * @param array<int, string[]> $categoryMap Optional map of event ID → category names.
-     * @return string The generated ICS content.
+     * @param EventCollection $events
+     * @param array<int, string[]> $categoryMap Event ID → category names.
      */
     public function exportIcal(EventCollection $events, array $categoryMap = []): string
     {

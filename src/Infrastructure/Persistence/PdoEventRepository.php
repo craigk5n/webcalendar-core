@@ -672,7 +672,7 @@ final readonly class PdoEventRepository implements EventRepositoryInterface
 
         $rule = $recurrence->rule();
         if ($rule === null) {
-            // Check if RDATEs exist (PRD says RDATE additions include extra dates)
+            // RDATEs can exist without an RRULE
             $this->saveExceptions($id, $recurrence);
             return;
         }

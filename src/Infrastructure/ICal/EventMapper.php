@@ -34,10 +34,6 @@ final readonly class EventMapper
 
     /**
      * Maps a VEvent component to a Domain Event entity.
-     * 
-     * @param VEvent $vevent The iCalendar VEvent component.
-     * @param string $createdBy The login of the user importing the event.
-     * @return Event
      */
     public function fromVEvent(VEvent $vevent, string $createdBy): Event
     {
@@ -121,9 +117,6 @@ final readonly class EventMapper
 
     /**
      * Maps a Domain Event entity to a VEvent component.
-     * 
-     * @param Event $event The Domain Event entity.
-     * @return VEvent
      */
     public function toVEvent(Event $event): VEvent
     {

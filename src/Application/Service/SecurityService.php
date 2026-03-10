@@ -27,9 +27,6 @@ final readonly class SecurityService
 
     /**
      * Generates a session token for a user.
-     *
-     * @param string $login The user's login identifier
-     * @return string The generated token
      */
     public function generateToken(string $login): string
     {
@@ -48,11 +45,7 @@ final readonly class SecurityService
     }
 
     /**
-     * Validates a session token.
-     *
-     * @param string $token The token to validate
-     * @param string $login The expected user login
-     * @return bool True if the token is valid
+     * Validates a session token against the expected user.
      */
     public function validateToken(string $token, string $login): bool
     {
@@ -84,10 +77,7 @@ final readonly class SecurityService
     }
 
     /**
-     * Generates a CSRF token.
-     *
-     * @param string $sessionId Optional session identifier to bind token to
-     * @return string The generated CSRF token
+     * Generates a CSRF token, optionally bound to a session.
      */
     public function generateCsrfToken(string $sessionId = ''): string
     {
@@ -106,11 +96,7 @@ final readonly class SecurityService
     }
 
     /**
-     * Validates a CSRF token.
-     *
-     * @param string $token The token to validate
-     * @param string $sessionId Optional session identifier to match
-     * @return bool True if the token is valid
+     * Validates and consumes a CSRF token (single-use).
      */
     public function validateCsrfToken(string $token, string $sessionId = ''): bool
     {

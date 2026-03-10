@@ -10,7 +10,6 @@ namespace WebCalendar\Core\Domain\ValueObject;
 final readonly class EventId
 {
     /**
-     * @param int $value The unique identifier value. Must be non-negative.
      * @throws \InvalidArgumentException If value is negative.
      */
     public function __construct(
@@ -21,9 +20,6 @@ final readonly class EventId
         }
     }
 
-    /**
-     * Returns the raw integer value.
-     */
     public function value(): int
     {
         return $this->value;

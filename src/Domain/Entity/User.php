@@ -10,12 +10,6 @@ namespace WebCalendar\Core\Domain\Entity;
 final readonly class User
 {
     /**
-     * @param string $login Unique login identifier.
-     * @param string $firstName User's first name.
-     * @param string $lastName User's last name.
-     * @param string $email User's email address.
-     * @param bool $isAdmin Whether the user has administrative privileges.
-     * @param bool $isEnabled Whether the user account is active.
      * @throws \InvalidArgumentException If login is empty or email is invalid.
      */
     public function __construct(

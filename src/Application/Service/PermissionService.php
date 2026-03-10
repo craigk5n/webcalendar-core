@@ -20,10 +20,6 @@ final readonly class PermissionService
 
     /**
      * Checks if a user has permission to access a system function.
-     * 
-     * @param User $user The user to check.
-     * @param Permission $permission The function to check access for.
-     * @return bool True if access is granted.
      */
     public function canAccess(User $user, Permission $permission): bool
     {

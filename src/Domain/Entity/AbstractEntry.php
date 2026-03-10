@@ -15,20 +15,6 @@ use WebCalendar\Core\Domain\ValueObject\Recurrence;
 abstract readonly class AbstractEntry
 {
     /**
-     * @param EventId $id The unique identifier.
-     * @param string $uid Globally unique identifier (RFC 5545 UID).
-     * @param string $name Title of the entry.
-     * @param string $description Detailed description.
-     * @param string $location Location text.
-     * @param \DateTimeImmutable $start Start date and time.
-     * @param int $duration Duration in minutes.
-     * @param string $createdBy Login of the creator.
-     * @param EventType $type Type of the entry.
-     * @param AccessLevel $access Access level (Public, Confidential, Private).
-     * @param Recurrence $recurrence Recurrence rules, exclusions, and additions.
-     * @param int $sequence Revision sequence number (RFC 5545).
-     * @param string|null $status Entry status.
-     * @param bool $allDay Whether this is an all-day event (RFC 5545 VALUE=DATE).
      * @throws \InvalidArgumentException If name is empty or duration is negative.
      */
     public function __construct(
@@ -141,9 +127,6 @@ abstract readonly class AbstractEntry
         return $this->modTime;
     }
 
-    /**
-     * Returns the end date and time.
-     */
     public function end(): \DateTimeImmutable
     {
         return $this->start->modify(sprintf('+%d minutes', $this->duration));

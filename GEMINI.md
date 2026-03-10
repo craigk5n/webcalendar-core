@@ -23,7 +23,7 @@ The project follows a clean architecture pattern:
 *   **`src/`**: Source code (PSR-4 `WebCalendar\Core\`).
 *   **`tests/`**: Unit and integration tests.
 *   **`legacy/`**: Contains the original WebCalendar v1.9.13 codebase. **READ-ONLY REFERENCE.** Do not import or depend on code here.
-*   **`PRD.md`**: The comprehensive Product Requirements Document. **Source of Truth** for features and data models.
+*   **`PRD.md`**: The Product Requirements Document. **Source of Truth** for features and data models.
 *   **`STATUS.md`**: Tracking current tasks and epics.
 *   **`composer.json`**: Dependency management and script definitions.
 

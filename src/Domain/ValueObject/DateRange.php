@@ -10,8 +10,6 @@ namespace WebCalendar\Core\Domain\ValueObject;
 final readonly class DateRange
 {
     /**
-     * @param \DateTimeImmutable $startDate The start of the range.
-     * @param \DateTimeImmutable $endDate The end of the range. Must be after or equal to start.
      * @throws \InvalidArgumentException If start date is after end date.
      */
     public function __construct(
@@ -23,17 +21,11 @@ final readonly class DateRange
         }
     }
 
-    /**
-     * Returns the start date.
-     */
     public function startDate(): \DateTimeImmutable
     {
         return $this->startDate;
     }
 
-    /**
-     * Returns the end date.
-     */
     public function endDate(): \DateTimeImmutable
     {
         return $this->endDate;

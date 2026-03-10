@@ -88,8 +88,8 @@ final readonly class PdoSiteExtraRepository implements SiteExtraRepositoryInterf
      * Decodes a value from storage.
      * Tries JSON decode first for arrays/objects, returns as-is for scalars.
      * 
-     * Note: Does NOT unserialize legacy PHP serialized data for security reasons.
-     * Legacy serialized data will be returned as a string prefixed with a warning.
+     * Skips PHP unserialize() to avoid deserialization exploits.
+     * Legacy serialized data is returned as a prefixed string.
      */
     private function decodeValue(mixed $value): mixed
     {
@@ -107,8 +107,7 @@ final readonly class PdoSiteExtraRepository implements SiteExtraRepositoryInterf
             return $decoded;
         }
 
-        // Check if this looks like legacy serialized PHP data
-        // We do NOT unserialize for security - return as string with warning
+        // Legacy serialized PHP data — flag for migration
         if ($this->looksLikeSerializedPhp($value)) {
             return '[LEGACY_SERIALIZED_DATA - migration required] ' . $value;
         }

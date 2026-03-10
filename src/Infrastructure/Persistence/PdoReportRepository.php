@@ -79,8 +79,7 @@ final readonly class PdoReportRepository implements ReportRepositoryInterface
             'global' => $report->isGlobal() ? 'Y' : 'N'
         ];
 
-        // This is simplified; real implementation would need to handle all fields
-        // and templates. For now, focus on the entity persistence.
+        // Simplified — only persists metadata, not full template fields
         
         $stmt = $this->pdo->prepare("SELECT 1 FROM {$this->tablePrefix}webcal_report WHERE cal_report_id = :id");
         $stmt->execute(['id' => $report->id()]);

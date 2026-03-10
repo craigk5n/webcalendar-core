@@ -62,12 +62,7 @@ final readonly class ImportService
             throw ImportLimitException::contentTooLarge($contentSize, $this->maxContentSize);
         }
 
-        try {
-            $vcalendar = $this->parser->parse($icsContent);
-        } catch (\Exception $e) {
-            $this->logger->error('Failed to parse iCal content', ['error' => $e->getMessage()]);
-            throw $e;
-        }
+        $vcalendar = $this->parser->parse($icsContent);
 
         // Count events first to check limit
         $components = $vcalendar->getComponents();

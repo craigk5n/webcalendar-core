@@ -10,31 +10,17 @@ namespace WebCalendar\Core\Domain\Repository;
 interface TokenRepositoryInterface
 {
     /**
-     * Stores a token with associated data.
-     *
-     * @param string $token The token string
-     * @param string $type Token type (e.g., 'session', 'csrf')
-     * @param string $data Associated data (e.g., user login for session tokens)
-     * @param int $ttlSeconds Time to live in seconds (0 = no expiration)
+     * Stores a token with associated data and optional TTL.
      */
     public function store(string $token, string $type, string $data, int $ttlSeconds = 0): void;
 
     /**
-     * Retrieves data associated with a token.
-     *
-     * @param string $token The token string
-     * @param string $type Token type
-     * @return string|null The associated data, or null if not found/expired
+     * Retrieves data associated with a token, or null if expired/missing.
      */
     public function get(string $token, string $type): ?string;
 
     /**
-     * Validates a token exists and matches expected data.
-     *
-     * @param string $token The token string
-     * @param string $type Token type
-     * @param string $expectedData Expected data to match
-     * @return bool True if token exists and data matches
+     * Validates a token exists, is not expired, and matches expected data.
      */
     public function validate(string $token, string $type, string $expectedData): bool;
 

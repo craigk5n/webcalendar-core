@@ -70,7 +70,6 @@ final class EventServiceTest extends TestCase
             ->willReturn($events);
 
         $result = $this->eventService->getEventsInDateRange($range, $user);
-        $this->assertInstanceOf(\WebCalendar\Core\Domain\ValueObject\EventCollection::class, $result);
         $this->assertSame($events, $result->all());
     }
 
@@ -207,8 +206,6 @@ final class EventServiceTest extends TestCase
         $this->eventService->updateEvent($event, $actor);
     }
 
-    // --- approve/reject tests (now with event-exists + participant validation) ---
-
     public function testUserCanApproveForThemselves(): void
     {
         $event = $this->createEvent(1, 'owner');
@@ -297,8 +294,6 @@ final class EventServiceTest extends TestCase
         $this->eventService->rejectEvent(new EventId(123), 'victim', $actor);
     }
 
-    // --- setParticipantStatus tests ---
-
     public function testSetParticipantStatusThrowsIfEventNotFound(): void
     {
         $actor = $this->createUser('jdoe');
@@ -339,8 +334,6 @@ final class EventServiceTest extends TestCase
             $actor
         );
     }
-
-    // --- setParticipants tests ---
 
     public function testSetParticipantsValidatesLogins(): void
     {
@@ -479,8 +472,6 @@ final class EventServiceTest extends TestCase
         $this->eventService->setParticipants(new EventId(1), ['attacker'], $actor);
     }
 
-    // --- addParticipant tests ---
-
     public function testAddParticipantValidatesLogin(): void
     {
         $event = $this->createEvent(1, 'owner');
@@ -548,8 +539,6 @@ final class EventServiceTest extends TestCase
 
         $this->eventService->addParticipant(new EventId(1), 'newguy', $actor);
     }
-
-    // --- removeParticipant tests ---
 
     public function testRemoveParticipantBlocksRemovingCreator(): void
     {
