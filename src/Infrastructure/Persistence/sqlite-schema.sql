@@ -54,6 +54,7 @@ CREATE TABLE webcal_entry (
     cal_organizer VARCHAR(255) DEFAULT NULL,
     cal_created INT DEFAULT NULL,
     cal_created_time INT DEFAULT NULL,
+    cal_image VARCHAR(2048) DEFAULT NULL,
     PRIMARY KEY (cal_id)
 );
 

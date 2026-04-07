@@ -34,6 +34,7 @@ abstract readonly class AbstractEntry
         protected bool $allDay = false,
         protected ?int $modDate = null,
         protected ?int $modTime = null,
+        protected ?string $image = null,
     ) {
         if (empty(trim($this->name))) {
             throw new \InvalidArgumentException('Name cannot be empty.');
@@ -125,6 +126,14 @@ abstract readonly class AbstractEntry
     public function modTime(): ?int
     {
         return $this->modTime;
+    }
+
+    /**
+     * RFC 7986 IMAGE property — URL of an image associated with this entry.
+     */
+    public function image(): ?string
+    {
+        return $this->image;
     }
 
     public function end(): \DateTimeImmutable

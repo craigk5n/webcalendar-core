@@ -112,6 +112,7 @@ final readonly class EventMapper
             sequence: $this->extractIntProperty($vevent, 'SEQUENCE'),
             status: $this->extractStringProperty($vevent, 'STATUS'),
             allDay: $allDay,
+            image: $vevent->getImage(),
         );
     }
 
@@ -155,6 +156,12 @@ final readonly class EventMapper
             AccessLevel::PUBLIC => 'PUBLIC',
         };
         $vevent->addProperty(GenericProperty::create('CLASS', $classValue));
+
+        // RFC 7986 IMAGE property
+        $image = $event->image();
+        if ($image !== null && $image !== '') {
+            $vevent->setImage($image);
+        }
 
         return $vevent;
     }

@@ -210,31 +210,33 @@ final readonly class PdoEventRepository implements EventRepositoryInterface
                 'access' => $event->access()->value,
                 'uid' => $event->uid(),
                 'sequence' => $event->sequence(),
-                'status' => $event->status()
+                'status' => $event->status(),
+                'image' => $event->image(),
             ];
 
             if ($isNew) {
                 $sql = "INSERT INTO {$this->tablePrefix}webcal_entry
                         (cal_id, cal_create_by, cal_date, cal_time, cal_duration, cal_name,
                          cal_description, cal_location, cal_type, cal_access, cal_uid,
-                         cal_sequence, cal_status)
+                         cal_sequence, cal_status, cal_image)
                         VALUES (:id, :create_by, :date, :time, :duration, :name,
                                 :description, :location, :type, :access, :uid,
-                                :sequence, :status)";
+                                :sequence, :status, :image)";
             } else {
-                $sql = "UPDATE {$this->tablePrefix}webcal_entry SET 
-                        cal_create_by = :create_by, 
-                        cal_date = :date, 
-                        cal_time = :time, 
-                        cal_duration = :duration, 
-                        cal_name = :name, 
-                        cal_description = :description, 
-                        cal_location = :location, 
-                        cal_type = :type, 
-                        cal_access = :access, 
-                        cal_uid = :uid, 
-                        cal_sequence = :sequence, 
-                        cal_status = :status
+                $sql = "UPDATE {$this->tablePrefix}webcal_entry SET
+                        cal_create_by = :create_by,
+                        cal_date = :date,
+                        cal_time = :time,
+                        cal_duration = :duration,
+                        cal_name = :name,
+                        cal_description = :description,
+                        cal_location = :location,
+                        cal_type = :type,
+                        cal_access = :access,
+                        cal_uid = :uid,
+                        cal_sequence = :sequence,
+                        cal_status = :status,
+                        cal_image = :image
                         WHERE cal_id = :id";
             }
 
@@ -498,6 +500,9 @@ final readonly class PdoEventRepository implements EventRepositoryInterface
         $access = is_string($row['cal_access'] ?? null) ? $row['cal_access'] : 'P';
         $sequence = is_numeric($row['cal_sequence'] ?? null) ? (int)$row['cal_sequence'] : 0;
         $status = is_string($row['cal_status'] ?? null) ? $row['cal_status'] : null;
+        $image = is_string($row['cal_image'] ?? null) && $row['cal_image'] !== ''
+            ? $row['cal_image']
+            : null;
 
         $recurrence = $preloadedRecurrence ?? $this->loadRecurrence($id);
 
@@ -518,6 +523,7 @@ final readonly class PdoEventRepository implements EventRepositoryInterface
             allDay: $allDay,
             modDate: is_numeric($row['cal_mod_date'] ?? null) ? (int)$row['cal_mod_date'] : null,
             modTime: is_numeric($row['cal_mod_time'] ?? null) ? (int)$row['cal_mod_time'] : null,
+            image: $image,
         );
     }
 
