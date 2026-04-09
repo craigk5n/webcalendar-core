@@ -197,6 +197,13 @@ final readonly class PdoEventRepository implements EventRepositoryInterface
                 $idValue = $this->getNextId();
             }
 
+            // Stamp a current modification timestamp on every write so
+            // downstream consumers (CalDAV sync-token generation,
+            // optimistic-concurrency checks, "recently updated" UIs)
+            // have a monotonically advancing signal. Stored as integers
+            // in the same YYYYMMDD / HHMMSS shape the rest of the schema
+            // uses.
+            $now = new \DateTimeImmutable();
             $data = [
                 'id' => $idValue,
                 'create_by' => $event->createdBy(),
@@ -212,16 +219,18 @@ final readonly class PdoEventRepository implements EventRepositoryInterface
                 'sequence' => $event->sequence(),
                 'status' => $event->status(),
                 'image' => $event->image(),
+                'mod_date' => (int)$now->format('Ymd'),
+                'mod_time' => (int)$now->format('His'),
             ];
 
             if ($isNew) {
                 $sql = "INSERT INTO {$this->tablePrefix}webcal_entry
                         (cal_id, cal_create_by, cal_date, cal_time, cal_duration, cal_name,
                          cal_description, cal_location, cal_type, cal_access, cal_uid,
-                         cal_sequence, cal_status, cal_image)
+                         cal_sequence, cal_status, cal_image, cal_mod_date, cal_mod_time)
                         VALUES (:id, :create_by, :date, :time, :duration, :name,
                                 :description, :location, :type, :access, :uid,
-                                :sequence, :status, :image)";
+                                :sequence, :status, :image, :mod_date, :mod_time)";
             } else {
                 $sql = "UPDATE {$this->tablePrefix}webcal_entry SET
                         cal_create_by = :create_by,
@@ -236,7 +245,9 @@ final readonly class PdoEventRepository implements EventRepositoryInterface
                         cal_uid = :uid,
                         cal_sequence = :sequence,
                         cal_status = :status,
-                        cal_image = :image
+                        cal_image = :image,
+                        cal_mod_date = :mod_date,
+                        cal_mod_time = :mod_time
                         WHERE cal_id = :id";
             }
 

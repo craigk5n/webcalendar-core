@@ -158,22 +158,44 @@ final readonly class PdoCategoryRepository implements CategoryRepositoryInterfac
     }
 
     /**
+     * Loads categories assigned to a single event for a given user.
+     *
+     * Global categories (stored with `cat_owner=''`) are visible to every
+     * user, but assignment rows in `webcal_entry_categories` always carry
+     * the assigning user's login as `cat_owner`. We therefore match any
+     * category whose owner is either the assigner (personal) or empty
+     * (global), and prefer the personal version when both exist for the
+     * same `cat_id`.
+     *
      * @return Category[]
      */
     public function getForEvent(EventId $eventId, string $userLogin): array
     {
-        $sql = "SELECT c.* FROM {$this->tablePrefix}webcal_categories c
-                JOIN {$this->tablePrefix}webcal_entry_categories ec ON c.cat_id = ec.cat_id
-                WHERE ec.cal_id = :cal_id AND ec.cat_owner = :owner";
-        
+        $sql = "SELECT c.*
+                FROM {$this->tablePrefix}webcal_categories c
+                JOIN {$this->tablePrefix}webcal_entry_categories ec
+                  ON c.cat_id = ec.cat_id
+                 AND c.cat_owner IN (ec.cat_owner, '')
+                WHERE ec.cal_id = :cal_id AND ec.cat_owner = :owner
+                ORDER BY ec.cat_order ASC,
+                         CASE WHEN c.cat_owner = ec.cat_owner THEN 0 ELSE 1 END";
+
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute(['cal_id' => $eventId->value(), 'owner' => $userLogin]);
         $categories = [];
+        $seen = [];
 
         while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-            if (is_array($row)) {
-                $categories[] = $this->mapRowToCategory($row);
+            if (!is_array($row)) {
+                continue;
             }
+            $catId = (int) $row['cat_id'];
+            if (isset($seen[$catId])) {
+                // Personal row was already taken; skip the global duplicate.
+                continue;
+            }
+            $seen[$catId] = true;
+            $categories[] = $this->mapRowToCategory($row);
         }
 
         return $categories;
@@ -189,12 +211,19 @@ final readonly class PdoCategoryRepository implements CategoryRepositoryInterfac
         $placeholders = implode(',', array_fill(0, count($ids), '?'));
         $params = array_merge($ids, [$userLogin]);
 
+        // See getForEvent() for the global/personal category matching
+        // rationale. The `CASE WHEN ... THEN 0 ELSE 1` ordering makes the
+        // personal version sort before the global one so the per-event
+        // dedup loop below deterministically keeps the personal match.
         $stmt = $this->pdo->prepare(
             "SELECT ec.cal_id, c.cat_id, c.cat_color
              FROM {$this->tablePrefix}webcal_entry_categories ec
-             JOIN {$this->tablePrefix}webcal_categories c ON ec.cat_id = c.cat_id AND ec.cat_owner = c.cat_owner
+             JOIN {$this->tablePrefix}webcal_categories c
+               ON c.cat_id = ec.cat_id
+              AND c.cat_owner IN (ec.cat_owner, '')
              WHERE ec.cal_id IN ($placeholders) AND ec.cat_owner = ?
-             ORDER BY ec.cat_order ASC"
+             ORDER BY ec.cal_id, ec.cat_order ASC,
+                      CASE WHEN c.cat_owner = ec.cat_owner THEN 0 ELSE 1 END"
         );
         $stmt->execute($params);
 

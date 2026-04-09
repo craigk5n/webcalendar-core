@@ -182,6 +182,91 @@ final class PdoCategoryRepositoryTest extends RepositoryTestCase
         $this->assertSame('#fff', $found->color());
     }
 
+    // -- Global vs personal category resolution -----------------------------
+    //
+    // Regression coverage for a read-path bug: assignToEvent() writes the
+    // junction row with `cat_owner = $userLogin` regardless of whether the
+    // target category is global (`cat_owner=''`) or personal. Earlier the
+    // batch read joined on `ec.cat_owner = c.cat_owner` and so never matched
+    // global categories assigned to user events.
+    //
+    // Both getForEvent() and getForEventsBatch() must return assigned
+    // categories whether they are global or personal, and when both versions
+    // exist the personal version must win.
+
+    public function testGetForEventReturnsGlobalCategoryAssignedToUserEvent(): void
+    {
+        // Global category (owner is null / empty-string in DB)
+        $this->repository->save(new Category(1, null, 'Holidays', '#ff0000'));
+        $this->insertEntry(100);
+        $this->repository->assignToEvent(new EventId(100), 'admin', [1]);
+
+        $categories = $this->repository->getForEvent(new EventId(100), 'admin');
+        $this->assertCount(1, $categories);
+        $this->assertSame('Holidays', $categories[0]->name());
+        $this->assertNull($categories[0]->owner(), 'global category should round-trip with null owner');
+    }
+
+    public function testGetForEventsBatchReturnsGlobalCategoryAssignedToUserEvent(): void
+    {
+        $this->repository->save(new Category(1, null, 'Holidays', '#ff0000'));
+        $this->insertEntry(100);
+        $this->insertEntry(101);
+        $this->repository->assignToEvent(new EventId(100), 'admin', [1]);
+
+        $map = $this->repository->getForEventsBatch(
+            [new EventId(100), new EventId(101)],
+            'admin',
+        );
+        $this->assertArrayHasKey(100, $map);
+        $this->assertSame(1, $map[100]['id']);
+        $this->assertSame('#ff0000', $map[100]['color']);
+        $this->assertArrayNotHasKey(101, $map, 'unassigned events should not appear');
+    }
+
+    public function testGetForEventPrefersPersonalOverGlobalWhenSameCatId(): void
+    {
+        // Both a global and a personal category share cat_id=1 (legal per
+        // the composite primary key `(cat_id, cat_owner)`). The personal
+        // version should win for the user who owns it.
+        $this->repository->save(new Category(1, null, 'Global Work', '#000000'));
+        $this->repository->save(new Category(1, 'admin', 'Personal Work', '#ffffff'));
+        $this->insertEntry(100);
+        $this->repository->assignToEvent(new EventId(100), 'admin', [1]);
+
+        $categories = $this->repository->getForEvent(new EventId(100), 'admin');
+        $this->assertCount(1, $categories);
+        $this->assertSame('Personal Work', $categories[0]->name(), 'personal version must win over global');
+        $this->assertSame('admin', $categories[0]->owner());
+    }
+
+    public function testGetForEventsBatchPrefersPersonalOverGlobalWhenSameCatId(): void
+    {
+        $this->repository->save(new Category(1, null, 'Global Work', '#000000'));
+        $this->repository->save(new Category(1, 'admin', 'Personal Work', '#ffffff'));
+        $this->insertEntry(100);
+        $this->repository->assignToEvent(new EventId(100), 'admin', [1]);
+
+        $map = $this->repository->getForEventsBatch([new EventId(100)], 'admin');
+        $this->assertSame('#ffffff', $map[100]['color'], 'personal color (white) must win over global (black)');
+    }
+
+    public function testGetForEventsBatchDoesNotLeakOtherUsersAssignments(): void
+    {
+        // admin and jdoe each assign the global category to the SAME event
+        // id — each should only see their own assignment row.
+        $this->repository->save(new Category(1, null, 'Shared', '#cccccc'));
+        $this->insertEntry(100);
+        $this->repository->assignToEvent(new EventId(100), 'admin', [1]);
+        $this->repository->assignToEvent(new EventId(100), 'jdoe', [1]);
+
+        $adminMap = $this->repository->getForEventsBatch([new EventId(100)], 'admin');
+        $jdoeMap = $this->repository->getForEventsBatch([new EventId(100)], 'jdoe');
+
+        $this->assertSame(1, $adminMap[100]['id']);
+        $this->assertSame(1, $jdoeMap[100]['id']);
+    }
+
     private function insertEntry(int $calId): void
     {
         $this->pdo->exec(
