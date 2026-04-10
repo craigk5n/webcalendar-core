@@ -24,6 +24,12 @@ interface UserRepositoryInterface
     public function findAll(): array;
 
     /**
+     * Returns only enabled users.
+     * @return User[]
+     */
+    public function findAllEnabled(): array;
+
+    /**
      * Persists a user.
      */
     public function save(User $user): void;

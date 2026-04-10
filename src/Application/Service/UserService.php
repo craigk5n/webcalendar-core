@@ -6,6 +6,7 @@ namespace WebCalendar\Core\Application\Service;
 
 use WebCalendar\Core\Domain\Entity\User;
 use WebCalendar\Core\Domain\Exception\AuthorizationException;
+use WebCalendar\Core\Domain\Exception\SelfOperationException;
 use WebCalendar\Core\Domain\Repository\UserRepositoryInterface;
 use WebCalendar\Core\Domain\ValueObject\UserPreference;
 use Psr\Log\LoggerInterface;
@@ -47,12 +48,21 @@ final readonly class UserService
 
     /**
      * Updates an existing user.
-     * 
+     *
      * @throws AuthorizationException if actor is not admin or the user being updated
+     * @throws SelfOperationException if actor tries to disable their own account
      */
     public function updateUser(User $user, User $actor): void
     {
         $this->assertAdminOrSelf($actor, $user->login(), 'update user');
+
+        if ($user->login() === $actor->login() && !$user->isEnabled()) {
+            $existing = $this->userRepository->findByLogin($user->login());
+            if ($existing !== null && $existing->isEnabled()) {
+                throw SelfOperationException::cannotDisableSelf();
+            }
+        }
+
         $this->logger->info('User updated', ['login' => $user->login(), 'actor' => $actor->login()]);
         $this->userRepository->save($user);
     }
@@ -71,14 +81,30 @@ final readonly class UserService
 
     /**
      * Deletes a user.
-     * 
+     *
      * @throws AuthorizationException if actor is not an admin
+     * @throws SelfOperationException if actor tries to delete their own account
      */
     public function deleteUser(string $login, User $actor): void
     {
         $this->assertAdmin($actor, 'delete user');
+
+        if ($login === $actor->login()) {
+            throw SelfOperationException::cannotDeleteSelf();
+        }
+
         $this->logger->info('User deleted', ['login' => $login, 'actor' => $actor->login()]);
         $this->userRepository->delete($login);
+    }
+
+    /**
+     * Returns only enabled users (for participant pickers, etc.).
+     *
+     * @return User[]
+     */
+    public function getEnabledUsers(): array
+    {
+        return $this->userRepository->findAllEnabled();
     }
 
     /**

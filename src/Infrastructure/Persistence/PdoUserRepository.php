@@ -52,6 +52,25 @@ final readonly class PdoUserRepository implements UserRepositoryInterface
         return $users;
     }
 
+    /**
+     * @return User[]
+     */
+    public function findAllEnabled(): array
+    {
+        $stmt = $this->pdo->query("SELECT * FROM {$this->tablePrefix}webcal_user WHERE cal_enabled = 'Y'");
+        $users = [];
+
+        if ($stmt) {
+            while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                if (is_array($row)) {
+                    $users[] = $this->mapRowToUser($row);
+                }
+            }
+        }
+
+        return $users;
+    }
+
     public function save(User $user): void
     {
         $data = [
@@ -84,8 +103,42 @@ final readonly class PdoUserRepository implements UserRepositoryInterface
 
     public function delete(string $login): void
     {
-        $stmt = $this->pdo->prepare("DELETE FROM {$this->tablePrefix}webcal_user WHERE cal_login = :login");
-        $stmt->execute(['login' => $login]);
+        $this->pdo->beginTransaction();
+
+        try {
+            $tables = [
+                'webcal_user_pref' => ['cal_login'],
+                'webcal_user_layers' => ['cal_login', 'cal_layeruser'],
+                'webcal_entry_user' => ['cal_login'],
+                'webcal_group_user' => ['cal_login'],
+                'webcal_access_user' => ['cal_login', 'cal_other_user'],
+                'webcal_access_function' => ['cal_login'],
+                'webcal_user_template' => ['cal_login'],
+                'webcal_blob' => ['cal_login'],
+                'webcal_asst' => ['cal_boss', 'cal_assistant'],
+                'webcal_view_user' => ['cal_login'],
+                'webcal_import' => ['cal_login'],
+                'webcal_import_data' => ['cal_login'],
+                'webcal_nonuser_cals' => ['cal_admin'],
+                'webcal_report' => ['cal_login'],
+                'webcal_entry_log' => ['cal_login'],
+            ];
+
+            foreach ($tables as $table => $columns) {
+                foreach ($columns as $column) {
+                    $sql = "DELETE FROM {$this->tablePrefix}{$table} WHERE {$column} = :login";
+                    $this->pdo->prepare($sql)->execute(['login' => $login]);
+                }
+            }
+
+            $stmt = $this->pdo->prepare("DELETE FROM {$this->tablePrefix}webcal_user WHERE cal_login = :login");
+            $stmt->execute(['login' => $login]);
+
+            $this->pdo->commit();
+        } catch (\Throwable $e) {
+            $this->pdo->rollBack();
+            throw $e;
+        }
     }
 
     /**
