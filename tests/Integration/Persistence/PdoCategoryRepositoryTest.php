@@ -23,12 +23,12 @@ final class PdoCategoryRepositoryTest extends RepositoryTestCase
         $this->pdo->exec('DELETE FROM webcal_categories');
     }
 
-    public function testSaveAndFindById(): void
+    public function testSaveAndFindByCompositeKey(): void
     {
         $category = new Category(1, null, 'Meeting', '#0073aa');
         $this->repository->save($category);
 
-        $found = $this->repository->findById(1);
+        $found = $this->repository->findByCompositeKey(1, '');
         $this->assertNotNull($found);
         $this->assertSame('Meeting', $found->name());
         $this->assertSame('#0073aa', $found->color());
@@ -57,15 +57,15 @@ final class PdoCategoryRepositoryTest extends RepositoryTestCase
         $this->assertNull($this->repository->findByName('nonexistent'));
     }
 
-    public function testGetEventCountReturnsZeroForNoEvents(): void
+    public function testGetEventCountByOwnerReturnsZeroForNoEvents(): void
     {
         $category = new Category(1, null, 'Empty', '#000');
         $this->repository->save($category);
 
-        $this->assertSame(0, $this->repository->getEventCount(1));
+        $this->assertSame(0, $this->repository->getEventCountByOwner(1, ''));
     }
 
-    public function testGetEventCountReturnsCorrectCount(): void
+    public function testGetEventCountByOwnerReturnsCorrectCount(): void
     {
         $category = new Category(1, null, 'Work', '#000');
         $this->repository->save($category);
@@ -80,22 +80,25 @@ final class PdoCategoryRepositoryTest extends RepositoryTestCase
         $this->repository->assignToEvent(new EventId(101), 'admin', [1]);
         $this->repository->assignToEvent(new EventId(102), 'admin', [1]);
 
-        $this->assertSame(3, $this->repository->getEventCount(1));
+        $this->assertSame(3, $this->repository->getEventCountByOwner(1, 'admin'));
     }
 
-    public function testGetEventCountCountsDistinctEvents(): void
+    public function testGetEventCountByOwnerScopesCountsPerUser(): void
     {
+        // Two users each assign the global cat_id=1 to the same event.
+        // Each user's assignment is a distinct junction row with its own
+        // cat_owner, and the owner-aware count must return each owner's
+        // contribution — not a deduped distinct-event total.
         $category = new Category(1, null, 'Shared', '#000');
         $this->repository->save($category);
 
         $this->insertEntry(100);
 
-        // Same event assigned by two different users
         $this->repository->assignToEvent(new EventId(100), 'admin', [1]);
         $this->repository->assignToEvent(new EventId(100), 'jdoe', [1]);
 
-        // Should count the event only once
-        $this->assertSame(1, $this->repository->getEventCount(1));
+        $this->assertSame(1, $this->repository->getEventCountByOwner(1, 'admin'));
+        $this->assertSame(1, $this->repository->getEventCountByOwner(1, 'jdoe'));
     }
 
     public function testReassignEventsMovesEventsToTarget(): void
@@ -113,8 +116,8 @@ final class PdoCategoryRepositoryTest extends RepositoryTestCase
 
         $this->repository->reassignEvents(1, 2, 'admin');
 
-        $this->assertSame(0, $this->repository->getEventCount(1));
-        $this->assertSame(2, $this->repository->getEventCount(2));
+        $this->assertSame(0, $this->repository->getEventCountByOwner(1, 'admin'));
+        $this->assertSame(2, $this->repository->getEventCountByOwner(2, 'admin'));
     }
 
     public function testReassignEventsDeduplicates(): void
@@ -126,26 +129,18 @@ final class PdoCategoryRepositoryTest extends RepositoryTestCase
 
         $this->insertEntry(100);
 
-        // Event 100 is in both categories
-        $this->repository->assignToEvent(new EventId(100), 'admin', [1]);
-        $this->repository->assignToEvent(new EventId(100), 'jdoe', [2]);
+        // Admin assigns the event to both categories. The reassign from
+        // cat 1 to cat 2 for admin must collapse admin's rows into a
+        // single row on cat 2 (dedup) without touching jdoe (who is
+        // not involved here).
+        $this->repository->assignToEvent(new EventId(100), 'admin', [1, 2]);
 
         $this->repository->reassignEvents(1, 2, 'admin');
 
-        // Source should be empty
-        $this->assertSame(0, $this->repository->getEventCount(1));
-        // Target should still have event 100 (no duplicates)
-        $this->assertSame(1, $this->repository->getEventCount(2));
-    }
-
-    public function testDeleteRemovesCategory(): void
-    {
-        $category = new Category(1, null, 'ToDelete', '#000');
-        $this->repository->save($category);
-        $this->assertNotNull($this->repository->findById(1));
-
-        $this->repository->delete(1);
-        $this->assertNull($this->repository->findById(1));
+        // Source should be empty for admin.
+        $this->assertSame(0, $this->repository->getEventCountByOwner(1, 'admin'));
+        // Target should still have event 100 exactly once for admin.
+        $this->assertSame(1, $this->repository->getEventCountByOwner(2, 'admin'));
     }
 
     public function testFindAllGlobal(): void
@@ -176,7 +171,7 @@ final class PdoCategoryRepositoryTest extends RepositoryTestCase
         $updated = new Category(1, null, 'Renamed', '#fff');
         $this->repository->save($updated);
 
-        $found = $this->repository->findById(1);
+        $found = $this->repository->findByCompositeKey(1, '');
         $this->assertNotNull($found);
         $this->assertSame('Renamed', $found->name());
         $this->assertSame('#fff', $found->color());
@@ -335,6 +330,11 @@ final class PdoCategoryRepositoryTest extends RepositoryTestCase
         $this->assertSame(1, (int) $stmt->fetchColumn());
     }
 
+    /**
+     * @psalm-suppress DeprecatedMethod — the whole point of this test is
+     *     to pin the inflated-count behavior of the legacy getEventCount
+     *     so the deprecation on it stays honest.
+     */
     public function testGetEventCountByOwnerSplitsPerOwner(): void
     {
         // Regression: the legacy getEventCount(1) returns the combined
@@ -411,6 +411,10 @@ final class PdoCategoryRepositoryTest extends RepositoryTestCase
         $this->assertSame('Global', $survivor->name());
     }
 
+    /**
+     * @psalm-suppress DeprecatedMethod — intentionally exercises the
+     *     deprecated `delete(int)` to pin its destructive behavior.
+     */
     public function testLegacyDeleteWipesEveryRowSharingCatId(): void
     {
         // Documents the behavior of the deprecated `delete(int)` method

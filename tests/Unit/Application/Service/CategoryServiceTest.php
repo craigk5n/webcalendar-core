@@ -155,15 +155,15 @@ final class CategoryServiceTest extends TestCase
     $actor = $this->createUser('jdoe');
 
     $this->categoryRepository->expects($this->once())
-      ->method('findById')
-      ->with(5)
+      ->method('findByCompositeKey')
+      ->with(5, 'jdoe')
       ->willReturn($category);
 
     $this->categoryRepository->expects($this->once())
-      ->method('delete')
-      ->with(5);
+      ->method('deleteByCompositeKey')
+      ->with(5, 'jdoe');
 
-    $this->categoryService->deleteCategory(5, $actor);
+    $this->categoryService->deleteCategory(5, 'jdoe', $actor);
   }
 
   public function testNonOwnerCannotDeleteCategory(): void
@@ -172,15 +172,15 @@ final class CategoryServiceTest extends TestCase
     $actor = $this->createUser('other');
 
     $this->categoryRepository->expects($this->once())
-      ->method('findById')
-      ->with(5)
+      ->method('findByCompositeKey')
+      ->with(5, 'jdoe')
       ->willReturn($category);
 
     $this->categoryRepository->expects($this->never())
-      ->method('delete');
+      ->method('deleteByCompositeKey');
 
     $this->expectException(AuthorizationException::class);
-    $this->categoryService->deleteCategory(5, $actor);
+    $this->categoryService->deleteCategory(5, 'jdoe', $actor);
   }
 
   public function testDeleteNonExistentCategoryThrows(): void
@@ -188,14 +188,14 @@ final class CategoryServiceTest extends TestCase
     $actor = $this->createUser('jdoe');
 
     $this->categoryRepository->expects($this->once())
-      ->method('findById')
-      ->with(999)
+      ->method('findByCompositeKey')
+      ->with(999, '')
       ->willReturn(null);
 
     $this->categoryRepository->expects($this->never())
-      ->method('delete');
+      ->method('deleteByCompositeKey');
 
     $this->expectException(\DomainException::class);
-    $this->categoryService->deleteCategory(999, $actor);
+    $this->categoryService->deleteCategory(999, null, $actor);
   }
 }

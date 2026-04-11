@@ -61,21 +61,33 @@ final readonly class CategoryService
     }
 
     /**
-     * Deletes a category.
+     * Deletes a category identified by its composite primary key
+     * `(cat_id, cat_owner)`. Pass `null` (or `''`) for the owner to
+     * target a global category. Required because a single `cat_id`
+     * can name both a global row and a user-owned row.
      *
      * @throws \DomainException if the category does not exist.
      * @throws AuthorizationException if actor is not the owner or admin
      */
-    public function deleteCategory(int $id, User $actor): void
+    public function deleteCategory(int $id, ?string $owner, User $actor): void
     {
-        $category = $this->categoryRepository->findById($id);
+        $ownerKey = $owner ?? '';
+        $category = $this->categoryRepository->findByCompositeKey($id, $ownerKey);
         if ($category === null) {
-            throw new \DomainException(sprintf('Category with ID %d not found.', $id));
+            throw new \DomainException(sprintf(
+                'Category with ID %d and owner "%s" not found.',
+                $id,
+                $ownerKey,
+            ));
         }
 
         $this->assertCanModify($category, $actor, 'delete category');
-        $this->logger->info('Category deleted', ['id' => $id, 'actor' => $actor->login()]);
-        $this->categoryRepository->delete($id);
+        $this->logger->info('Category deleted', [
+            'id' => $id,
+            'owner' => $ownerKey,
+            'actor' => $actor->login(),
+        ]);
+        $this->categoryRepository->deleteByCompositeKey($id, $ownerKey);
     }
 
     /**
