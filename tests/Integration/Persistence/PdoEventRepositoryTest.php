@@ -302,4 +302,145 @@ final class PdoEventRepositoryTest extends RepositoryTestCase
         $this->assertSame('A', $result['admin']);
         $this->assertSame('W', $result['jdoe']);
     }
+
+    // -- Composite-key and cross-scope isolation regression coverage ------
+    //
+    // `webcal_entry_user` has PRIMARY KEY (cal_id, cal_login). Any method
+    // that takes only one of those columns must be checked for cross-scope
+    // leakage. Any destructive method must also be checked for the
+    // self-input degenerate case (e.g. delete-then-reinsert on the same
+    // row set).
+    //
+    // See also: tests in PdoCategoryRepositoryTest for the analogous
+    // (cat_id, cat_owner) coverage on webcal_categories.
+
+    public function testDeleteRemovesEventAndAllRelatedJunctionRows(): void
+    {
+        $event = new Event(
+            id: new EventId(0),
+            uid: 'delete-cascade',
+            name: 'To Be Deleted',
+            description: '',
+            location: '',
+            start: new \DateTimeImmutable('2026-04-01 10:00:00'),
+            duration: 60,
+            createdBy: 'admin',
+            type: EventType::EVENT,
+            access: AccessLevel::PUBLIC
+        );
+        $this->repository->save($event);
+
+        $id = new EventId(1);
+        $this->repository->saveParticipantsWithStatus($id, [
+            'admin' => 'A',
+            'jdoe' => 'W',
+        ]);
+
+        $this->repository->delete($id);
+
+        $this->assertNull($this->repository->findById($id));
+
+        $stmt = $this->pdo->query(
+            'SELECT COUNT(*) FROM webcal_entry_user WHERE cal_id = 1'
+        );
+        $this->assertNotFalse($stmt);
+        $this->assertSame(0, (int) $stmt->fetchColumn(), 'participant rows must cascade delete');
+
+        $stmt = $this->pdo->query(
+            'SELECT COUNT(*) FROM webcal_entry_repeats WHERE cal_id = 1'
+        );
+        $this->assertNotFalse($stmt);
+        $this->assertSame(0, (int) $stmt->fetchColumn(), 'recurrence rows must cascade delete');
+    }
+
+    public function testDeleteDoesNotTouchOtherEventsJunctionRows(): void
+    {
+        // Cross-event isolation: deleting event 1 must not remove
+        // webcal_entry_user rows belonging to event 2, even for the same
+        // participant login.
+        $e1 = new Event(new EventId(0), 'e1', 'Event One', '', '', new \DateTimeImmutable('2026-04-01 10:00:00'), 60, 'admin', EventType::EVENT, AccessLevel::PUBLIC);
+        $e2 = new Event(new EventId(0), 'e2', 'Event Two', '', '', new \DateTimeImmutable('2026-04-02 10:00:00'), 60, 'admin', EventType::EVENT, AccessLevel::PUBLIC);
+        $this->repository->save($e1);
+        $this->repository->save($e2);
+
+        $this->repository->saveParticipantsWithStatus(new EventId(1), ['admin' => 'A', 'jdoe' => 'W']);
+        $this->repository->saveParticipantsWithStatus(new EventId(2), ['admin' => 'A', 'jdoe' => 'A']);
+
+        $this->repository->delete(new EventId(1));
+
+        // Event 2's junction rows must be untouched.
+        $survivors = $this->repository->getParticipantsWithStatus(new EventId(2));
+        $this->assertCount(2, $survivors);
+        $this->assertSame('A', $survivors['admin']);
+        $this->assertSame('A', $survivors['jdoe']);
+        $this->assertNotNull($this->repository->findById(new EventId(2)));
+    }
+
+    public function testUpdateParticipantStatusIsScopedToEventAndUser(): void
+    {
+        // Cross-event + cross-user isolation. Updating (event=1, login=jdoe)
+        // must not touch (event=1, login=admin), (event=2, login=jdoe),
+        // or (event=2, login=admin).
+        $e1 = new Event(new EventId(0), 'e1', 'Event One', '', '', new \DateTimeImmutable('2026-04-01 10:00:00'), 60, 'admin', EventType::EVENT, AccessLevel::PUBLIC);
+        $e2 = new Event(new EventId(0), 'e2', 'Event Two', '', '', new \DateTimeImmutable('2026-04-02 10:00:00'), 60, 'admin', EventType::EVENT, AccessLevel::PUBLIC);
+        $this->repository->save($e1);
+        $this->repository->save($e2);
+
+        $this->repository->saveParticipantsWithStatus(new EventId(1), ['admin' => 'A', 'jdoe' => 'W']);
+        $this->repository->saveParticipantsWithStatus(new EventId(2), ['admin' => 'W', 'jdoe' => 'W']);
+
+        $this->repository->updateParticipantStatus(new EventId(1), 'jdoe', 'R');
+
+        $e1Status = $this->repository->getParticipantsWithStatus(new EventId(1));
+        $e2Status = $this->repository->getParticipantsWithStatus(new EventId(2));
+
+        // Only the targeted row changed.
+        $this->assertSame('R', $e1Status['jdoe']);
+        $this->assertSame('A', $e1Status['admin'], 'admin on event 1 must be untouched');
+        $this->assertSame('W', $e2Status['jdoe'], 'jdoe on event 2 must be untouched');
+        $this->assertSame('W', $e2Status['admin'], 'admin on event 2 must be untouched');
+    }
+
+    public function testSaveParticipantsDoesNotTouchOtherEventsRows(): void
+    {
+        // saveParticipants delete-then-insert is scoped to a single
+        // cal_id, but the DELETE must only match rows for that cal_id.
+        $e1 = new Event(new EventId(0), 'e1', 'Event One', '', '', new \DateTimeImmutable('2026-04-01 10:00:00'), 60, 'admin', EventType::EVENT, AccessLevel::PUBLIC);
+        $e2 = new Event(new EventId(0), 'e2', 'Event Two', '', '', new \DateTimeImmutable('2026-04-02 10:00:00'), 60, 'admin', EventType::EVENT, AccessLevel::PUBLIC);
+        $this->repository->save($e1);
+        $this->repository->save($e2);
+
+        $this->repository->saveParticipantsWithStatus(new EventId(1), ['admin' => 'A', 'jdoe' => 'W']);
+        $this->repository->saveParticipantsWithStatus(new EventId(2), ['admin' => 'A', 'jdoe' => 'A']);
+
+        // Replace event 1's participant list — event 2 must be unaffected.
+        $this->repository->saveParticipants(new EventId(1), ['admin']);
+
+        $e1Status = $this->repository->getParticipantsWithStatus(new EventId(1));
+        $e2Status = $this->repository->getParticipantsWithStatus(new EventId(2));
+
+        $this->assertCount(1, $e1Status);
+        $this->assertArrayHasKey('admin', $e1Status);
+        $this->assertCount(2, $e2Status, 'event 2 participants must be untouched');
+    }
+
+    public function testSaveParticipantsWithStatusIdempotentReplay(): void
+    {
+        // Saving the same participant list twice must not leave orphans
+        // or duplicate rows. Regression pin for the delete-then-insert
+        // pattern used in saveParticipantsWithStatus.
+        $event = new Event(new EventId(0), 'replay', 'Replay', '', '', new \DateTimeImmutable('2026-04-01 10:00:00'), 60, 'admin', EventType::EVENT, AccessLevel::PUBLIC);
+        $this->repository->save($event);
+
+        $id = new EventId(1);
+        $list = ['admin' => 'A', 'jdoe' => 'W'];
+
+        $this->repository->saveParticipantsWithStatus($id, $list);
+        $this->repository->saveParticipantsWithStatus($id, $list);
+
+        $result = $this->repository->getParticipantsWithStatus($id);
+        $this->assertCount(2, $result);
+        $this->assertSame('A', $result['admin']);
+        $this->assertSame('W', $result['jdoe']);
+    }
 }

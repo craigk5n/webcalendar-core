@@ -95,6 +95,30 @@ Key tables: `webcal_entry` (events), `webcal_entry_user` (participants), `webcal
 - **Performance:** Benchmark critical paths (target p95 < 200ms).
 - **Mutation:** Use Infection PHP to verify test quality (target score > 80%).
 
+### Repository integration-test rules
+
+Learned from a real bug in `PdoCategoryRepository` where tests passed on
+unique-`cat_id` fixtures and the bug only fired on composite-PK collisions.
+When writing integration tests against any table whose `PRIMARY KEY` has
+more than one column (see `src/Infrastructure/Persistence/*-schema.sql`),
+apply both of these rules:
+
+1. **Composite-PK fixture rule.** Include at least one fixture where two
+   rows collide on the partial key you are filtering by (e.g. two rows
+   at `cat_id=1` with different `cat_owner`, or two rows at `cal_id=100`
+   with different `cal_login`). Every public method that accepts less
+   than the full PK needs a test that exercises that collision.
+2. **Destructive-method rule.** Every `delete*` / `reassign*` / `merge*`
+   / `save*` method (where save does delete-then-insert) needs:
+   - a **self-input / degenerate test** (`from === to`, empty list,
+     unknown key — the method must not corrupt state); and
+   - a **cross-scope isolation test** — another user's or another
+     event's rows at the same partial key must be untouched.
+
+Examples of this pattern are in `tests/Integration/Persistence/Pdo*RepositoryTest.php`
+under the "Composite-key and cross-scope isolation regression coverage"
+section markers.
+
 ## Security Standards
 
 - **Input Validation:** Strict type checking on all inputs. Sanitize HTML in descriptions (if `ALLOW_HTML_DESCRIPTION` is enabled). Validate file uploads (MIME type, size).

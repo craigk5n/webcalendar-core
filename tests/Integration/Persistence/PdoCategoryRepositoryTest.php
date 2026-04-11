@@ -411,6 +411,77 @@ final class PdoCategoryRepositoryTest extends RepositoryTestCase
         $this->assertSame('Global', $survivor->name());
     }
 
+    public function testLegacyDeleteWipesEveryRowSharingCatId(): void
+    {
+        // Documents the behavior of the deprecated `delete(int)` method
+        // that motivated adding `deleteByCompositeKey`. It removes BOTH
+        // the global and the user-owned row at cat_id=1. New code must
+        // not call `delete`; this test is a fossil so the deprecation
+        // stays honest.
+        $this->repository->save(new Category(1, null, 'Global', '#000'));
+        $this->repository->save(new Category(1, 'admin', 'Personal', '#fff'));
+
+        $this->repository->delete(1);
+
+        $this->assertNull($this->repository->findByCompositeKey(1, ''));
+        $this->assertNull($this->repository->findByCompositeKey(1, 'admin'));
+    }
+
+    public function testFindByNameWithOwnerDisambiguatesSharedName(): void
+    {
+        // Two rows share the name "Work" — one global, one user-owned.
+        // findByName must return the right row when the owner is passed.
+        $this->repository->save(new Category(1, null, 'Work', '#000'));
+        $this->repository->save(new Category(2, 'admin', 'Work', '#fff'));
+
+        $global = $this->repository->findByName('Work', '');
+        $this->assertNotNull($global);
+        $this->assertSame(1, $global->id());
+        $this->assertNull($global->owner());
+
+        $personal = $this->repository->findByName('Work', 'admin');
+        $this->assertNotNull($personal);
+        $this->assertSame(2, $personal->id());
+        $this->assertSame('admin', $personal->owner());
+
+        // Owner with no matching row returns null even if the global
+        // row exists.
+        $this->assertNull($this->repository->findByName('Work', 'jdoe'));
+    }
+
+    public function testAssignToEventPreservesOtherUsersJunctionRows(): void
+    {
+        // Cross-user isolation on webcal_entry_categories
+        // (cal_id, cat_id, cat_order, cat_owner). admin and jdoe each
+        // assign their own categories to the same event. Re-assigning
+        // admin's list must not delete jdoe's row for the same event.
+        $this->repository->save(new Category(1, null, 'Shared', '#000'));
+        $this->repository->save(new Category(2, null, 'Other', '#fff'));
+        $this->insertEntry(100);
+
+        $this->repository->assignToEvent(new EventId(100), 'admin', [1]);
+        $this->repository->assignToEvent(new EventId(100), 'jdoe', [1, 2]);
+
+        // Replace admin's assignments. jdoe's rows must be untouched.
+        $this->repository->assignToEvent(new EventId(100), 'admin', [2]);
+
+        $stmt = $this->pdo->query(
+            "SELECT cat_id FROM webcal_entry_categories
+              WHERE cal_id = 100 AND cat_owner = 'admin'
+              ORDER BY cat_order"
+        );
+        $this->assertNotFalse($stmt);
+        $this->assertSame([2], array_map('intval', $stmt->fetchAll(\PDO::FETCH_COLUMN)));
+
+        $stmt = $this->pdo->query(
+            "SELECT cat_id FROM webcal_entry_categories
+              WHERE cal_id = 100 AND cat_owner = 'jdoe'
+              ORDER BY cat_order"
+        );
+        $this->assertNotFalse($stmt);
+        $this->assertSame([1, 2], array_map('intval', $stmt->fetchAll(\PDO::FETCH_COLUMN)));
+    }
+
     private function insertEntry(int $calId): void
     {
         $this->pdo->exec(
