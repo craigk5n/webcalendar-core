@@ -12,7 +12,17 @@ use WebCalendar\Core\Domain\ValueObject\EventId;
  */
 interface CategoryRepositoryInterface
 {
+    /**
+     * @deprecated Ambiguous when a `cat_id` is shared across owners.
+     *     Prefer {@see findByCompositeKey()}.
+     */
     public function findById(int $id): ?Category;
+
+    /**
+     * Fetches a single category by its composite primary key
+     * `(cat_id, cat_owner)`. Use `''` as the owner for global categories.
+     */
+    public function findByCompositeKey(int $id, string $owner): ?Category;
 
     public function findByName(string $name, ?string $owner = null): ?Category;
 
@@ -35,7 +45,17 @@ interface CategoryRepositoryInterface
      */
     public function create(Category $category): void;
 
+    /**
+     * @deprecated Deletes every category row sharing this `cat_id`.
+     *     Prefer {@see deleteByCompositeKey()}.
+     */
     public function delete(int $id): void;
+
+    /**
+     * Deletes a single category by its composite primary key
+     * `(cat_id, cat_owner)`. Use `''` for global categories.
+     */
+    public function deleteByCompositeKey(int $id, string $owner): void;
 
     /**
      * Assigns categories to an event for a specific user.
@@ -60,11 +80,25 @@ interface CategoryRepositoryInterface
 
     /**
      * Gets the number of events assigned to a category.
+     *
+     * @deprecated Inflates counts when a `cat_id` is shared by a global
+     *     and a user-owned category. Prefer {@see getEventCountByOwner()}.
      */
     public function getEventCount(int $catId): int;
 
     /**
-     * Reassigns all events from one category to another, deduplicating.
+     * Counts distinct events assigned to a specific category matched by
+     * its composite primary key `(cat_id, cat_owner)`. Resolves the
+     * global-vs-personal ambiguity that `getEventCount()` cannot.
+     */
+    public function getEventCountByOwner(int $catId, string $catOwner): int;
+
+    /**
+     * Reassigns the caller's events from one category to another,
+     * deduplicating collisions. Matches `$userLogin` against the
+     * junction table's `cat_owner`, so other users' rows at the same
+     * `cat_id` are untouched. Self-merge (`$fromCatId === $toCatId`)
+     * is a guarded no-op.
      */
     public function reassignEvents(int $fromCatId, int $toCatId, string $userLogin): void;
 }

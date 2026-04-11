@@ -21,10 +21,40 @@ final readonly class PdoCategoryRepository implements CategoryRepositoryInterfac
     ) {
     }
 
+    /**
+     * @deprecated Ambiguous when a `cat_id` is shared between a global
+     *     (`cat_owner=''`) and a user-owned row. Prefer
+     *     {@see findByCompositeKey()}, which reflects the real
+     *     `(cat_id, cat_owner)` primary key. This method still returns
+     *     whichever row the database engine chooses first.
+     */
     public function findById(int $id): ?Category
     {
-        $stmt = $this->pdo->prepare("SELECT * FROM {$this->tablePrefix}webcal_categories WHERE cat_id = :id");
+        $stmt = $this->pdo->prepare("SELECT * FROM {$this->tablePrefix}webcal_categories WHERE cat_id = :id LIMIT 1");
         $stmt->execute(['id' => $id]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!is_array($row)) {
+            return null;
+        }
+
+        return $this->mapRowToCategory($row);
+    }
+
+    /**
+     * Fetches a single category by its composite primary key
+     * `(cat_id, cat_owner)`. Use `''` as the owner to target a global
+     * category. Required whenever a numeric `cat_id` can be shared
+     * between a global row and a user-owned row.
+     */
+    public function findByCompositeKey(int $id, string $owner): ?Category
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT * FROM {$this->tablePrefix}webcal_categories
+              WHERE cat_id = :id AND cat_owner = :owner
+              LIMIT 1"
+        );
+        $stmt->execute(['id' => $id, 'owner' => $owner]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if (!is_array($row)) {
@@ -128,10 +158,29 @@ final readonly class PdoCategoryRepository implements CategoryRepositoryInterfac
         $this->save($category);
     }
 
+    /**
+     * @deprecated Deletes EVERY category row sharing this `cat_id`,
+     *     including a global row and a user-owned row with the same id.
+     *     Prefer {@see deleteByCompositeKey()} which honors the real
+     *     primary key.
+     */
     public function delete(int $id): void
     {
         $stmt = $this->pdo->prepare("DELETE FROM {$this->tablePrefix}webcal_categories WHERE cat_id = :id");
         $stmt->execute(['id' => $id]);
+    }
+
+    /**
+     * Deletes a single category by its composite primary key
+     * `(cat_id, cat_owner)`. Use `''` to target the global row.
+     */
+    public function deleteByCompositeKey(int $id, string $owner): void
+    {
+        $stmt = $this->pdo->prepare(
+            "DELETE FROM {$this->tablePrefix}webcal_categories
+              WHERE cat_id = :id AND cat_owner = :owner"
+        );
+        $stmt->execute(['id' => $id, 'owner' => $owner]);
     }
 
     public function assignToEvent(EventId $eventId, string $userLogin, array $categoryIds): void
@@ -241,6 +290,12 @@ final readonly class PdoCategoryRepository implements CategoryRepositoryInterfac
         return $map;
     }
 
+    /**
+     * @deprecated Inflates counts when a `cat_id` is shared by a global
+     *     and a user-owned category. Prefer
+     *     {@see getEventCountByOwner()}, which resolves the ambiguity
+     *     by joining through the category table.
+     */
     public function getEventCount(int $catId): int
     {
         $stmt = $this->pdo->prepare(
@@ -250,24 +305,97 @@ final readonly class PdoCategoryRepository implements CategoryRepositoryInterfac
         return (int) $stmt->fetchColumn();
     }
 
+    /**
+     * Counts distinct events assigned to a specific category, matched
+     * by the composite primary key `(cat_id, cat_owner)`.
+     *
+     * Filters the junction table on `ec.cat_owner`, which is populated
+     * with the assigning user's login by {@see assignToEvent()}. So the
+     * semantic is "distinct events where this user recorded this cat_id
+     * against themselves." This is what the admin Categories panel needs
+     * to answer "does this category have any uses before I delete it?"
+     * without conflating a global and a personal category that share a
+     * numeric id.
+     *
+     * Pass `''` for a truly unused global row (one where no user has
+     * written a junction entry under the empty owner); personal rows
+     * resolve against their owner's login.
+     */
+    public function getEventCountByOwner(int $catId, string $catOwner): int
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT COUNT(DISTINCT cal_id)
+               FROM {$this->tablePrefix}webcal_entry_categories
+              WHERE cat_id = :id AND cat_owner = :owner"
+        );
+        $stmt->execute(['id' => $catId, 'owner' => $catOwner]);
+        return (int) $stmt->fetchColumn();
+    }
+
+    /**
+     * Reassigns a user's junction rows from one category to another,
+     * deduplicating any rows that would become duplicates after the
+     * update.
+     *
+     * The `$userLogin` is matched against `webcal_entry_categories.cat_owner`,
+     * which is populated with the assigning user's login (see
+     * {@see assignToEvent()}). This scopes the operation to rows the
+     * caller actually owns, so merging `cat_id=1` for user `admin` can
+     * never touch rows belonging to `jdoe`, even if `jdoe` also uses
+     * `cat_id=1`.
+     *
+     * Guards against the same-id self-merge case (`(1, '') → (1, 'admin')`
+     * collapses to `(1, 1)` at the junction level and would previously
+     * cause the pre-dedupe DELETE to match itself and destroy every
+     * junction row at that cat_id). The whole operation runs inside a
+     * transaction so a partial failure cannot leave the junction table
+     * half-destroyed.
+     */
     public function reassignEvents(int $fromCatId, int $toCatId, string $userLogin): void
     {
-        // Delete junction rows that would become duplicates after reassignment
-        $stmt = $this->pdo->prepare(
-            "DELETE FROM {$this->tablePrefix}webcal_entry_categories
-             WHERE cat_id = :from_id AND cal_id IN (
-                 SELECT cal_id FROM (
-                     SELECT cal_id FROM {$this->tablePrefix}webcal_entry_categories WHERE cat_id = :to_id
-                 ) AS existing
-             )"
-        );
-        $stmt->execute(['from_id' => $fromCatId, 'to_id' => $toCatId]);
+        // Self-merge: the UPDATE below would be a no-op, but the
+        // pre-DELETE would match the source against itself and wipe
+        // every junction row at this cat_id. Bail out first.
+        if ($fromCatId === $toCatId) {
+            return;
+        }
 
-        // Reassign remaining rows
-        $stmt = $this->pdo->prepare(
-            "UPDATE {$this->tablePrefix}webcal_entry_categories SET cat_id = :to_id WHERE cat_id = :from_id"
-        );
-        $stmt->execute(['to_id' => $toCatId, 'from_id' => $fromCatId]);
+        $this->executeInTransaction(function () use ($fromCatId, $toCatId, $userLogin): void {
+            // Pre-delete source rows that would collide with an existing
+            // target row after the UPDATE (PK is
+            // (cal_id, cat_id, cat_order, cat_owner) so identical
+            // cal_id + cat_order + same owner would violate it).
+            $stmt = $this->pdo->prepare(
+                "DELETE FROM {$this->tablePrefix}webcal_entry_categories
+                 WHERE cat_id = :from_id
+                   AND cat_owner = :user
+                   AND cal_id IN (
+                     SELECT cal_id FROM (
+                       SELECT cal_id FROM {$this->tablePrefix}webcal_entry_categories
+                        WHERE cat_id = :to_id AND cat_owner = :user
+                     ) AS existing
+                   )"
+            );
+            $stmt->execute([
+                'from_id' => $fromCatId,
+                'to_id' => $toCatId,
+                'user' => $userLogin,
+            ]);
+
+            // Move the caller's remaining rows to the target category.
+            // Filtering on cat_owner prevents the UPDATE from sweeping
+            // other users' rows that happen to share the same cat_id.
+            $stmt = $this->pdo->prepare(
+                "UPDATE {$this->tablePrefix}webcal_entry_categories
+                    SET cat_id = :to_id
+                  WHERE cat_id = :from_id AND cat_owner = :user"
+            );
+            $stmt->execute([
+                'to_id' => $toCatId,
+                'from_id' => $fromCatId,
+                'user' => $userLogin,
+            ]);
+        });
     }
 
     /**

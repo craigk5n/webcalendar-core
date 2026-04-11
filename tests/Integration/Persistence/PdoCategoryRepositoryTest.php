@@ -267,6 +267,150 @@ final class PdoCategoryRepositoryTest extends RepositoryTestCase
         $this->assertSame(1, $jdoeMap[100]['id']);
     }
 
+    // -- Composite-key regression coverage ---------------------------------
+    //
+    // `webcal_categories` has PRIMARY KEY (cat_id, cat_owner), so a single
+    // numeric cat_id can legitimately name two different categories — one
+    // global (cat_owner='') and one user-owned. Earlier versions of this
+    // repository ignored cat_owner in reassignEvents / getEventCount /
+    // findById / delete, which caused (a) data loss on same-id merges,
+    // (b) inflated counts, and (c) non-deterministic lookups. These tests
+    // pin the fixed behavior in place.
+
+    public function testReassignEventsIsNoOpWhenFromEqualsTo(): void
+    {
+        // Regression: merging (cat_id=1, '') into (cat_id=1, 'admin')
+        // collapses to reassignEvents(1, 1, 'admin'). Previously the
+        // pre-dedupe DELETE matched itself and wiped every row at
+        // cat_id=1. All events must survive.
+        $this->repository->save(new Category(1, null, 'Meeting', '#000'));
+        $this->repository->save(new Category(1, 'admin', 'Meetings', '#111'));
+
+        $this->insertEntry(100);
+        $this->insertEntry(101);
+        $this->insertEntry(102);
+
+        $this->repository->assignToEvent(new EventId(100), 'admin', [1]);
+        $this->repository->assignToEvent(new EventId(101), 'admin', [1]);
+        $this->repository->assignToEvent(new EventId(102), 'admin', [1]);
+
+        $this->repository->reassignEvents(1, 1, 'admin');
+
+        // All three junction rows must still exist.
+        $stmt = $this->pdo->query(
+            "SELECT COUNT(*) FROM webcal_entry_categories WHERE cat_id = 1 AND cat_owner = 'admin'"
+        );
+        $this->assertNotFalse($stmt);
+        $this->assertSame(3, (int) $stmt->fetchColumn());
+    }
+
+    public function testReassignEventsDoesNotTouchOtherUsersRows(): void
+    {
+        // Regression: the UPDATE used to match on cat_id alone, so
+        // merging admin's cat_id=1 into cat_id=2 also moved jdoe's
+        // cat_id=1 rows. With the owner filter jdoe's rows must stay
+        // where they were.
+        $this->repository->save(new Category(1, null, 'Shared', '#000'));
+        $this->repository->save(new Category(2, null, 'Target', '#fff'));
+
+        $this->insertEntry(100);
+        $this->insertEntry(200);
+
+        $this->repository->assignToEvent(new EventId(100), 'admin', [1]);
+        $this->repository->assignToEvent(new EventId(200), 'jdoe', [1]);
+
+        $this->repository->reassignEvents(1, 2, 'admin');
+
+        // admin's row moved to cat_id=2; jdoe's row is still at cat_id=1.
+        $stmt = $this->pdo->query(
+            "SELECT cat_id FROM webcal_entry_categories WHERE cat_owner = 'admin' AND cal_id = 100"
+        );
+        $this->assertNotFalse($stmt);
+        $this->assertSame(2, (int) $stmt->fetchColumn());
+
+        $stmt = $this->pdo->query(
+            "SELECT cat_id FROM webcal_entry_categories WHERE cat_owner = 'jdoe' AND cal_id = 200"
+        );
+        $this->assertNotFalse($stmt);
+        $this->assertSame(1, (int) $stmt->fetchColumn());
+    }
+
+    public function testGetEventCountByOwnerSplitsPerOwner(): void
+    {
+        // Regression: the legacy getEventCount(1) returns the combined
+        // count of every junction row at cat_id=1 regardless of owner,
+        // reporting the same inflated number for both a global and a
+        // user-owned category sharing that cat_id. The owner-aware
+        // variant filters on the junction `cat_owner`, so each owner's
+        // assignments are counted separately.
+        $this->repository->save(new Category(1, null, 'Global Work', '#000'));
+        $this->repository->save(new Category(1, 'admin', 'Personal Work', '#fff'));
+
+        $this->insertEntry(100);
+        $this->insertEntry(101);
+        $this->insertEntry(102);
+
+        // admin makes two assignments; jdoe makes one.
+        $this->repository->assignToEvent(new EventId(100), 'admin', [1]);
+        $this->repository->assignToEvent(new EventId(101), 'admin', [1]);
+        $this->repository->assignToEvent(new EventId(102), 'jdoe', [1]);
+
+        $this->assertSame(
+            2,
+            $this->repository->getEventCountByOwner(1, 'admin'),
+            'admin\'s assignments counted separately from jdoe\'s'
+        );
+        $this->assertSame(
+            1,
+            $this->repository->getEventCountByOwner(1, 'jdoe'),
+            'jdoe\'s assignments counted separately from admin\'s'
+        );
+
+        // The legacy ambiguous method lumps them all together.
+        $this->assertSame(
+            3,
+            $this->repository->getEventCount(1),
+            'legacy getEventCount ignores owner and inflates the count'
+        );
+    }
+
+    public function testFindByCompositeKeyDisambiguatesSharedCatId(): void
+    {
+        $this->repository->save(new Category(1, null, 'Global', '#000'));
+        $this->repository->save(new Category(1, 'admin', 'Personal', '#fff'));
+
+        $global = $this->repository->findByCompositeKey(1, '');
+        $this->assertNotNull($global);
+        $this->assertSame('Global', $global->name());
+        $this->assertNull($global->owner());
+
+        $personal = $this->repository->findByCompositeKey(1, 'admin');
+        $this->assertNotNull($personal);
+        $this->assertSame('Personal', $personal->name());
+        $this->assertSame('admin', $personal->owner());
+    }
+
+    public function testFindByCompositeKeyReturnsNullForUnknownOwner(): void
+    {
+        $this->repository->save(new Category(1, 'admin', 'Personal', '#fff'));
+        $this->assertNull($this->repository->findByCompositeKey(1, 'jdoe'));
+        $this->assertNull($this->repository->findByCompositeKey(1, ''));
+    }
+
+    public function testDeleteByCompositeKeyRemovesOnlyOneOwner(): void
+    {
+        $this->repository->save(new Category(1, null, 'Global', '#000'));
+        $this->repository->save(new Category(1, 'admin', 'Personal', '#fff'));
+
+        $this->repository->deleteByCompositeKey(1, 'admin');
+
+        // Personal row gone, global row survives.
+        $this->assertNull($this->repository->findByCompositeKey(1, 'admin'));
+        $survivor = $this->repository->findByCompositeKey(1, '');
+        $this->assertNotNull($survivor);
+        $this->assertSame('Global', $survivor->name());
+    }
+
     private function insertEntry(int $calId): void
     {
         $this->pdo->exec(
