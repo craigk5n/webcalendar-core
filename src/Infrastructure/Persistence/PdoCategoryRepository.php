@@ -365,21 +365,30 @@ final readonly class PdoCategoryRepository implements CategoryRepositoryInterfac
             // target row after the UPDATE (PK is
             // (cal_id, cat_id, cat_order, cat_owner) so identical
             // cal_id + cat_order + same owner would violate it).
+            //
+            // Each named placeholder appears exactly once. Reusing a
+            // named placeholder (e.g. two `:user` references) is legal
+            // in PDO's emulated-prepares mode and in SQLite, but breaks
+            // with SQLSTATE[HY093] under `PDO::ATTR_EMULATE_PREPARES=false`
+            // on MySQL/PostgreSQL native prepares. Keep the (from/to)
+            // split so downstream consumers that harden their PDO config
+            // don't hit a non-portable-looking bug from this library.
             $stmt = $this->pdo->prepare(
                 "DELETE FROM {$this->tablePrefix}webcal_entry_categories
                  WHERE cat_id = :from_id
-                   AND cat_owner = :user
+                   AND cat_owner = :user_from
                    AND cal_id IN (
                      SELECT cal_id FROM (
                        SELECT cal_id FROM {$this->tablePrefix}webcal_entry_categories
-                        WHERE cat_id = :to_id AND cat_owner = :user
+                        WHERE cat_id = :to_id AND cat_owner = :user_to
                      ) AS existing
                    )"
             );
             $stmt->execute([
                 'from_id' => $fromCatId,
                 'to_id' => $toCatId,
-                'user' => $userLogin,
+                'user_from' => $userLogin,
+                'user_to' => $userLogin,
             ]);
 
             // Move the caller's remaining rows to the target category.

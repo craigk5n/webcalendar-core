@@ -272,6 +272,65 @@ final class PdoCategoryRepositoryTest extends RepositoryTestCase
     // (b) inflated counts, and (c) non-deterministic lookups. These tests
     // pin the fixed behavior in place.
 
+    public function testReassignEventsDoesNotReuseNamedPlaceholders(): void
+    {
+        // Regression: the dedupe DELETE in reassignEvents() used to
+        // reference `:user` twice while binding it once, which worked
+        // under PDO emulated prepares and SQLite but broke with
+        // SQLSTATE[HY093] on MySQL/PostgreSQL native prepares (the
+        // hardened config that downstream consumers like webcalendar-wp
+        // install via `PDO::ATTR_EMULATE_PREPARES=false`).
+        //
+        // Core's integration suite runs against SQLite, which masks
+        // this class of bug entirely. `StrictPlaceholderPdo` closes
+        // the gap by rejecting reused named placeholders at prepare()
+        // time — any repository method that triggers the pattern will
+        // throw here even though the underlying query would succeed
+        // on SQLite.
+        $strictPdo = new StrictPlaceholderPdo('sqlite::memory:');
+        $strictPdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+        $this->loadSchemaInto($strictPdo);
+
+        $repo = new PdoCategoryRepository($strictPdo);
+        $repo->save(new Category(1, null, 'Source', '#000'));
+        $repo->save(new Category(2, null, 'Target', '#fff'));
+
+        $strictPdo->exec(
+            "INSERT INTO webcal_entry (cal_id, cal_name, cal_date, cal_time, cal_duration, cal_create_by, cal_type, cal_access)
+             VALUES (100, 'Test Event', 20260214, 100000, 60, 'admin', 'E', 'P')"
+        );
+
+        // Admin has the event in both categories — exercises the
+        // dedupe DELETE branch that contained the placeholder-reuse bug.
+        $repo->assignToEvent(new EventId(100), 'admin', [1, 2]);
+
+        // Must not throw the strict-placeholder error.
+        $repo->reassignEvents(1, 2, 'admin');
+
+        $this->assertSame(0, $repo->getEventCountByOwner(1, 'admin'));
+        $this->assertSame(1, $repo->getEventCountByOwner(2, 'admin'));
+    }
+
+    /**
+     * Loads the SQLite schema into an arbitrary PDO connection so a
+     * test can use a PDO subclass (e.g. StrictPlaceholderPdo) without
+     * going through RepositoryTestCase::setUp().
+     */
+    private function loadSchemaInto(\PDO $pdo): void
+    {
+        $path = __DIR__ . '/../../../src/Infrastructure/Persistence/sqlite-schema.sql';
+        $sql = file_get_contents($path);
+        if ($sql === false) {
+            $this->fail("Failed to load schema from $path");
+        }
+        foreach (explode(';', $sql) as $stmt) {
+            $stmt = trim($stmt);
+            if ($stmt !== '') {
+                $pdo->exec($stmt);
+            }
+        }
+    }
+
     public function testReassignEventsIsNoOpWhenFromEqualsTo(): void
     {
         // Regression: merging (cat_id=1, '') into (cat_id=1, 'admin')
