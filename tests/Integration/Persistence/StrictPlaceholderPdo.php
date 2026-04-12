@@ -32,6 +32,9 @@ use RuntimeException;
  */
 final class StrictPlaceholderPdo extends PDO
 {
+    /**
+     * @param array<int, mixed> $options
+     */
     public function prepare(string $query, array $options = []): PDOStatement|false
     {
         $this->assertNoReusedNamedPlaceholder($query);
