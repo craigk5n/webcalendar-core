@@ -57,8 +57,18 @@ final readonly class PdoEventRepository implements EventRepositoryInterface
 
     public function search(string $keyword, ?DateRange $range = null, ?User $user = null, ?string $accessLevel = null, ?int $limit = null): \WebCalendar\Core\Domain\ValueObject\EventCollection
     {
-        $sql = "SELECT * FROM {$this->tablePrefix}webcal_entry WHERE (cal_name LIKE :keyword OR cal_description LIKE :keyword)";
-        $params = ['keyword' => '%' . $keyword . '%'];
+        // :keyword_name and :keyword_desc are bound to the same value but kept
+        // as distinct named placeholders so the query works under
+        // PDO::ATTR_EMULATE_PREPARES=false (MySQL/PostgreSQL native prepares
+        // reject reused named placeholders with SQLSTATE[HY093]). Same fix
+        // pattern as 7543f84 for PdoCategoryRepository::reassignEvents().
+        $sql = "SELECT * FROM {$this->tablePrefix}webcal_entry "
+            . "WHERE (cal_name LIKE :keyword_name OR cal_description LIKE :keyword_desc)";
+        $like = '%' . $keyword . '%';
+        $params = [
+            'keyword_name' => $like,
+            'keyword_desc' => $like,
+        ];
 
         if ($range !== null) {
             $sql .= ' AND cal_date BETWEEN :start AND :end';

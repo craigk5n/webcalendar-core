@@ -443,4 +443,50 @@ final class PdoEventRepositoryTest extends RepositoryTestCase
         $this->assertSame('A', $result['admin']);
         $this->assertSame('W', $result['jdoe']);
     }
+
+    public function testSearchDoesNotReuseNamedPlaceholders(): void
+    {
+        // Regression: search() used to bind one `:keyword` against a SQL
+        // string that referenced :keyword twice (once for cal_name LIKE,
+        // once for cal_description LIKE). That works under PDO emulated
+        // prepares and SQLite but explodes with SQLSTATE[HY093] on
+        // MySQL/PostgreSQL native prepares — i.e. any consumer that
+        // hardens its config with PDO::ATTR_EMULATE_PREPARES=false
+        // (such as webcalendar-wp's PdoFactory). Same pattern as
+        // testReassignEventsDoesNotReuseNamedPlaceholders for categories.
+        $strictPdo = new StrictPlaceholderPdo('sqlite::memory:');
+        $strictPdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+        $this->loadSchemaInto($strictPdo);
+
+        $repo = new PdoEventRepository($strictPdo);
+        $repo->save(new Event(new EventId(0), 'a', 'Project Meeting', 'discuss', '', new \DateTimeImmutable('2026-02-11 10:00:00'), 30, 'admin', EventType::EVENT, AccessLevel::PUBLIC));
+        $repo->save(new Event(new EventId(0), 'b', 'Lunch', 'meeting topic in description', '', new \DateTimeImmutable('2026-02-11 12:00:00'), 60, 'admin', EventType::EVENT, AccessLevel::PUBLIC));
+
+        // Must not throw the strict-placeholder error.
+        $hits = $repo->search('meeting');
+
+        // Both events match — name on row 1, description on row 2 — proving
+        // both halves of the OR are bound to the same value.
+        $this->assertCount(2, $hits);
+    }
+
+    /**
+     * Loads the SQLite schema into an arbitrary PDO connection so a
+     * test can use a PDO subclass (e.g. StrictPlaceholderPdo) without
+     * going through RepositoryTestCase::setUp().
+     */
+    private function loadSchemaInto(\PDO $pdo): void
+    {
+        $path = __DIR__ . '/../../../src/Infrastructure/Persistence/sqlite-schema.sql';
+        $sql = file_get_contents($path);
+        if ($sql === false) {
+            $this->fail("Failed to load schema from $path");
+        }
+        foreach (explode(';', $sql) as $stmt) {
+            $stmt = trim($stmt);
+            if ($stmt !== '') {
+                $pdo->exec($stmt);
+            }
+        }
+    }
 }
