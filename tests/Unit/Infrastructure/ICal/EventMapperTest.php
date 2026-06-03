@@ -45,6 +45,118 @@ final class EventMapperTest extends TestCase
         $this->assertSame(AccessLevel::PUBLIC, $event->access());
     }
 
+    // ── TZID handling on import (regression: issue #1) ────────────
+    //
+    // DTSTART;TZID=Europe/London:20260604T190000 must be parsed in
+    // Europe/London (BST = UTC+1 in June), i.e. 18:00 UTC. The process
+    // default timezone is pinned to UTC to mirror the WordPress runtime
+    // where the bug was observed (zoned local times silently reinterpreted
+    // against UTC, yielding a +1h offset).
+
+    public function testFromVEventHonorsDtStartTzid(): void
+    {
+        $previousTz = date_default_timezone_get();
+        date_default_timezone_set('UTC');
+
+        try {
+            $vevent = new VEvent();
+            $vevent->setUid('tz-uid');
+            $vevent->setSummary('London Event');
+            $vevent->setDtStart('20260604T190000');
+            $vevent->getProperty('DTSTART')?->setParameter('TZID', 'Europe/London');
+            $vevent->setDuration('PT1H');
+
+            $event = $this->mapper->fromVEvent($vevent, 'creator-login');
+
+            // 19:00 Europe/London (BST) == 18:00 UTC.
+            $utc = $event->start()->setTimezone(new \DateTimeZone('UTC'));
+            $this->assertSame(
+                '2026-06-04 18:00:00',
+                $utc->format('Y-m-d H:i:s'),
+                'DTSTART TZID was dropped; zoned local time misread against UTC.'
+            );
+        } finally {
+            date_default_timezone_set($previousTz);
+        }
+    }
+
+    public function testFromVEventFloatingTimeUsesProcessTimezone(): void
+    {
+        // Floating (no TZID, no Z): wall-clock is preserved as-is, interpreted
+        // against the process default timezone. With default = UTC the instant
+        // is the literal 09:00 UTC.
+        $previousTz = date_default_timezone_get();
+        date_default_timezone_set('UTC');
+
+        try {
+            $vevent = new VEvent();
+            $vevent->setUid('float-uid');
+            $vevent->setSummary('Floating Event');
+            $vevent->setDtStart('20260604T090000');
+            $vevent->setDuration('PT1H');
+
+            $event = $this->mapper->fromVEvent($vevent, 'creator-login');
+
+            $utc = $event->start()->setTimezone(new \DateTimeZone('UTC'));
+            $this->assertSame('2026-06-04 09:00:00', $utc->format('Y-m-d H:i:s'));
+        } finally {
+            date_default_timezone_set($previousTz);
+        }
+    }
+
+    public function testFromVEventUtcZuluTime(): void
+    {
+        // Explicit UTC (trailing Z): TZID, if any, is ignored by the parser and
+        // the instant is exactly the stated UTC time.
+        $previousTz = date_default_timezone_get();
+        date_default_timezone_set('America/New_York');
+
+        try {
+            $vevent = new VEvent();
+            $vevent->setUid('zulu-uid');
+            $vevent->setSummary('Zulu Event');
+            $vevent->setDtStart('20260604T180000Z');
+            $vevent->setDuration('PT1H');
+
+            $event = $this->mapper->fromVEvent($vevent, 'creator-login');
+
+            $utc = $event->start()->setTimezone(new \DateTimeZone('UTC'));
+            $this->assertSame('2026-06-04 18:00:00', $utc->format('Y-m-d H:i:s'));
+        } finally {
+            date_default_timezone_set($previousTz);
+        }
+    }
+
+    public function testFromVEventDtEndTzidSpanningDstBoundary(): void
+    {
+        // Europe/London "spring forward" 2026: clocks jump 01:00→02:00 GMT on
+        // Sun 29 Mar. An event 00:30→02:30 local crosses the gap. Honoring TZID
+        // on both DTSTART and DTEND yields the correct elapsed wall time:
+        //   00:30 BST-pre == 00:30 UTC, 02:30 BST == 01:30 UTC → 60 real minutes.
+        $previousTz = date_default_timezone_get();
+        date_default_timezone_set('UTC');
+
+        try {
+            $vevent = new VEvent();
+            $vevent->setUid('dst-uid');
+            $vevent->setSummary('DST Boundary Event');
+            $vevent->setDtStart('20260329T003000');
+            $vevent->getProperty('DTSTART')?->setParameter('TZID', 'Europe/London');
+            $vevent->setDtEnd('20260329T023000');
+            $vevent->getProperty('DTEND')?->setParameter('TZID', 'Europe/London');
+
+            $event = $this->mapper->fromVEvent($vevent, 'creator-login');
+
+            // 00:30 UTC start.
+            $utcStart = $event->start()->setTimezone(new \DateTimeZone('UTC'));
+            $this->assertSame('2026-03-29 00:30:00', $utcStart->format('Y-m-d H:i:s'));
+            // Real elapsed time across the DST gap is 60 minutes, not 120.
+            $this->assertSame(60, $event->duration());
+        } finally {
+            date_default_timezone_set($previousTz);
+        }
+    }
+
     public function testToVEvent(): void
     {
         $start = new \DateTimeImmutable('2026-02-11 10:00:00');

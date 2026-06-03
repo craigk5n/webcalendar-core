@@ -15,15 +15,16 @@ use Icalendar\Parser\ValueParser\DateParser;
 use Icalendar\Parser\ValueParser\DateTimeParser;
 use Icalendar\Parser\ValueParser\DurationParser;
 use Icalendar\Property\GenericProperty;
+use Icalendar\Property\PropertyInterface;
 
 /**
  * Mapper for translating between Domain Event entities and iCalendar VEvent components.
  */
-final readonly class EventMapper
+final class EventMapper
 {
-    private DateParser $dateParser;
-    private DateTimeParser $dateTimeParser;
-    private DurationParser $durationParser;
+    private readonly DateParser $dateParser;
+    private readonly DateTimeParser $dateTimeParser;
+    private readonly DurationParser $durationParser;
 
     public function __construct()
     {
@@ -53,7 +54,7 @@ final readonly class EventMapper
             $start = $this->dateParser->parse($startStr);
         } else {
             $start = $startStr !== null
-                ? $this->dateTimeParser->parse($startStr)
+                ? $this->dateTimeParser->parse($startStr, $this->tzidParams($dtStartProp))
                 : new \DateTimeImmutable();
         }
 
@@ -76,7 +77,8 @@ final readonly class EventMapper
             } else {
                 $endStr = $vevent->getDtEnd();
                 if ($endStr !== null) {
-                    $end = $this->dateTimeParser->parse($endStr);
+                    $dtEndProp = $vevent->getProperty('DTEND');
+                    $end = $this->dateTimeParser->parse($endStr, $this->tzidParams($dtEndProp));
                     $durationMinutes = (int) (($end->getTimestamp() - $start->getTimestamp()) / 60);
                 }
             }
@@ -274,6 +276,19 @@ final readonly class EventMapper
         // Normalize whitespace: collapse multiple blank lines
         $text = (string) preg_replace('/\n{3,}/', "\n\n", $text);
         return trim($text);
+    }
+
+    /**
+     * Build the parameter array passed to DateTimeParser, forwarding the
+     * property's TZID so zoned local times (e.g. DTSTART;TZID=Europe/London)
+     * are parsed in their declared timezone rather than the process default.
+     *
+     * @return array<string, string>
+     */
+    private function tzidParams(?PropertyInterface $prop): array
+    {
+        $tzid = $prop?->getParameter('TZID');
+        return ($tzid !== null && $tzid !== '') ? ['TZID' => $tzid] : [];
     }
 
     private function intervalToMinutes(\DateInterval $interval): int
