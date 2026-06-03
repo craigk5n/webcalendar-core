@@ -157,6 +157,162 @@ final class EventMapperTest extends TestCase
         }
     }
 
+    // ── Calendar-timezone conversion on import (regression: issue #2) ──
+    //
+    // Distinct from #1. A UTC ("Z") date-time parses to the correct absolute
+    // instant, but WebCalendar's storage model is timezone-naive: it persists
+    // the start's wall-clock (Ymd/His). When the mapper is given the calendar's
+    // display timezone, absolute instants (Z or TZID) must be rebased to that
+    // zone BEFORE the wall-clock is read, so a Europe/London calendar stores
+    // 09:00 (not 08:00) for an 08:00Z summer event. The process default TZ is
+    // pinned to UTC to mirror the WordPress runtime where the bug was found.
+
+    public function testFromVEventUtcConvertedToTargetTimezoneSummer(): void
+    {
+        $previousTz = date_default_timezone_get();
+        date_default_timezone_set('UTC');
+
+        try {
+            $mapper = new EventMapper(new \DateTimeZone('Europe/London'));
+
+            $vevent = new VEvent();
+            $vevent->setUid('summer-1');
+            $vevent->setSummary('Summer 9am meeting');
+            $vevent->setDtStart('20260604T080000Z');
+            $vevent->setDtEnd('20260604T150000Z');
+
+            $event = $mapper->fromVEvent($vevent, 'admin');
+
+            // 08:00Z is 09:00 Europe/London during BST. The stored wall-clock
+            // (what PdoEventRepository persists) must read 09:00 local.
+            $this->assertSame(
+                '2026-06-04 09:00',
+                $event->start()->format('Y-m-d H:i'),
+                'UTC Z time was not rebased to the calendar timezone (off-by-one-hour).'
+            );
+            // Absolute instant is unchanged by the rebase.
+            $this->assertSame(
+                '2026-06-04 08:00',
+                $event->start()->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d H:i')
+            );
+        } finally {
+            date_default_timezone_set($previousTz);
+        }
+    }
+
+    public function testFromVEventUtcConvertedToTargetTimezoneWinter(): void
+    {
+        // Winter: Europe/London == UTC (GMT). Rebasing must be a no-op, never a
+        // double shift — 17:00Z stays 17:00 local.
+        $previousTz = date_default_timezone_get();
+        date_default_timezone_set('UTC');
+
+        try {
+            $mapper = new EventMapper(new \DateTimeZone('Europe/London'));
+
+            $vevent = new VEvent();
+            $vevent->setUid('winter-1');
+            $vevent->setSummary('Winter 5pm meeting');
+            $vevent->setDtStart('20261202T170000Z');
+            $vevent->setDtEnd('20261202T180000Z');
+
+            $event = $mapper->fromVEvent($vevent, 'admin');
+
+            $this->assertSame(
+                '2026-12-02 17:00',
+                $event->start()->format('Y-m-d H:i')
+            );
+        } finally {
+            date_default_timezone_set($previousTz);
+        }
+    }
+
+    public function testFromVEventUtcConversionShiftsNearMidnightToNextDay(): void
+    {
+        // A near-midnight UTC instant lands on the adjacent local day once
+        // rebased: 23:30Z on Thu 4 Jun is 00:30 Fri 5 Jun in Europe/London
+        // (BST). This is the "missing Thursday events" symptom in the issue.
+        $previousTz = date_default_timezone_get();
+        date_default_timezone_set('UTC');
+
+        try {
+            $mapper = new EventMapper(new \DateTimeZone('Europe/London'));
+
+            $vevent = new VEvent();
+            $vevent->setUid('midnight-1');
+            $vevent->setSummary('Late Thursday meeting');
+            $vevent->setDtStart('20260604T233000Z');
+            $vevent->setDtEnd('20260605T003000Z');
+
+            $event = $mapper->fromVEvent($vevent, 'admin');
+
+            $this->assertSame(
+                '2026-06-05 00:30',
+                $event->start()->format('Y-m-d H:i'),
+                'Near-midnight UTC time did not roll to the correct local day.'
+            );
+        } finally {
+            date_default_timezone_set($previousTz);
+        }
+    }
+
+    public function testFromVEventFloatingTimeNotConvertedWithTargetTimezone(): void
+    {
+        // Floating times (no Z, no TZID) have no absolute meaning; they must be
+        // left as literal wall-clock even when a target timezone is configured.
+        $previousTz = date_default_timezone_get();
+        date_default_timezone_set('UTC');
+
+        try {
+            $mapper = new EventMapper(new \DateTimeZone('Europe/London'));
+
+            $vevent = new VEvent();
+            $vevent->setUid('float-1');
+            $vevent->setSummary('Floating meeting');
+            $vevent->setDtStart('20260604T090000');
+            $vevent->setDuration('PT1H');
+
+            $event = $mapper->fromVEvent($vevent, 'admin');
+
+            $this->assertSame(
+                '2026-06-04 09:00',
+                $event->start()->format('Y-m-d H:i'),
+                'Floating wall-clock must not be shifted by the target timezone.'
+            );
+        } finally {
+            date_default_timezone_set($previousTz);
+        }
+    }
+
+    public function testFromVEventZonedTimeRebasedToDifferentTargetTimezone(): void
+    {
+        // A TZID-zoned time in a zone other than the calendar's: 09:00 New York
+        // (EDT = UTC-4 in June) is 14:00 Europe/London (BST). The stored
+        // wall-clock must be expressed in the calendar timezone.
+        $previousTz = date_default_timezone_get();
+        date_default_timezone_set('UTC');
+
+        try {
+            $mapper = new EventMapper(new \DateTimeZone('Europe/London'));
+
+            $vevent = new VEvent();
+            $vevent->setUid('zoned-1');
+            $vevent->setSummary('NY morning call');
+            $vevent->setDtStart('20260604T090000');
+            $vevent->getProperty('DTSTART')?->setParameter('TZID', 'America/New_York');
+            $vevent->setDuration('PT1H');
+
+            $event = $mapper->fromVEvent($vevent, 'admin');
+
+            $this->assertSame(
+                '2026-06-04 14:00',
+                $event->start()->format('Y-m-d H:i')
+            );
+        } finally {
+            date_default_timezone_set($previousTz);
+        }
+    }
+
     public function testToVEvent(): void
     {
         $start = new \DateTimeImmutable('2026-02-11 10:00:00');

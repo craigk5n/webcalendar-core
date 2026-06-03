@@ -26,8 +26,17 @@ final class EventMapper
     private readonly DateTimeParser $dateTimeParser;
     private readonly DurationParser $durationParser;
 
-    public function __construct()
-    {
+    /**
+     * @param \DateTimeZone|null $targetTimezone The calendar's display timezone.
+     *   When provided, absolute date-times (UTC "Z" or zoned "TZID") are rebased
+     *   to this zone before their wall-clock is read for the timezone-naive
+     *   WebCalendar store, so they land on the correct local time and day.
+     *   Floating times (no Z, no TZID) are never shifted. When null, no
+     *   conversion is performed (legacy behavior).
+     */
+    public function __construct(
+        private readonly ?\DateTimeZone $targetTimezone = null,
+    ) {
         $this->dateParser = new DateParser();
         $this->dateTimeParser = new DateTimeParser();
         $this->durationParser = new DurationParser();
@@ -56,6 +65,9 @@ final class EventMapper
             $start = $startStr !== null
                 ? $this->dateTimeParser->parse($startStr, $this->tzidParams($dtStartProp))
                 : new \DateTimeImmutable();
+            // Rebase absolute (Z / TZID) instants to the calendar timezone so the
+            // timezone-naive store keeps the correct local wall-clock and day.
+            $start = $this->rebaseToTarget($start, $startStr, $dtStartProp);
         }
 
         $durationMinutes = 0;
@@ -289,6 +301,32 @@ final class EventMapper
     {
         $tzid = $prop?->getParameter('TZID');
         return ($tzid !== null && $tzid !== '') ? ['TZID' => $tzid] : [];
+    }
+
+    /**
+     * Convert an absolute instant to the configured calendar timezone before its
+     * wall-clock is stored. No-op when no target timezone is configured or when
+     * the value is floating (no trailing "Z" and no TZID parameter): a floating
+     * time has no absolute meaning and must be preserved as literal wall-clock.
+     */
+    private function rebaseToTarget(
+        \DateTimeImmutable $value,
+        ?string $rawValue,
+        ?PropertyInterface $prop,
+    ): \DateTimeImmutable {
+        if ($this->targetTimezone === null || $rawValue === null) {
+            return $value;
+        }
+
+        $isUtc = str_ends_with($rawValue, 'Z');
+        $tzid = $prop?->getParameter('TZID');
+        $isZoned = $tzid !== null && $tzid !== '';
+
+        if (!$isUtc && !$isZoned) {
+            return $value; // floating — leave as-is
+        }
+
+        return $value->setTimezone($this->targetTimezone);
     }
 
     private function intervalToMinutes(\DateInterval $interval): int
