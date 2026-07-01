@@ -12,9 +12,9 @@ use Icalendar\Recurrence\RRule;
  * Wraps the php-icalendar-core RRule class to provide domain-specific
  * recurrence logic while maintaining immutability.
  */
-final readonly class RecurrenceRule
+final class RecurrenceRule
 {
-    private RRule $rrule;
+    private readonly RRule $rrule;
 
     /**
      * @param string $rruleString Standard RRULE string (e.g. "FREQ=WEEKLY;INTERVAL=2")

@@ -12,9 +12,9 @@ use Psr\Log\NullLogger;
 /**
  * cURL-based webhook provider with SSRF protection.
  */
-final readonly class CurlWebhookProvider implements WebhookProviderInterface
+final class CurlWebhookProvider implements WebhookProviderInterface
 {
-    private LoggerInterface $logger;
+    private readonly LoggerInterface $logger;
 
     /**
      * @param string $secret Secret key for signing webhooks
@@ -23,10 +23,10 @@ final readonly class CurlWebhookProvider implements WebhookProviderInterface
      * @param bool $allowPrivateIps Whether to allow private IP ranges
      */
     public function __construct(
-        private string $secret = '',
-        private int $timeout = 10,
-        private array $allowedHosts = [],
-        private bool $allowPrivateIps = false,
+        private readonly string $secret = '',
+        private readonly int $timeout = 10,
+        private readonly array $allowedHosts = [],
+        private readonly bool $allowPrivateIps = false,
         ?LoggerInterface $logger = null,
     ) {
         $this->logger = $logger ?? new NullLogger();

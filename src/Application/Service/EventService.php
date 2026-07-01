@@ -20,13 +20,13 @@ use Psr\Log\NullLogger;
 /**
  * Service for orchestrating Event-related business logic.
  */
-final readonly class EventService
+final class EventService
 {
-    private LoggerInterface $logger;
+    private readonly LoggerInterface $logger;
 
     public function __construct(
-        private EventRepositoryInterface $eventRepository,
-        private UserRepositoryInterface $userRepository,
+        private readonly EventRepositoryInterface $eventRepository,
+        private readonly UserRepositoryInterface $userRepository,
         ?LoggerInterface $logger = null
     ) {
         $this->logger = $logger ?? new NullLogger();

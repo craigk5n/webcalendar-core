@@ -13,12 +13,12 @@ use WebCalendar\Core\Application\Contract\EmailProviderInterface;
  * 
  * Uses PHP's native mail() function or can be extended for SMTP libraries.
  */
-final readonly class SmtpEmailProvider implements EmailProviderInterface
+final class SmtpEmailProvider implements EmailProviderInterface
 {
     public function __construct(
-        private string $fromAddress,
-        private string $fromName = '',
-        private ?string $replyTo = null,
+        private readonly string $fromAddress,
+        private readonly string $fromName = '',
+        private readonly ?string $replyTo = null,
     ) {
     }
 

@@ -9,10 +9,10 @@ use WebCalendar\Core\Domain\Repository\ConfigRepositoryInterface;
 /**
  * Service for managing global system settings.
  */
-final readonly class ConfigService
+final class ConfigService
 {
     public function __construct(
-        private ConfigRepositoryInterface $configRepository
+        private readonly ConfigRepositoryInterface $configRepository
     ) {
     }
 

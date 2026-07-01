@@ -11,10 +11,10 @@ use WebCalendar\Core\Domain\ValueObject\BlobType;
 /**
  * Service for managing event attachments and comments.
  */
-final readonly class BlobService
+final class BlobService
 {
     public function __construct(
-        private BlobRepositoryInterface $blobRepository
+        private readonly BlobRepositoryInterface $blobRepository
     ) {
     }
 

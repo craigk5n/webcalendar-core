@@ -7,11 +7,11 @@ namespace WebCalendar\Core\Domain\ValueObject;
 /**
  * Value object representing a single user preference.
  */
-final readonly class UserPreference
+final class UserPreference
 {
     public function __construct(
-        private string $key,
-        private string $value
+        private readonly string $key,
+        private readonly string $value
     ) {
         if (empty(trim($this->key))) {
             throw new \InvalidArgumentException('Preference key cannot be empty.');

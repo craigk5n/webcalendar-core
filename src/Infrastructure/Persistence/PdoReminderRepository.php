@@ -11,11 +11,11 @@ use WebCalendar\Core\Domain\Repository\ReminderRepositoryInterface;
 /**
  * PDO implementation of the ReminderRepositoryInterface.
  */
-final readonly class PdoReminderRepository implements ReminderRepositoryInterface
+final class PdoReminderRepository implements ReminderRepositoryInterface
 {
     public function __construct(
-        private PDO $pdo,
-        private string $tablePrefix = '',
+        private readonly PDO $pdo,
+        private readonly string $tablePrefix = '',
     ) {
     }
 

@@ -12,12 +12,12 @@ use WebCalendar\Core\Domain\ValueObject\EventId;
 /**
  * PDO-based implementation of CategoryRepositoryInterface.
  */
-final readonly class PdoCategoryRepository implements CategoryRepositoryInterface
+final class PdoCategoryRepository implements CategoryRepositoryInterface
 {
     use TransactionalTrait;
     public function __construct(
-        private PDO $pdo,
-        private string $tablePrefix = '',
+        private readonly PDO $pdo,
+        private readonly string $tablePrefix = '',
     ) {
     }
 

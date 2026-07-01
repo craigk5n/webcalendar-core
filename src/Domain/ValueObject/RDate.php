@@ -7,13 +7,13 @@ namespace WebCalendar\Core\Domain\ValueObject;
 /**
  * Value object representing a list of Recurrence Dates (RDATE).
  */
-final readonly class RDate
+final class RDate
 {
     /**
      * @param \DateTimeImmutable[] $dates
      */
     public function __construct(
-        private array $dates = []
+        private readonly array $dates = []
     ) {
     }
 

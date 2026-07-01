@@ -11,11 +11,11 @@ use WebCalendar\Core\Domain\Repository\GroupRepositoryInterface;
 /**
  * PDO-based implementation of GroupRepositoryInterface.
  */
-final readonly class PdoGroupRepository implements GroupRepositoryInterface
+final class PdoGroupRepository implements GroupRepositoryInterface
 {
     public function __construct(
-        private PDO $pdo,
-        private string $tablePrefix = '',
+        private readonly PDO $pdo,
+        private readonly string $tablePrefix = '',
     ) {
     }
 

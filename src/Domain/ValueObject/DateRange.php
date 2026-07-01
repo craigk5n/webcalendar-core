@@ -7,14 +7,14 @@ namespace WebCalendar\Core\Domain\ValueObject;
 /**
  * Value object representing a date range with a start and end date/time.
  */
-final readonly class DateRange
+final class DateRange
 {
     /**
      * @throws \InvalidArgumentException If start date is after end date.
      */
     public function __construct(
-        private \DateTimeImmutable $startDate,
-        private \DateTimeImmutable $endDate
+        private readonly \DateTimeImmutable $startDate,
+        private readonly \DateTimeImmutable $endDate
     ) {
         if ($this->startDate > $this->endDate) {
             throw new \InvalidArgumentException('Start date cannot be after end date.');

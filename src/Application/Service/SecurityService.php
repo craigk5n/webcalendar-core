@@ -11,15 +11,15 @@ use Psr\Log\NullLogger;
 /**
  * Service for security utilities (tokens, CSRF, sanitization).
  */
-final readonly class SecurityService
+final class SecurityService
 {
-    private LoggerInterface $logger;
+    private readonly LoggerInterface $logger;
 
     public function __construct(
-        private string $secretKey,
-        private TokenRepositoryInterface $tokenRepository,
-        private int $sessionTtl = 86400,
-        private int $csrfTtl = 3600,
+        private readonly string $secretKey,
+        private readonly TokenRepositoryInterface $tokenRepository,
+        private readonly int $sessionTtl = 86400,
+        private readonly int $csrfTtl = 3600,
         ?LoggerInterface $logger = null,
     ) {
         $this->logger = $logger ?? new NullLogger();

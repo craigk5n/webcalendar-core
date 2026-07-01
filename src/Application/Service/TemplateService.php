@@ -9,10 +9,10 @@ use WebCalendar\Core\Domain\Repository\TemplateRepositoryInterface;
 /**
  * Service for managing user-customizable templates (headers/footers).
  */
-final readonly class TemplateService
+final class TemplateService
 {
     public function __construct(
-        private TemplateRepositoryInterface $templateRepository
+        private readonly TemplateRepositoryInterface $templateRepository
     ) {
     }
 

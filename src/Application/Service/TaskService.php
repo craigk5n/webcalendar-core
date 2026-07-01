@@ -17,12 +17,12 @@ use Psr\Log\NullLogger;
 /**
  * Service for orchestrating Task-related business logic.
  */
-final readonly class TaskService
+final class TaskService
 {
-    private LoggerInterface $logger;
+    private readonly LoggerInterface $logger;
 
     public function __construct(
-        private TaskRepositoryInterface $taskRepository,
+        private readonly TaskRepositoryInterface $taskRepository,
         ?LoggerInterface $logger = null
     ) {
         $this->logger = $logger ?? new NullLogger();

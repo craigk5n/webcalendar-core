@@ -14,13 +14,13 @@ use Psr\Log\NullLogger;
 /**
  * Service for exporting calendar data to external formats.
  */
-final readonly class ExportService
+final class ExportService
 {
-    private Writer $writer;
-    private LoggerInterface $logger;
+    private readonly Writer $writer;
+    private readonly LoggerInterface $logger;
 
     public function __construct(
-        private EventMapper $eventMapper,
+        private readonly EventMapper $eventMapper,
         ?LoggerInterface $logger = null
     ) {
         $this->writer = new Writer();

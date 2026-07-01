@@ -7,6 +7,6 @@ namespace WebCalendar\Core\Domain\Entity;
 /**
  * Domain entity representing a Calendar Event.
  */
-final readonly class Event extends AbstractEntry
+final class Event extends AbstractEntry
 {
 }

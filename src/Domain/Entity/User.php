@@ -7,18 +7,18 @@ namespace WebCalendar\Core\Domain\Entity;
 /**
  * Domain entity representing a User.
  */
-final readonly class User
+final class User
 {
     /**
      * @throws \InvalidArgumentException If login is empty or email is invalid.
      */
     public function __construct(
-        private string $login,
-        private string $firstName,
-        private string $lastName,
-        private string $email,
-        private bool $isAdmin,
-        private bool $isEnabled
+        private readonly string $login,
+        private readonly string $firstName,
+        private readonly string $lastName,
+        private readonly string $email,
+        private readonly bool $isAdmin,
+        private readonly bool $isEnabled
     ) {
         if (empty(trim($this->login))) {
             throw new \InvalidArgumentException('Login cannot be empty.');

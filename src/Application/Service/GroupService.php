@@ -10,10 +10,10 @@ use WebCalendar\Core\Domain\Repository\GroupRepositoryInterface;
 /**
  * Service for managing user groups.
  */
-final readonly class GroupService
+final class GroupService
 {
     public function __construct(
-        private GroupRepositoryInterface $groupRepository
+        private readonly GroupRepositoryInterface $groupRepository
     ) {
     }
 

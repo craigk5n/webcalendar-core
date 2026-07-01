@@ -9,19 +9,19 @@ use WebCalendar\Core\Domain\ValueObject\BlobType;
 /**
  * Domain entity representing an event Attachment or Comment (stored as BLOB).
  */
-final readonly class Blob
+final class Blob
 {
     public function __construct(
-        private int $id,
-        private int $eventId,
-        private string $login,
-        private string $name,
-        private string $description,
-        private int $size,
-        private string $mimeType,
-        private BlobType $type,
-        private \DateTimeImmutable $date,
-        private string $content = ''
+        private readonly int $id,
+        private readonly int $eventId,
+        private readonly string $login,
+        private readonly string $name,
+        private readonly string $description,
+        private readonly int $size,
+        private readonly string $mimeType,
+        private readonly BlobType $type,
+        private readonly \DateTimeImmutable $date,
+        private readonly string $content = ''
     ) {
         if (empty(trim($this->login))) {
             throw new \InvalidArgumentException('Login cannot be empty.');

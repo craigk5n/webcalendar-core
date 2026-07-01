@@ -7,18 +7,18 @@ namespace WebCalendar\Core\Application\DTO;
 /**
  * Data Transfer Object for Event creation/update requests.
  */
-final readonly class EventRequest
+final class EventRequest
 {
     public function __construct(
-        public string $name,
-        public string $start,
-        public int $duration,
-        public string $description = '',
-        public string $location = '',
-        public string $type = 'E',
-        public string $access = 'P',
-        public ?string $rrule = null,
-        public ?string $status = null
+        public readonly string $name,
+        public readonly string $start,
+        public readonly int $duration,
+        public readonly string $description = '',
+        public readonly string $location = '',
+        public readonly string $type = 'E',
+        public readonly string $access = 'P',
+        public readonly ?string $rrule = null,
+        public readonly ?string $status = null
     ) {
     }
 

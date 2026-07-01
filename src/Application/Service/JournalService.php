@@ -17,12 +17,12 @@ use Psr\Log\NullLogger;
 /**
  * Service for orchestrating Journal-related business logic.
  */
-final readonly class JournalService
+final class JournalService
 {
-    private LoggerInterface $logger;
+    private readonly LoggerInterface $logger;
 
     public function __construct(
-        private JournalRepositoryInterface $journalRepository,
+        private readonly JournalRepositoryInterface $journalRepository,
         ?LoggerInterface $logger = null
     ) {
         $this->logger = $logger ?? new NullLogger();

@@ -9,22 +9,22 @@ use WebCalendar\Core\Domain\Entity\Event;
 /**
  * Data Transfer Object for Event responses.
  */
-final readonly class EventResponse implements \JsonSerializable
+final class EventResponse implements \JsonSerializable
 {
     public function __construct(
-        public int $id,
-        public string $uid,
-        public string $name,
-        public string $description,
-        public string $location,
-        public string $start,
-        public int $duration,
-        public string $createdBy,
-        public string $type,
-        public string $access,
-        public ?string $rrule = null,
-        public int $sequence = 0,
-        public ?string $status = null
+        public readonly int $id,
+        public readonly string $uid,
+        public readonly string $name,
+        public readonly string $description,
+        public readonly string $location,
+        public readonly string $start,
+        public readonly int $duration,
+        public readonly string $createdBy,
+        public readonly string $type,
+        public readonly string $access,
+        public readonly ?string $rrule = null,
+        public readonly int $sequence = 0,
+        public readonly ?string $status = null
     ) {
     }
 

@@ -10,11 +10,11 @@ use WebCalendar\Core\Domain\Repository\TemplateRepositoryInterface;
 /**
  * PDO-based implementation of TemplateRepositoryInterface.
  */
-final readonly class PdoTemplateRepository implements TemplateRepositoryInterface
+final class PdoTemplateRepository implements TemplateRepositoryInterface
 {
     public function __construct(
-        private PDO $pdo,
-        private string $tablePrefix = '',
+        private readonly PDO $pdo,
+        private readonly string $tablePrefix = '',
     ) {
     }
 

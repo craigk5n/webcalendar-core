@@ -12,10 +12,10 @@ use WebCalendar\Core\Domain\ValueObject\DateRange;
 /**
  * Service for managing the system activity log (audit trail).
  */
-final readonly class ActivityLogService
+final class ActivityLogService
 {
     public function __construct(
-        private ActivityLogRepositoryInterface $activityLogRepository
+        private readonly ActivityLogRepositoryInterface $activityLogRepository
     ) {
     }
 

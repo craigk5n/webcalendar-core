@@ -17,12 +17,12 @@ use Psr\Log\NullLogger;
 /**
  * Service for handling public scheduling/booking.
  */
-final readonly class BookingService
+final class BookingService
 {
-    private LoggerInterface $logger;
+    private readonly LoggerInterface $logger;
 
     public function __construct(
-        private EventService $eventService,
+        private readonly EventService $eventService,
         ?LoggerInterface $logger = null
     ) {
         $this->logger = $logger ?? new NullLogger();

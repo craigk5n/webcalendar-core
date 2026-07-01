@@ -7,14 +7,14 @@ namespace WebCalendar\Core\Application\DTO;
 /**
  * Data Transfer Object for Search requests.
  */
-final readonly class SearchRequest
+final class SearchRequest
 {
     public function __construct(
-        public string $query,
-        public ?string $start = null,
-        public ?string $end = null,
-        public ?int $categoryId = null,
-        public ?string $user = null
+        public readonly string $query,
+        public readonly ?string $start = null,
+        public readonly ?string $end = null,
+        public readonly ?int $categoryId = null,
+        public readonly ?string $user = null
     ) {
     }
 

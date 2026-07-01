@@ -10,10 +10,10 @@ use WebCalendar\Core\Domain\Repository\LayerRepositoryInterface;
 /**
  * Service for managing calendar layers (overlays).
  */
-final readonly class LayerService
+final class LayerService
 {
     public function __construct(
-        private LayerRepositoryInterface $layerRepository
+        private readonly LayerRepositoryInterface $layerRepository
     ) {
     }
 

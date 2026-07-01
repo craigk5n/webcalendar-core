@@ -11,11 +11,11 @@ use WebCalendar\Core\Domain\Repository\ReportRepositoryInterface;
 /**
  * PDO-based implementation of ReportRepositoryInterface.
  */
-final readonly class PdoReportRepository implements ReportRepositoryInterface
+final class PdoReportRepository implements ReportRepositoryInterface
 {
     public function __construct(
-        private PDO $pdo,
-        private string $tablePrefix = '',
+        private readonly PDO $pdo,
+        private readonly string $tablePrefix = '',
     ) {
     }
 

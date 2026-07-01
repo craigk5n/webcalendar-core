@@ -12,7 +12,7 @@ use WebCalendar\Core\Domain\ValueObject\Recurrence;
 /**
  * Domain entity representing a Calendar Task (VTODO).
  */
-final readonly class Task extends AbstractEntry
+final class Task extends AbstractEntry
 {
     /**
      * @throws \InvalidArgumentException If name is empty, duration is negative, or percent is invalid.
@@ -28,8 +28,8 @@ final readonly class Task extends AbstractEntry
         string $createdBy,
         EventType $type,
         AccessLevel $access,
-        private ?\DateTimeImmutable $dueDate = null,
-        private int $percentComplete = 0,
+        private readonly ?\DateTimeImmutable $dueDate = null,
+        private readonly int $percentComplete = 0,
         Recurrence $recurrence = new Recurrence(),
         int $sequence = 0,
         ?string $status = null

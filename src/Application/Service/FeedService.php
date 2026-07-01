@@ -15,13 +15,13 @@ use Psr\Log\NullLogger;
 /**
  * Service for generating calendar feeds (RSS, Free/Busy).
  */
-final readonly class FeedService
+final class FeedService
 {
-    private LoggerInterface $logger;
+    private readonly LoggerInterface $logger;
 
     public function __construct(
-        private EventService $eventService,
-        private string $baseUrl = 'https://example.com/calendar',
+        private readonly EventService $eventService,
+        private readonly string $baseUrl = 'https://example.com/calendar',
         ?LoggerInterface $logger = null
     ) {
         $this->logger = $logger ?? new NullLogger();

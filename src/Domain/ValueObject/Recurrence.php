@@ -7,12 +7,12 @@ namespace WebCalendar\Core\Domain\ValueObject;
 /**
  * Value object aggregating all recurrence-related information for an event.
  */
-final readonly class Recurrence
+final class Recurrence
 {
     public function __construct(
-        private ?RecurrenceRule $rule = null,
-        private ExDate $exDate = new ExDate(),
-        private RDate $rDate = new RDate()
+        private readonly ?RecurrenceRule $rule = null,
+        private readonly ExDate $exDate = new ExDate(),
+        private readonly RDate $rDate = new RDate()
     ) {
     }
 

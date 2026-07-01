@@ -9,13 +9,13 @@ use WebCalendar\Core\Domain\Entity\Group;
 /**
  * Data Transfer Object for Group responses.
  */
-final readonly class GroupResponse implements \JsonSerializable
+final class GroupResponse implements \JsonSerializable
 {
     public function __construct(
-        public int $id,
-        public string $owner,
-        public string $name,
-        public string $lastUpdate
+        public readonly int $id,
+        public readonly string $owner,
+        public readonly string $name,
+        public readonly string $lastUpdate
     ) {
     }
 

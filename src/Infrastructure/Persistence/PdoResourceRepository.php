@@ -11,11 +11,11 @@ use WebCalendar\Core\Domain\Repository\ResourceRepositoryInterface;
 /**
  * PDO-based implementation of ResourceRepositoryInterface.
  */
-final readonly class PdoResourceRepository implements ResourceRepositoryInterface
+final class PdoResourceRepository implements ResourceRepositoryInterface
 {
     public function __construct(
-        private PDO $pdo,
-        private string $tablePrefix = '',
+        private readonly PDO $pdo,
+        private readonly string $tablePrefix = '',
     ) {
     }
 

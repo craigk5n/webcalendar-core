@@ -11,11 +11,11 @@ use WebCalendar\Core\Domain\Repository\AssistantRepositoryInterface;
 /**
  * PDO-based implementation of AssistantRepositoryInterface.
  */
-final readonly class PdoAssistantRepository implements AssistantRepositoryInterface
+final class PdoAssistantRepository implements AssistantRepositoryInterface
 {
     public function __construct(
-        private PDO $pdo,
-        private string $tablePrefix = '',
+        private readonly PDO $pdo,
+        private readonly string $tablePrefix = '',
     ) {
     }
 

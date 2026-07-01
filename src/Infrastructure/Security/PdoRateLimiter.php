@@ -12,11 +12,11 @@ use WebCalendar\Core\Application\Contract\RateLimiterInterface;
  * 
  * Uses database table to track rate limit attempts.
  */
-final readonly class PdoRateLimiter implements RateLimiterInterface
+final class PdoRateLimiter implements RateLimiterInterface
 {
     public function __construct(
-        private PDO $pdo,
-        private string $tablePrefix = '',
+        private readonly PDO $pdo,
+        private readonly string $tablePrefix = '',
     ) {
     }
 

@@ -9,14 +9,14 @@ use WebCalendar\Core\Domain\ValueObject\ViewType;
 /**
  * Domain entity representing a Custom View.
  */
-final readonly class View
+final class View
 {
     public function __construct(
-        private int $id,
-        private string $owner,
-        private string $name,
-        private ViewType $type,
-        private bool $isGlobal = false
+        private readonly int $id,
+        private readonly string $owner,
+        private readonly string $name,
+        private readonly ViewType $type,
+        private readonly bool $isGlobal = false
     ) {
         if (empty(trim($this->name))) {
             throw new \InvalidArgumentException('View name cannot be empty.');
