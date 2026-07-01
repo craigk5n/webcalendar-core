@@ -10,11 +10,11 @@ use WebCalendar\Core\Domain\Repository\PermissionRepositoryInterface;
 /**
  * PDO-based implementation of PermissionRepositoryInterface.
  */
-final readonly class PdoPermissionRepository implements PermissionRepositoryInterface
+final class PdoPermissionRepository implements PermissionRepositoryInterface
 {
     public function __construct(
-        private PDO $pdo,
-        private string $tablePrefix = '',
+        private readonly PDO $pdo,
+        private readonly string $tablePrefix = '',
     ) {
     }
 

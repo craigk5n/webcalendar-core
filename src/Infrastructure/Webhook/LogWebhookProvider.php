@@ -11,10 +11,10 @@ use Psr\Log\LoggerInterface;
  * Webhook provider that logs webhooks instead of sending them.
  * Useful for development and testing environments.
  */
-final readonly class LogWebhookProvider implements WebhookProviderInterface
+final class LogWebhookProvider implements WebhookProviderInterface
 {
     public function __construct(
-        private LoggerInterface $logger,
+        private readonly LoggerInterface $logger,
     ) {
     }
 

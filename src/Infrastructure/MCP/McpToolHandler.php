@@ -17,12 +17,12 @@ use WebCalendar\Core\Domain\Entity\Event;
 /**
  * Handler for MCP (Model Context Protocol) tool requests.
  */
-final readonly class McpToolHandler
+final class McpToolHandler
 {
     public function __construct(
-        private EventService $eventService,
-        private SearchService $searchService,
-        private UserService $userService
+        private readonly EventService $eventService,
+        private readonly SearchService $searchService,
+        private readonly UserService $userService
     ) {
     }
 

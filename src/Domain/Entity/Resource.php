@@ -7,14 +7,14 @@ namespace WebCalendar\Core\Domain\Entity;
 /**
  * Domain entity representing a non-user calendar Resource (room, equipment, etc.).
  */
-final readonly class Resource
+final class Resource
 {
     public function __construct(
-        private string $login,
-        private string $name,
-        private string $admin,
-        private bool $isPublic = false,
-        private ?string $url = null
+        private readonly string $login,
+        private readonly string $name,
+        private readonly string $admin,
+        private readonly bool $isPublic = false,
+        private readonly ?string $url = null
     ) {
         if (empty(trim($this->login))) {
             throw new \InvalidArgumentException('Resource login cannot be empty.');

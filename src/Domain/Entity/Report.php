@@ -7,18 +7,18 @@ namespace WebCalendar\Core\Domain\Entity;
 /**
  * Domain entity representing a custom Report.
  */
-final readonly class Report
+final class Report
 {
     /**
      * @param array<string, string> $templates Associative array of templates [type => text].
      */
     public function __construct(
-        private int $id,
-        private string $owner,
-        private string $name,
-        private string $type,
-        private bool $isGlobal = false,
-        private array $templates = []
+        private readonly int $id,
+        private readonly string $owner,
+        private readonly string $name,
+        private readonly string $type,
+        private readonly bool $isGlobal = false,
+        private readonly array $templates = []
     ) {
         if (empty(trim($this->name))) {
             throw new \InvalidArgumentException('Report name cannot be empty.');

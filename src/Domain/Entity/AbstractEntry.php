@@ -12,29 +12,29 @@ use WebCalendar\Core\Domain\ValueObject\Recurrence;
 /**
  * Base class for all calendar entries (Events, Tasks, Journals).
  */
-abstract readonly class AbstractEntry
+abstract class AbstractEntry
 {
     /**
      * @throws \InvalidArgumentException If name is empty or duration is negative.
      */
     public function __construct(
-        protected EventId $id,
-        protected string $uid,
-        protected string $name,
-        protected string $description,
-        protected string $location,
-        protected \DateTimeImmutable $start,
-        protected int $duration,
-        protected string $createdBy,
-        protected EventType $type,
-        protected AccessLevel $access,
-        protected Recurrence $recurrence = new Recurrence(),
-        protected int $sequence = 0,
-        protected ?string $status = null,
-        protected bool $allDay = false,
-        protected ?int $modDate = null,
-        protected ?int $modTime = null,
-        protected ?string $image = null,
+        protected readonly EventId $id,
+        protected readonly string $uid,
+        protected readonly string $name,
+        protected readonly string $description,
+        protected readonly string $location,
+        protected readonly \DateTimeImmutable $start,
+        protected readonly int $duration,
+        protected readonly string $createdBy,
+        protected readonly EventType $type,
+        protected readonly AccessLevel $access,
+        protected readonly Recurrence $recurrence = new Recurrence(),
+        protected readonly int $sequence = 0,
+        protected readonly ?string $status = null,
+        protected readonly bool $allDay = false,
+        protected readonly ?int $modDate = null,
+        protected readonly ?int $modTime = null,
+        protected readonly ?string $image = null,
     ) {
         if (empty(trim($this->name))) {
             throw new \InvalidArgumentException('Name cannot be empty.');

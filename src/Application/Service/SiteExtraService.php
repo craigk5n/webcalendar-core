@@ -9,10 +9,10 @@ use WebCalendar\Core\Domain\Repository\SiteExtraRepositoryInterface;
 /**
  * Service for managing custom event fields (Site Extras).
  */
-final readonly class SiteExtraService
+final class SiteExtraService
 {
     public function __construct(
-        private SiteExtraRepositoryInterface $siteExtraRepository
+        private readonly SiteExtraRepositoryInterface $siteExtraRepository
     ) {
     }
 

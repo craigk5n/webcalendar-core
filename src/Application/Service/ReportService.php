@@ -12,11 +12,11 @@ use WebCalendar\Core\Domain\ValueObject\DateRange;
 /**
  * Service for generating custom reports based on templates.
  */
-final readonly class ReportService
+final class ReportService
 {
     public function __construct(
-        private ReportRepositoryInterface $reportRepository,
-        private EventService $eventService
+        private readonly ReportRepositoryInterface $reportRepository,
+        private readonly EventService $eventService
     ) {
     }
 

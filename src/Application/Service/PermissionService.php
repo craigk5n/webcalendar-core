@@ -11,10 +11,10 @@ use WebCalendar\Core\Domain\ValueObject\Permission;
 /**
  * Service for checking user permissions (UAC).
  */
-final readonly class PermissionService
+final class PermissionService
 {
     public function __construct(
-        private PermissionRepositoryInterface $permissionRepository
+        private readonly PermissionRepositoryInterface $permissionRepository
     ) {
     }
 

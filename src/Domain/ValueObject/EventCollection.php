@@ -11,13 +11,13 @@ use WebCalendar\Core\Domain\Entity\Event;
  * 
  * @implements \IteratorAggregate<int, Event>
  */
-final readonly class EventCollection implements \IteratorAggregate, \Countable
+final class EventCollection implements \IteratorAggregate, \Countable
 {
     /**
      * @param Event[] $events
      */
     public function __construct(
-        private array $events = []
+        private readonly array $events = []
     ) {
     }
 

@@ -9,14 +9,14 @@ use WebCalendar\Core\Domain\Entity\Category;
 /**
  * Data Transfer Object for Category responses.
  */
-final readonly class CategoryResponse implements \JsonSerializable
+final class CategoryResponse implements \JsonSerializable
 {
     public function __construct(
-        public int $id,
-        public ?string $owner,
-        public string $name,
-        public ?string $color,
-        public bool $enabled
+        public readonly int $id,
+        public readonly ?string $owner,
+        public readonly string $name,
+        public readonly ?string $color,
+        public readonly bool $enabled
     ) {
     }
 

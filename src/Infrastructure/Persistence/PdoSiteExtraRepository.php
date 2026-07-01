@@ -10,11 +10,11 @@ use WebCalendar\Core\Domain\Repository\SiteExtraRepositoryInterface;
 /**
  * PDO-based implementation of SiteExtraRepositoryInterface.
  */
-final readonly class PdoSiteExtraRepository implements SiteExtraRepositoryInterface
+final class PdoSiteExtraRepository implements SiteExtraRepositoryInterface
 {
     public function __construct(
-        private PDO $pdo,
-        private string $tablePrefix = '',
+        private readonly PDO $pdo,
+        private readonly string $tablePrefix = '',
     ) {
     }
 

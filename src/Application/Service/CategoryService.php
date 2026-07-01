@@ -15,12 +15,12 @@ use Psr\Log\NullLogger;
 /**
  * Service for managing event categories.
  */
-final readonly class CategoryService
+final class CategoryService
 {
-    private LoggerInterface $logger;
+    private readonly LoggerInterface $logger;
 
     public function __construct(
-        private CategoryRepositoryInterface $categoryRepository,
+        private readonly CategoryRepositoryInterface $categoryRepository,
         ?LoggerInterface $logger = null
     ) {
         $this->logger = $logger ?? new NullLogger();

@@ -11,11 +11,11 @@ use WebCalendar\Core\Domain\Repository\LayerRepositoryInterface;
 /**
  * PDO-based implementation of LayerRepositoryInterface.
  */
-final readonly class PdoLayerRepository implements LayerRepositoryInterface
+final class PdoLayerRepository implements LayerRepositoryInterface
 {
     public function __construct(
-        private PDO $pdo,
-        private string $tablePrefix = '',
+        private readonly PDO $pdo,
+        private readonly string $tablePrefix = '',
     ) {
     }
 

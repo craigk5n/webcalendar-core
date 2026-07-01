@@ -7,11 +7,11 @@ namespace WebCalendar\Core\Domain\Entity;
 /**
  * Domain entity representing an Assistant relationship.
  */
-final readonly class Assistant
+final class Assistant
 {
     public function __construct(
-        private string $boss,
-        private string $assistant
+        private readonly string $boss,
+        private readonly string $assistant
     ) {
         if (empty(trim($this->boss))) {
             throw new \InvalidArgumentException('Boss login cannot be empty.');

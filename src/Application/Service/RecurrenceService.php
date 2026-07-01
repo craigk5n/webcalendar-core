@@ -13,9 +13,9 @@ use Icalendar\Recurrence\Occurrence;
 /**
  * Service for expanding repeating events into concrete occurrences.
  */
-final readonly class RecurrenceService
+final class RecurrenceService
 {
-    private RecurrenceExpander $expander;
+    private readonly RecurrenceExpander $expander;
 
     public function __construct()
     {

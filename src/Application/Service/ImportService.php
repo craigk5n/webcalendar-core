@@ -20,17 +20,17 @@ use Psr\Log\NullLogger;
 /**
  * Service for importing calendar data from external formats.
  */
-final readonly class ImportService
+final class ImportService
 {
-    private Parser $parser;
-    private LoggerInterface $logger;
+    private readonly Parser $parser;
+    private readonly LoggerInterface $logger;
 
     public function __construct(
-        private EventRepositoryInterface $eventRepository,
-        private EventMapper $eventMapper,
-        private ?CategoryRepositoryInterface $categoryRepository = null,
-        private int $maxContentSize = 10485760, // 10MB default
-        private int $maxEvents = 1000, // 1000 events default
+        private readonly EventRepositoryInterface $eventRepository,
+        private readonly EventMapper $eventMapper,
+        private readonly ?CategoryRepositoryInterface $categoryRepository = null,
+        private readonly int $maxContentSize = 10485760, // 10MB default
+        private readonly int $maxEvents = 1000, // 1000 events default
         ?LoggerInterface $logger = null,
     ) {
         $this->parser = new Parser(Parser::LENIENT);

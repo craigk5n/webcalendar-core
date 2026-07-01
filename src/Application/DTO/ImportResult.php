@@ -7,13 +7,13 @@ namespace WebCalendar\Core\Application\DTO;
 /**
  * Result of an iCal import operation.
  */
-final readonly class ImportResult
+final class ImportResult
 {
   public function __construct(
-    public int $importedCount,
-    public int $skippedCount,
+    public readonly int $importedCount,
+    public readonly int $skippedCount,
     /** @var array<array{line: int, message: string}> */
-    public array $warnings = [],
+    public readonly array $warnings = [],
   ) {
   }
 }

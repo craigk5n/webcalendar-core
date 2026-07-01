@@ -7,13 +7,13 @@ namespace WebCalendar\Core\Domain\ValueObject;
 /**
  * Value object representing a list of Exception Dates (EXDATE).
  */
-final readonly class ExDate
+final class ExDate
 {
     /**
      * @param \DateTimeImmutable[] $dates
      */
     public function __construct(
-        private array $dates = []
+        private readonly array $dates = []
     ) {
     }
 

@@ -12,10 +12,10 @@ use Psr\Log\LoggerInterface;
  * Email provider that logs emails instead of sending them.
  * Useful for development and testing environments.
  */
-final readonly class LogEmailProvider implements EmailProviderInterface
+final class LogEmailProvider implements EmailProviderInterface
 {
     public function __construct(
-        private LoggerInterface $logger,
+        private readonly LoggerInterface $logger,
     ) {
     }
 

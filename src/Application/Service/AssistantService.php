@@ -10,10 +10,10 @@ use WebCalendar\Core\Domain\Repository\AssistantRepositoryInterface;
 /**
  * Service for managing boss/assistant relationships.
  */
-final readonly class AssistantService
+final class AssistantService
 {
     public function __construct(
-        private AssistantRepositoryInterface $assistantRepository
+        private readonly AssistantRepositoryInterface $assistantRepository
     ) {
     }
 

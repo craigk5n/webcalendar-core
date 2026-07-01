@@ -14,12 +14,12 @@ use Psr\Log\NullLogger;
 /**
  * Service for managing custom calendar views.
  */
-final readonly class ViewService
+final class ViewService
 {
-    private LoggerInterface $logger;
+    private readonly LoggerInterface $logger;
 
     public function __construct(
-        private ViewRepositoryInterface $viewRepository,
+        private readonly ViewRepositoryInterface $viewRepository,
         ?LoggerInterface $logger = null
     ) {
         $this->logger = $logger ?? new NullLogger();

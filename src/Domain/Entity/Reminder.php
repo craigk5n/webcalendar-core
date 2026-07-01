@@ -7,19 +7,19 @@ namespace WebCalendar\Core\Domain\Entity;
 /**
  * Domain entity representing an event Reminder (VALARM).
  */
-final readonly class Reminder
+final class Reminder
 {
     public function __construct(
-        private int $eventId,
-        private int $date = 0,
-        private int $offset = 0,
-        private string $related = 'S',
-        private string $before = 'Y',
-        private int $lastSent = 0,
-        private int $repeats = 0,
-        private int $duration = 0,
-        private int $timesSent = 0,
-        private string $action = 'EMAIL',
+        private readonly int $eventId,
+        private readonly int $date = 0,
+        private readonly int $offset = 0,
+        private readonly string $related = 'S',
+        private readonly string $before = 'Y',
+        private readonly int $lastSent = 0,
+        private readonly int $repeats = 0,
+        private readonly int $duration = 0,
+        private readonly int $timesSent = 0,
+        private readonly string $action = 'EMAIL',
     ) {
     }
 

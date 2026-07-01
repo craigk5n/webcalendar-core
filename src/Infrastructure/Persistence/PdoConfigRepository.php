@@ -10,11 +10,11 @@ use WebCalendar\Core\Domain\Repository\ConfigRepositoryInterface;
 /**
  * PDO-based implementation of ConfigRepositoryInterface.
  */
-final readonly class PdoConfigRepository implements ConfigRepositoryInterface
+final class PdoConfigRepository implements ConfigRepositoryInterface
 {
     public function __construct(
-        private PDO $pdo,
-        private string $tablePrefix = '',
+        private readonly PDO $pdo,
+        private readonly string $tablePrefix = '',
     ) {
     }
 

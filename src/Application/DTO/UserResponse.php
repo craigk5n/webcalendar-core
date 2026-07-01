@@ -9,15 +9,15 @@ use WebCalendar\Core\Domain\Entity\User;
 /**
  * Data Transfer Object for User responses.
  */
-final readonly class UserResponse implements \JsonSerializable
+final class UserResponse implements \JsonSerializable
 {
     public function __construct(
-        public string $login,
-        public string $firstName,
-        public string $lastName,
-        public string $email,
-        public bool $isAdmin,
-        public bool $isEnabled
+        public readonly string $login,
+        public readonly string $firstName,
+        public readonly string $lastName,
+        public readonly string $email,
+        public readonly bool $isAdmin,
+        public readonly bool $isEnabled
     ) {
     }
 

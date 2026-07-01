@@ -16,12 +16,12 @@ use WebCalendar\Core\Domain\ValueObject\Recurrence;
 /**
  * PDO-based implementation of JournalRepositoryInterface.
  */
-final readonly class PdoJournalRepository implements JournalRepositoryInterface
+final class PdoJournalRepository implements JournalRepositoryInterface
 {
     use TransactionalTrait;
     public function __construct(
-        private PDO $pdo,
-        private string $tablePrefix = '',
+        private readonly PDO $pdo,
+        private readonly string $tablePrefix = '',
     ) {
     }
 

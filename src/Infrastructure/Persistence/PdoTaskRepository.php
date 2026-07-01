@@ -19,12 +19,12 @@ use WebCalendar\Core\Domain\ValueObject\RDate;
 /**
  * PDO-based implementation of TaskRepositoryInterface.
  */
-final readonly class PdoTaskRepository implements TaskRepositoryInterface
+final class PdoTaskRepository implements TaskRepositoryInterface
 {
     use TransactionalTrait;
     public function __construct(
-        private PDO $pdo,
-        private string $tablePrefix = '',
+        private readonly PDO $pdo,
+        private readonly string $tablePrefix = '',
     ) {
     }
 

@@ -12,11 +12,11 @@ use WebCalendar\Core\Domain\ValueObject\UserPreference;
 /**
  * PDO-based implementation of UserRepositoryInterface.
  */
-final readonly class PdoUserRepository implements UserRepositoryInterface
+final class PdoUserRepository implements UserRepositoryInterface
 {
     public function __construct(
-        private PDO $pdo,
-        private string $tablePrefix = '',
+        private readonly PDO $pdo,
+        private readonly string $tablePrefix = '',
     ) {
     }
 

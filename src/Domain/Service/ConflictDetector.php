@@ -10,7 +10,7 @@ use WebCalendar\Core\Domain\ValueObject\EventCollection;
 /**
  * Domain service for detecting conflicts (overlaps) between events.
  */
-final readonly class ConflictDetector
+final class ConflictDetector
 {
     /**
      * Detects events in $existingEvents that conflict with $event.

@@ -13,11 +13,11 @@ use WebCalendar\Core\Domain\ValueObject\DateRange;
 /**
  * PDO-based implementation of ActivityLogRepositoryInterface.
  */
-final readonly class PdoActivityLogRepository implements ActivityLogRepositoryInterface
+final class PdoActivityLogRepository implements ActivityLogRepositoryInterface
 {
     public function __construct(
-        private PDO $pdo,
-        private string $tablePrefix = '',
+        private readonly PDO $pdo,
+        private readonly string $tablePrefix = '',
     ) {
     }
 

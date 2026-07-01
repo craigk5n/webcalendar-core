@@ -10,10 +10,10 @@ use WebCalendar\Core\Domain\Repository\ResourceRepositoryInterface;
 /**
  * Service for managing shared resources (non-user calendars).
  */
-final readonly class ResourceService
+final class ResourceService
 {
     public function __construct(
-        private ResourceRepositoryInterface $resourceRepository
+        private readonly ResourceRepositoryInterface $resourceRepository
     ) {
     }
 

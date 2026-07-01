@@ -15,12 +15,12 @@ use Psr\Log\NullLogger;
 /**
  * Service for managing Users and their preferences.
  */
-final readonly class UserService
+final class UserService
 {
-    private LoggerInterface $logger;
+    private readonly LoggerInterface $logger;
 
     public function __construct(
-        private UserRepositoryInterface $userRepository,
+        private readonly UserRepositoryInterface $userRepository,
         ?LoggerInterface $logger = null
     ) {
         $this->logger = $logger ?? new NullLogger();

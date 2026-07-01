@@ -14,15 +14,15 @@ use Psr\Log\NullLogger;
  * Default implementation of AuthServiceInterface using the database repository.
  * Includes rate limiting to prevent brute force attacks.
  */
-final readonly class DatabaseAuthService implements AuthServiceInterface
+final class DatabaseAuthService implements AuthServiceInterface
 {
-    private LoggerInterface $logger;
+    private readonly LoggerInterface $logger;
 
     public function __construct(
-        private UserRepositoryInterface $userRepository,
-        private ?RateLimiterInterface $rateLimiter = null,
-        private int $maxLoginAttempts = 5,
-        private int $lockoutWindow = 900, // 15 minutes
+        private readonly UserRepositoryInterface $userRepository,
+        private readonly ?RateLimiterInterface $rateLimiter = null,
+        private readonly int $maxLoginAttempts = 5,
+        private readonly int $lockoutWindow = 900, // 15 minutes
         ?LoggerInterface $logger = null,
     ) {
         $this->logger = $logger ?? new NullLogger();

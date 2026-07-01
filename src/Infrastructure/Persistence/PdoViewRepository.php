@@ -12,11 +12,11 @@ use WebCalendar\Core\Domain\ValueObject\ViewType;
 /**
  * PDO-based implementation of ViewRepositoryInterface.
  */
-final readonly class PdoViewRepository implements ViewRepositoryInterface
+final class PdoViewRepository implements ViewRepositoryInterface
 {
     public function __construct(
-        private PDO $pdo,
-        private string $tablePrefix = '',
+        private readonly PDO $pdo,
+        private readonly string $tablePrefix = '',
     ) {
     }
 

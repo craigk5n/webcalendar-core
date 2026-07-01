@@ -14,12 +14,12 @@ use Psr\Log\NullLogger;
 /**
  * Service for searching events and tasks.
  */
-final readonly class SearchService
+final class SearchService
 {
-    private LoggerInterface $logger;
+    private readonly LoggerInterface $logger;
 
     public function __construct(
-        private EventRepositoryInterface $eventRepository,
+        private readonly EventRepositoryInterface $eventRepository,
         ?LoggerInterface $logger = null
     ) {
         $this->logger = $logger ?? new NullLogger();

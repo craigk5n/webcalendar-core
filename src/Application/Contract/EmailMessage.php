@@ -7,7 +7,7 @@ namespace WebCalendar\Core\Application\Contract;
 /**
  * Represents an email message to be sent.
  */
-final readonly class EmailMessage
+final class EmailMessage
 {
     /**
      * @param string $to Recipient email address
@@ -20,14 +20,14 @@ final readonly class EmailMessage
      * @param array<array{path: string, name: string}> $attachments File attachments
      */
     public function __construct(
-        public string $to,
-        public string $subject,
-        public string $htmlBody,
-        public string $textBody = '',
-        public array $cc = [],
-        public array $bcc = [],
-        public ?string $replyTo = null,
-        public array $attachments = [],
+        public readonly string $to,
+        public readonly string $subject,
+        public readonly string $htmlBody,
+        public readonly string $textBody = '',
+        public readonly array $cc = [],
+        public readonly array $bcc = [],
+        public readonly ?string $replyTo = null,
+        public readonly array $attachments = [],
     ) {
     }
 

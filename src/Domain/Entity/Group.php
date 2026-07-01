@@ -7,13 +7,13 @@ namespace WebCalendar\Core\Domain\Entity;
 /**
  * Domain entity representing a User Group.
  */
-final readonly class Group
+final class Group
 {
     public function __construct(
-        private int $id,
-        private string $owner,
-        private string $name,
-        private \DateTimeImmutable $lastUpdate
+        private readonly int $id,
+        private readonly string $owner,
+        private readonly string $name,
+        private readonly \DateTimeImmutable $lastUpdate
     ) {
         if (empty(trim($this->name))) {
             throw new \InvalidArgumentException('Group name cannot be empty.');

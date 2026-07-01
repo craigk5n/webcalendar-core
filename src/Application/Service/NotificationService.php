@@ -15,13 +15,13 @@ use Psr\Log\NullLogger;
 /**
  * Service for dispatching notifications (email, webhooks).
  */
-final readonly class NotificationService
+final class NotificationService
 {
-    private LoggerInterface $logger;
+    private readonly LoggerInterface $logger;
 
     public function __construct(
-        private EmailProviderInterface $emailProvider,
-        private WebhookProviderInterface $webhookProvider,
+        private readonly EmailProviderInterface $emailProvider,
+        private readonly WebhookProviderInterface $webhookProvider,
         ?LoggerInterface $logger = null
     ) {
         $this->logger = $logger ?? new NullLogger();

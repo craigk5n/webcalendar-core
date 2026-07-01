@@ -12,11 +12,11 @@ use WebCalendar\Core\Domain\ValueObject\BlobType;
 /**
  * PDO-based implementation of BlobRepositoryInterface.
  */
-final readonly class PdoBlobRepository implements BlobRepositoryInterface
+final class PdoBlobRepository implements BlobRepositoryInterface
 {
     public function __construct(
-        private PDO $pdo,
-        private string $tablePrefix = '',
+        private readonly PDO $pdo,
+        private readonly string $tablePrefix = '',
     ) {
     }
 

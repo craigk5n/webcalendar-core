@@ -10,11 +10,11 @@ use WebCalendar\Core\Domain\Repository\TokenRepositoryInterface;
 /**
  * PDO-based implementation of TokenRepositoryInterface.
  */
-final readonly class PdoTokenRepository implements TokenRepositoryInterface
+final class PdoTokenRepository implements TokenRepositoryInterface
 {
     public function __construct(
-        private PDO $pdo,
-        private string $tablePrefix = '',
+        private readonly PDO $pdo,
+        private readonly string $tablePrefix = '',
     ) {
     }
 
