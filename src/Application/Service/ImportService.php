@@ -42,9 +42,16 @@ final class ImportService
      *
      * @param string $icsContent The ICS file content.
      * @param User $user The user importing the events.
+     * @param bool $updateExisting When a VEVENT's UID already exists, overwrite
+     *   that event with the incoming values instead of skipping it. Defaults to
+     *   false, preserving the historical skip-only behaviour.
+     *
+     *   Callers mirroring a remote feed should pass true: without it, a change
+     *   made upstream (a time moved, a title edited) can never propagate, since
+     *   the UID is seen and the event skipped on every subsequent sync.
      * @throws ImportLimitException If import limits are exceeded.
      */
-    public function importIcal(string $icsContent, User $user): ImportResult
+    public function importIcal(string $icsContent, User $user, bool $updateExisting = false): ImportResult
     {
         $contentSize = strlen($icsContent);
         $this->logger->info('Starting iCal import', [
@@ -83,6 +90,7 @@ final class ImportService
 
         $imported = 0;
         $skipped = 0;
+        $updated = 0;
         $warnings = [];
 
         foreach ($components as $component) {
@@ -94,8 +102,20 @@ final class ImportService
                     $existingEvent = $this->eventRepository->findByUid($event->uid());
 
                     if ($existingEvent !== null) {
-                        $this->logger->debug('Skipping existing event', ['uid' => $event->uid()]);
-                        $skipped++;
+                        if (!$updateExisting) {
+                            $this->logger->debug('Skipping existing event', ['uid' => $event->uid()]);
+                            $skipped++;
+                            continue;
+                        }
+
+                        // Re-point the mapped event at the existing row so save()
+                        // overwrites it rather than inserting a duplicate.
+                        $this->eventRepository->save($event->withId($existingEvent->id()));
+                        $this->logger->debug('Updated existing event', [
+                            'uid' => $event->uid(),
+                            'id' => $existingEvent->id()->value(),
+                        ]);
+                        $updated++;
                         continue;
                     }
 
@@ -123,10 +143,11 @@ final class ImportService
         $this->logger->info('iCal import completed', [
             'imported_count' => $imported,
             'skipped_count' => $skipped,
+            'updated_count' => $updated,
             'warning_count' => count($warnings),
         ]);
 
-        return new ImportResult($imported, $skipped, $warnings);
+        return new ImportResult($imported, $skipped, $warnings, $updated);
     }
 
     /**

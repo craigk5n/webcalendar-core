@@ -80,4 +80,62 @@ final class EventTest extends TestCase
             access: AccessLevel::PUBLIC
         );
     }
+    public function testWithIdReturnsACopyCarryingTheNewId(): void
+    {
+        $start = new \DateTimeImmutable('2026-07-15 14:46:00');
+
+        $event = new Event(
+            id: new EventId(0),
+            uid: 'uid-abc',
+            name: 'Imported Event',
+            description: 'desc',
+            location: 'loc',
+            start: $start,
+            duration: 60,
+            createdBy: 'admin',
+            type: EventType::EVENT,
+            access: AccessLevel::PUBLIC,
+            sequence: 3,
+            status: 'A',
+            allDay: true,
+        );
+
+        $copy = $event->withId(new EventId(42));
+
+        $this->assertSame(42, $copy->id()->value());
+
+        // Every other field survives the copy.
+        $this->assertSame('uid-abc', $copy->uid());
+        $this->assertSame('Imported Event', $copy->name());
+        $this->assertSame('desc', $copy->description());
+        $this->assertSame('loc', $copy->location());
+        $this->assertEquals($start, $copy->start());
+        $this->assertSame(60, $copy->duration());
+        $this->assertSame('admin', $copy->createdBy());
+        $this->assertSame(EventType::EVENT, $copy->type());
+        $this->assertSame(AccessLevel::PUBLIC, $copy->access());
+        $this->assertSame(3, $copy->sequence());
+        $this->assertSame('A', $copy->status());
+        $this->assertTrue($copy->isAllDay());
+    }
+
+    public function testWithIdDoesNotMutateTheOriginal(): void
+    {
+        $event = new Event(
+            id: new EventId(7),
+            uid: 'uid',
+            name: 'Name',
+            description: '',
+            location: '',
+            start: new \DateTimeImmutable(),
+            duration: 0,
+            createdBy: 'admin',
+            type: EventType::EVENT,
+            access: AccessLevel::PUBLIC
+        );
+
+        $event->withId(new EventId(99));
+
+        $this->assertSame(7, $event->id()->value());
+    }
 }
