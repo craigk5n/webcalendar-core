@@ -14,6 +14,8 @@ use WebCalendar\Core\Domain\ValueObject\EventId;
 use WebCalendar\Core\Infrastructure\ICal\EventMapper;
 use Icalendar\Parser\Parser;
 use Icalendar\Component\VEvent;
+use Icalendar\Value\TextListValue;
+use Icalendar\Value\ValueInterface;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 
@@ -110,11 +112,21 @@ final class ImportService
 
                         // Re-point the mapped event at the existing row so save()
                         // overwrites it rather than inserting a duplicate.
-                        $this->eventRepository->save($event->withId($existingEvent->id()));
+                        $saved = $event->withId($existingEvent->id());
+                        $this->eventRepository->save($saved);
                         $this->logger->debug('Updated existing event', [
                             'uid' => $event->uid(),
                             'id' => $existingEvent->id()->value(),
                         ]);
+
+                        // Re-sync categories on update too. Without this a
+                        // CATEGORIES change made upstream never propagates once
+                        // the event exists, since every later sync takes this
+                        // branch. $saved carries the real row id.
+                        if ($this->categoryRepository !== null) {
+                            $this->importCategories($component, $saved, $user);
+                        }
+
                         $updated++;
                         continue;
                     }
@@ -122,9 +134,18 @@ final class ImportService
                     $this->eventRepository->create($event);
                     $imported++;
 
-                    // Handle categories if present in the component and repo is available
+                    // Handle categories if present in the component and repo is available.
                     if ($this->categoryRepository !== null) {
-                        $this->importCategories($component, $event, $user);
+                        // create() has a void contract and Event is immutable, so
+                        // the mapped $event still carries EventId(0). Re-read the
+                        // row by UID to obtain its generated id before assigning
+                        // categories, otherwise they attach to cal_id 0.
+                        $persisted = $event->uid() !== ''
+                            ? $this->eventRepository->findByUid($event->uid())
+                            : null;
+                        if ($persisted !== null) {
+                            $this->importCategories($component, $persisted, $user);
+                        }
                     }
                 } catch (\Exception $e) {
                     $uid = $component->getProperty('UID')?->getValue()->getRawValue() ?? 'unknown';
@@ -177,13 +198,8 @@ final class ImportService
             return;
         }
 
-        $catNames = explode(',', $categories->getValue()->getRawValue());
-        foreach ($catNames as $catName) {
-            $catName = trim($catName);
-            if ($catName === '') {
-                continue;
-            }
-
+        $categoryIds = [];
+        foreach ($this->categoryNames($categories->getValue()) as $catName) {
             $category = $this->categoryRepository->findByName($catName, $user->login());
             if ($category === null) {
                 $category = new Category(0, $user->login(), $catName, null);
@@ -192,8 +208,44 @@ final class ImportService
             }
 
             if ($category !== null) {
-                $this->categoryRepository->assignToEvent($event->id(), $user->login(), [$category->id()]);
+                $categoryIds[] = $category->id();
             }
         }
+
+        // Assign the full set in one call. assignToEvent() replaces the event's
+        // assignments wholesale (delete-then-insert), so a single call both
+        // preserves every category on the event (calling it per-name would keep
+        // only the last) and lets an update overwrite the previous set.
+        if ($categoryIds !== []) {
+            $this->categoryRepository->assignToEvent($event->id(), $user->login(), $categoryIds);
+        }
+    }
+
+    /**
+     * Extracts individual category names from a CATEGORIES value. Since
+     * php-icalendar-core 1.2.0 the parser produces a TextListValue whose items
+     * are split on unescaped commas and unescaped, so "Food\,Drink,Travel"
+     * yields ["Food,Drink", "Travel"]. Leading/trailing whitespace is trimmed
+     * and empty names are dropped.
+     *
+     * @return list<string>
+     */
+    private function categoryNames(ValueInterface $value): array
+    {
+        $names = $value instanceof TextListValue
+            ? $value->getItems()
+            // Programmatically-built components may carry a scalar TEXT value;
+            // its raw value is already unescaped, so split on every comma.
+            : explode(',', $value->getRawValue());
+
+        $result = [];
+        foreach ($names as $name) {
+            $name = trim($name);
+            if ($name !== '') {
+                $result[] = $name;
+            }
+        }
+
+        return $result;
     }
 }

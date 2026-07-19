@@ -6,8 +6,10 @@ namespace WebCalendar\Core\Tests\Unit\Application\Service;
 
 use PHPUnit\Framework\TestCase;
 use WebCalendar\Core\Application\Service\ImportService;
+use WebCalendar\Core\Domain\Repository\CategoryRepositoryInterface;
 use WebCalendar\Core\Domain\Repository\EventRepositoryInterface;
 use WebCalendar\Core\Infrastructure\ICal\EventMapper;
+use WebCalendar\Core\Domain\Entity\Category;
 use WebCalendar\Core\Domain\Entity\User;
 use WebCalendar\Core\Domain\Entity\Event;
 use WebCalendar\Core\Domain\ValueObject\EventId;
@@ -146,5 +148,165 @@ ICS;
 
         $this->assertSame(1, $result->importedCount);
         $this->assertSame(0, $result->updatedCount);
+    }
+
+    // ---- Category import ----------------------------------------------------
+
+    /**
+     * @var CategoryRepositoryInterface&\PHPUnit\Framework\MockObject\MockObject
+     */
+    private $categoryRepository;
+
+    /** @var list<array{id: int, login: string, ids: list<int>}> */
+    private array $assignCalls = [];
+
+    /** @var list<string> */
+    private array $lookedUpNames = [];
+
+    /**
+     * Builds an ImportService wired to a category-repository mock. findByName
+     * resolves any name to a stable id (hash of the name) so distinct names get
+     * distinct ids, and every assignToEvent call is recorded in $assignCalls.
+     */
+    private function serviceWithCategories(): ImportService
+    {
+        $this->categoryRepository = $this->createMock(CategoryRepositoryInterface::class);
+        $this->assignCalls = [];
+        $this->lookedUpNames = [];
+
+        $this->categoryRepository->method('findByName')
+            ->willReturnCallback(function (string $name, ?string $owner = null): Category {
+                $this->lookedUpNames[] = $name;
+                return new Category($this->catId($name), $owner, $name, null);
+            });
+
+        $this->categoryRepository->method('assignToEvent')
+            ->willReturnCallback(function (EventId $id, string $login, array $ids): void {
+                /** @var list<int> $ids */
+                $this->assignCalls[] = ['id' => $id->value(), 'login' => $login, 'ids' => $ids];
+            });
+
+        return new ImportService(
+            $this->eventRepository,
+            new EventMapper(),
+            $this->categoryRepository
+        );
+    }
+
+    private function catId(string $name): int
+    {
+        return (int) sprintf('%u', crc32($name)) % 100000 + 1;
+    }
+
+    private static function icsWithCategories(string $categoriesLine): string
+    {
+        return "BEGIN:VCALENDAR\n"
+            . "VERSION:2.0\n"
+            . "PRODID:-//WebCalendar//NONSGML v1.0//EN\n"
+            . "BEGIN:VEVENT\n"
+            . "UID:uid-1\n"
+            . "SUMMARY:Event 1\n"
+            . "DTSTART:20260211T100000Z\n"
+            . "DURATION:PT1H\n"
+            . "CATEGORIES:{$categoriesLine}\n"
+            . "END:VEVENT\n"
+            . "END:VCALENDAR\n";
+    }
+
+    public function testImportAssignsAllCategoriesInASingleCall(): void
+    {
+        // Bug C: assignToEvent replaces the whole set, so calling it per-name
+        // kept only the last category. Multiple categories must survive.
+        $service = $this->serviceWithCategories();
+        $user = new User('jdoe', 'John', 'Doe', 'john@example.com', false, true);
+
+        $persisted = $this->existingEvent(7, 'uid-1');
+        $this->eventRepository->method('findByUid')
+            ->willReturnOnConsecutiveCalls(null, $persisted);
+
+        $service->importIcal(self::icsWithCategories('Work,Personal'), $user);
+
+        $this->assertCount(1, $this->assignCalls, 'categories must be assigned in one call');
+        $this->assertSame(
+            [$this->catId('Work'), $this->catId('Personal')],
+            $this->assignCalls[0]['ids']
+        );
+    }
+
+    public function testImportUnescapesCategoryNamesAndKeepsInternalSpaces(): void
+    {
+        // Bug A: an escaped comma is a literal comma inside one name, not a
+        // separator; internal spaces are part of the name. Requires the
+        // TextListValue CATEGORIES parsing added in php-icalendar-core 1.2.0.
+        $service = $this->serviceWithCategories();
+        $user = new User('jdoe', 'John', 'Doe', 'john@example.com', false, true);
+
+        $persisted = $this->existingEvent(7, 'uid-1');
+        $this->eventRepository->method('findByUid')
+            ->willReturnOnConsecutiveCalls(null, $persisted);
+
+        // Single-quoted: '\\,' is the two bytes \ and , — real ICS escaping.
+        $ics = self::icsWithCategories('Food\\,Drink,Team Meeting');
+
+        $service->importIcal($ics, $user);
+
+        $this->assertSame(['Food,Drink', 'Team Meeting'], $this->lookedUpNames);
+        $this->assertCount(1, $this->assignCalls);
+        $this->assertSame(
+            [$this->catId('Food,Drink'), $this->catId('Team Meeting')],
+            $this->assignCalls[0]['ids']
+        );
+    }
+
+    public function testImportAssignsCategoriesToPersistedEventIdNotZero(): void
+    {
+        // Bug D: create() is void and Event is immutable, so the mapped event
+        // still has EventId(0). Categories must attach to the real row id.
+        $service = $this->serviceWithCategories();
+        $user = new User('jdoe', 'John', 'Doe', 'john@example.com', false, true);
+
+        $persisted = $this->existingEvent(99, 'uid-1');
+        $this->eventRepository->method('findByUid')
+            ->willReturnOnConsecutiveCalls(null, $persisted);
+        $this->eventRepository->expects($this->once())->method('create');
+
+        $service->importIcal(self::icsWithCategories('Work'), $user);
+
+        $this->assertCount(1, $this->assignCalls);
+        $this->assertSame(99, $this->assignCalls[0]['id'], 'must assign to the persisted row id');
+    }
+
+    public function testUpdateReSyncsCategories(): void
+    {
+        // Bug B: on the update path categories were skipped entirely, so an
+        // upstream CATEGORIES change never propagated after first sync.
+        $service = $this->serviceWithCategories();
+        $user = new User('jdoe', 'John', 'Doe', 'john@example.com', false, true);
+
+        $this->eventRepository->method('findByUid')
+            ->willReturn($this->existingEvent(42, 'uid-1'));
+        $this->eventRepository->expects($this->once())->method('save');
+
+        $service->importIcal(self::icsWithCategories('Work,Personal'), $user, true);
+
+        $this->assertCount(1, $this->assignCalls, 'update must re-sync categories');
+        $this->assertSame(42, $this->assignCalls[0]['id']);
+        $this->assertSame(
+            [$this->catId('Work'), $this->catId('Personal')],
+            $this->assignCalls[0]['ids']
+        );
+    }
+
+    public function testUpdateWithoutFlagDoesNotTouchCategories(): void
+    {
+        $service = $this->serviceWithCategories();
+        $user = new User('jdoe', 'John', 'Doe', 'john@example.com', false, true);
+
+        $this->eventRepository->method('findByUid')
+            ->willReturn($this->existingEvent(42, 'uid-1'));
+
+        $service->importIcal(self::icsWithCategories('Work'), $user, false);
+
+        $this->assertSame([], $this->assignCalls, 'skip path must not modify categories');
     }
 }
