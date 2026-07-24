@@ -591,7 +591,14 @@ final class PdoEventRepository implements EventRepositoryInterface
         while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
             if (is_array($row)) {
                 $calId = is_numeric($row['cal_id'] ?? null) ? (int)$row['cal_id'] : 0;
-                $rules[$calId] = $this->mapRowToRecurrenceRule($row);
+                try {
+                    $rules[$calId] = $this->mapRowToRecurrenceRule($row);
+                } catch (\Throwable $e) {
+                    // A single event with a corrupt/unparseable recurrence rule
+                    // (e.g. bad data from a migration) must not fail the whole
+                    // range load. Treat that event as non-recurring instead.
+                    unset($rules[$calId]);
+                }
             }
         }
 

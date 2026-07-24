@@ -94,9 +94,33 @@ final class PdoEventRepositoryTest extends RepositoryTestCase
         );
 
         $events = $this->repository->findByDateRange($range);
-        
+
         $this->assertCount(1, $events);
         $this->assertSame('E1', $events[0]->name());
+    }
+
+    public function testCorruptRecurrenceRuleDoesNotFailTheRangeLoad(): void
+    {
+        // A migrated event can carry a corrupt repeats row that builds an
+        // unparseable RRULE. Loading a date range must not throw for it — the
+        // event is returned as non-recurring instead of failing the whole batch.
+        $date = new \DateTimeImmutable('2026-02-10 10:00:00');
+        $event = new Event(new EventId(0), 'u1', 'HASBADRULE', '', '', $date, 60, 'admin', EventType::EVENT, AccessLevel::PUBLIC);
+        $this->repository->save($event);
+
+        $id = $this->repository->findByUid('u1')?->id()->value();
+        $this->pdo->prepare(
+            "INSERT INTO webcal_entry_repeats (cal_id, cal_type, cal_frequency, cal_byday, cal_bysetpos, cal_wkst) VALUES (?, 'monthlyBySetPos', 1, 'TH,-17', '-17,8,9', 'SU')"
+        )->execute([$id]);
+
+        $range = new DateRange(new \DateTimeImmutable('2026-02-01'), new \DateTimeImmutable('2026-02-28'));
+
+        // Must not throw "Invalid RRULE string".
+        $events = $this->repository->findByDateRange($range);
+
+        $this->assertCount(1, $events);
+        $this->assertSame('HASBADRULE', $events[0]->name());
+        $this->assertFalse($events[0]->recurrence()->isRepeating(), 'corrupt rule should degrade to non-recurring');
     }
 
     public function testSearch(): void
