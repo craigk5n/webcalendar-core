@@ -14,6 +14,7 @@ use WebCalendar\Core\Domain\ValueObject\EventId;
  */
 final class PdoCategoryRepository implements CategoryRepositoryInterface
 {
+    use ChunkedInClauseTrait;
     use TransactionalTrait;
     public function __construct(
         private readonly PDO $pdo,
@@ -257,33 +258,41 @@ final class PdoCategoryRepository implements CategoryRepositoryInterface
         }
 
         $ids = array_map(fn(EventId $id) => $id->value(), $eventIds);
-        $placeholders = implode(',', array_fill(0, count($ids), '?'));
-        $params = array_merge($ids, [$userLogin]);
-
-        // See getForEvent() for the global/personal category matching
-        // rationale. The `CASE WHEN ... THEN 0 ELSE 1` ordering makes the
-        // personal version sort before the global one so the per-event
-        // dedup loop below deterministically keeps the personal match.
-        $stmt = $this->pdo->prepare(
-            "SELECT ec.cal_id, c.cat_id, c.cat_color
-             FROM {$this->tablePrefix}webcal_entry_categories ec
-             JOIN {$this->tablePrefix}webcal_categories c
-               ON c.cat_id = ec.cat_id
-              AND c.cat_owner IN (ec.cat_owner, '')
-             WHERE ec.cal_id IN ($placeholders) AND ec.cat_owner = ?
-             ORDER BY ec.cal_id, ec.cat_order ASC,
-                      CASE WHEN c.cat_owner = ec.cat_owner THEN 0 ELSE 1 END"
-        );
-        $stmt->execute($params);
 
         $map = [];
-        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
-            $eid = (int) $row['cal_id'];
-            if (!isset($map[$eid])) {
-                $map[$eid] = [
-                    'id' => (int) $row['cat_id'],
-                    'color' => $row['cat_color'],
-                ];
+
+        // Chunked so the placeholder count stays under the backend's
+        // per-statement ceiling on large batches (see ChunkedInClauseTrait).
+        // Safe here: each event id lands in exactly one chunk, so the
+        // per-event first-row-wins dedup below is unaffected by chunking.
+        foreach ($this->chunkForInClause($ids) as $chunk) {
+            $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+            $params = array_merge($chunk, [$userLogin]);
+
+            // See getForEvent() for the global/personal category matching
+            // rationale. The `CASE WHEN ... THEN 0 ELSE 1` ordering makes the
+            // personal version sort before the global one so the per-event
+            // dedup loop below deterministically keeps the personal match.
+            $stmt = $this->pdo->prepare(
+                "SELECT ec.cal_id, c.cat_id, c.cat_color
+                 FROM {$this->tablePrefix}webcal_entry_categories ec
+                 JOIN {$this->tablePrefix}webcal_categories c
+                   ON c.cat_id = ec.cat_id
+                  AND c.cat_owner IN (ec.cat_owner, '')
+                 WHERE ec.cal_id IN ($placeholders) AND ec.cat_owner = ?
+                 ORDER BY ec.cal_id, ec.cat_order ASC,
+                          CASE WHEN c.cat_owner = ec.cat_owner THEN 0 ELSE 1 END"
+            );
+            $stmt->execute($params);
+
+            foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $eid = (int) $row['cal_id'];
+                if (!isset($map[$eid])) {
+                    $map[$eid] = [
+                        'id' => (int) $row['cat_id'],
+                        'color' => $row['cat_color'],
+                    ];
+                }
             }
         }
 

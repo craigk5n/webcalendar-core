@@ -22,7 +22,7 @@ abstract class RepositoryTestCase extends TestCase
         $dbPassEnv = getenv('DB_PASS');
         $dbPass = $dbPassEnv !== false ? $dbPassEnv : null;
 
-        $this->pdo = new PDO($dbUrl, $dbUser, $dbPass);
+        $this->pdo = $this->createPdo($dbUrl, $dbUser, $dbPass);
         $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
         if (!$this->isSchemaLoaded()) {
@@ -30,6 +30,17 @@ abstract class RepositoryTestCase extends TestCase
         }
 
         $this->cleanDatabase($dbType);
+    }
+
+    /**
+     * Connection factory seam. Tests can override to wrap PDO — e.g.
+     * BatchInClauseChunkingTest enforces MySQL's placeholder ceiling, which
+     * local SQLite builds often don't (SQLITE_MAX_VARIABLE_NUMBER is a
+     * compile-time option many distros raise).
+     */
+    protected function createPdo(string $dbUrl, ?string $dbUser, ?string $dbPass): PDO
+    {
+        return new PDO($dbUrl, $dbUser, $dbPass);
     }
 
     private function isSchemaLoaded(): bool

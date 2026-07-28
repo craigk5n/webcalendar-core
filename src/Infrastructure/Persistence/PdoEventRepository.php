@@ -22,6 +22,7 @@ use WebCalendar\Core\Domain\ValueObject\RDate;
  */
 final class PdoEventRepository implements EventRepositoryInterface
 {
+    use ChunkedInClauseTrait;
     use TransactionalTrait;
     public function __construct(
         private readonly PDO $pdo,
@@ -325,14 +326,19 @@ final class PdoEventRepository implements EventRepositoryInterface
 
         $ids = array_map(fn(EventId $id) => $id->value(), $eventIds);
         $map = array_fill_keys($ids, []);
-        $placeholders = implode(',', array_fill(0, count($ids), '?'));
-        $stmt = $this->pdo->prepare(
-            "SELECT cal_id, cal_login FROM {$this->tablePrefix}webcal_entry_user WHERE cal_id IN ($placeholders)"
-        );
-        $stmt->execute($ids);
 
-        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
-            $map[(int) $row['cal_id']][] = $row['cal_login'];
+        // Chunked so the placeholder count stays under the backend's
+        // per-statement ceiling on large batches (see ChunkedInClauseTrait).
+        foreach ($this->chunkForInClause($ids) as $chunk) {
+            $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+            $stmt = $this->pdo->prepare(
+                "SELECT cal_id, cal_login FROM {$this->tablePrefix}webcal_entry_user WHERE cal_id IN ($placeholders)"
+            );
+            $stmt->execute($chunk);
+
+            foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $map[(int) $row['cal_id']][] = $row['cal_login'];
+            }
         }
 
         return $map;
@@ -579,49 +585,54 @@ final class PdoEventRepository implements EventRepositoryInterface
             return [];
         }
 
-        $placeholders = implode(',', array_fill(0, count($ids), '?'));
-
-        // 1. Batch-load all recurrence rules
-        $stmt = $this->pdo->prepare(
-            "SELECT * FROM {$this->tablePrefix}webcal_entry_repeats WHERE cal_id IN ($placeholders)"
-        );
-        $stmt->execute(array_values($ids));
-
         $rules = [];
-        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-            if (is_array($row)) {
-                $calId = is_numeric($row['cal_id'] ?? null) ? (int)$row['cal_id'] : 0;
-                try {
-                    $rules[$calId] = $this->mapRowToRecurrenceRule($row);
-                } catch (\Throwable $e) {
-                    // A single event with a corrupt/unparseable recurrence rule
-                    // (e.g. bad data from a migration) must not fail the whole
-                    // range load. Treat that event as non-recurring instead.
-                    unset($rules[$calId]);
-                }
-            }
-        }
-
-        // 2. Batch-load all exceptions (EXDATE + RDATE)
-        $stmt = $this->pdo->prepare(
-            "SELECT cal_id, cal_date, cal_exdate FROM {$this->tablePrefix}webcal_entry_repeats_not WHERE cal_id IN ($placeholders)"
-        );
-        $stmt->execute(array_values($ids));
-
         /** @var array<int, \DateTimeImmutable[]> $exDates */
         $exDates = [];
         /** @var array<int, \DateTimeImmutable[]> $rDates */
         $rDates = [];
-        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-            if (is_array($row)) {
-                $calId = is_numeric($row['cal_id'] ?? null) ? (int)$row['cal_id'] : 0;
-                $dateStr = (string)$row['cal_date'];
-                $date = \DateTimeImmutable::createFromFormat('Ymd', $dateStr);
-                if ($date !== false) {
-                    if ((int)$row['cal_exdate'] === 1) {
-                        $exDates[$calId][] = $date;
-                    } else {
-                        $rDates[$calId][] = $date;
+
+        // Chunked so the placeholder count stays under the backend's
+        // per-statement ceiling on large ranges (see ChunkedInClauseTrait).
+        foreach ($this->chunkForInClause($ids) as $chunk) {
+            $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+
+            // 1. Batch-load recurrence rules for this chunk
+            $stmt = $this->pdo->prepare(
+                "SELECT * FROM {$this->tablePrefix}webcal_entry_repeats WHERE cal_id IN ($placeholders)"
+            );
+            $stmt->execute($chunk);
+
+            while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                if (is_array($row)) {
+                    $calId = is_numeric($row['cal_id'] ?? null) ? (int)$row['cal_id'] : 0;
+                    try {
+                        $rules[$calId] = $this->mapRowToRecurrenceRule($row);
+                    } catch (\Throwable $e) {
+                        // A single event with a corrupt/unparseable recurrence rule
+                        // (e.g. bad data from a migration) must not fail the whole
+                        // range load. Treat that event as non-recurring instead.
+                        unset($rules[$calId]);
+                    }
+                }
+            }
+
+            // 2. Batch-load exceptions (EXDATE + RDATE) for this chunk
+            $stmt = $this->pdo->prepare(
+                "SELECT cal_id, cal_date, cal_exdate FROM {$this->tablePrefix}webcal_entry_repeats_not WHERE cal_id IN ($placeholders)"
+            );
+            $stmt->execute($chunk);
+
+            while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                if (is_array($row)) {
+                    $calId = is_numeric($row['cal_id'] ?? null) ? (int)$row['cal_id'] : 0;
+                    $dateStr = (string)$row['cal_date'];
+                    $date = \DateTimeImmutable::createFromFormat('Ymd', $dateStr);
+                    if ($date !== false) {
+                        if ((int)$row['cal_exdate'] === 1) {
+                            $exDates[$calId][] = $date;
+                        } else {
+                            $rDates[$calId][] = $date;
+                        }
                     }
                 }
             }
