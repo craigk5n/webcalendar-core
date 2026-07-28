@@ -94,6 +94,25 @@ final class BatchInClauseChunkingTest extends RepositoryTestCase
         $this->assertSame([], $map[2]);
     }
 
+    public function testGetParticipantsBatchDeduplicatesIdsAcrossChunkBoundaries(): void
+    {
+        $this->pdo->exec(
+            "INSERT INTO webcal_entry_user (cal_id, cal_login)
+             VALUES (1, 'alice')"
+        );
+
+        // Appending a duplicate of id 1 puts its two occurrences in
+        // different chunks (first and last). A single IN() treats the
+        // duplicate as a no-op, so the chunked loaders must too — without
+        // dedup, id 1's participant rows would merge twice.
+        $ids = $this->manyEventIds();
+        $ids[] = new EventId(1);
+
+        $map = $this->events->getParticipantsBatch($ids);
+
+        $this->assertSame(['alice'], $map[1]);
+    }
+
     public function testGetForEventsBatchAcrossChunks(): void
     {
         $this->pdo->exec(

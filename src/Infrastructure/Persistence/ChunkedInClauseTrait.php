@@ -19,6 +19,12 @@ trait ChunkedInClauseTrait
     /**
      * Split an id list into IN()-safe chunks.
      *
+     * Ids are deduplicated first: a duplicate inside one IN() is a no-op,
+     * but the same id straddling two chunks would run its rows through the
+     * caller's merge twice (e.g. doubling an event's participant list).
+     * Dedup is what makes the "each id lands in exactly one chunk"
+     * guarantee unconditional.
+     *
      * 32,000 ids per chunk: half MySQL's ceiling, leaving generous headroom
      * for a query's other bound parameters. (No trait constants before
      * PHP 8.2, hence the literal.)
@@ -29,6 +35,6 @@ trait ChunkedInClauseTrait
      */
     private function chunkForInClause(array $ids): array
     {
-        return array_chunk(array_values($ids), 32000);
+        return array_chunk(array_values(array_unique($ids)), 32000);
     }
 }
