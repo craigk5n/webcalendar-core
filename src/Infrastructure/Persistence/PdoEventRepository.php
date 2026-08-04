@@ -266,6 +266,15 @@ final class PdoEventRepository implements EventRepositoryInterface
 
             // Auto-create participant row for the event creator on new events.
             if ($isNew) {
+                // A freshly claimed id must not inherit participant rows. Ids
+                // come from MAX(cal_id)+1, so a past delete that missed
+                // webcal_entry_user leaves orphans exactly where the next
+                // event lands: the insert below would then die on the
+                // (cal_id, cal_login) primary key, and orphans under other
+                // logins would surface as phantom participants.
+                $this->pdo->prepare(
+                    "DELETE FROM {$this->tablePrefix}webcal_entry_user WHERE cal_id = :id"
+                )->execute(['id' => $idValue]);
                 $this->pdo->prepare(
                     "INSERT INTO {$this->tablePrefix}webcal_entry_user (cal_id, cal_login, cal_status) VALUES (:id, :login, 'A')"
                 )->execute(['id' => $idValue, 'login' => $event->createdBy()]);

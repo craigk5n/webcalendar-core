@@ -171,6 +171,42 @@ final class PdoEventRepositoryTest extends RepositoryTestCase
         $this->assertSame('A', $row['cal_status']);
     }
 
+    public function testSaveSurvivesOrphanedParticipantRows(): void
+    {
+        // A delete path that removed an entry without its participant rows
+        // leaves orphans; the next event to claim that id (MAX+1) must not
+        // collide with them. Seen in production: SQLSTATE 23000 duplicate
+        // '{id}-{login}' on webcal_entry_user's primary key.
+        $this->pdo->exec(
+            "INSERT INTO webcal_entry_user (cal_id, cal_login, cal_status) VALUES (1, 'admin', 'A')"
+        );
+        $this->pdo->exec(
+            "INSERT INTO webcal_entry_user (cal_id, cal_login, cal_status) VALUES (1, 'stale-guest', 'A')"
+        );
+
+        $event = new Event(
+            id: new EventId(0),
+            uid: 'orphan-survivor',
+            name: 'Orphan Survivor',
+            description: '',
+            location: '',
+            start: new \DateTimeImmutable('2026-03-10 10:00:00'),
+            duration: 60,
+            createdBy: 'admin',
+            type: EventType::EVENT,
+            access: AccessLevel::PUBLIC
+        );
+
+        $this->repository->save($event); // Claims id 1; must not throw.
+
+        // Exactly the creator's row remains — the orphans (including other
+        // logins, which would appear as phantom participants) are gone.
+        $stmt = $this->pdo->prepare('SELECT cal_login FROM webcal_entry_user WHERE cal_id = :id');
+        $stmt->execute(['id' => 1]);
+        $logins = $stmt->fetchAll(\PDO::FETCH_COLUMN);
+        $this->assertSame(['admin'], $logins);
+    }
+
     public function testUpdateDoesNotDuplicateParticipantRow(): void
     {
         $event = new Event(
