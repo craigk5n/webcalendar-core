@@ -19,6 +19,12 @@ interface ReminderRepositoryInterface
     public function findPending(): array;
 
     /**
+     * The event's reminder, if it has one (webcal_reminders is keyed by
+     * cal_id — one reminder per event).
+     */
+    public function findByEventId(int $eventId): ?Reminder;
+
+    /**
      * Mark a reminder as sent by setting the last_sent timestamp.
      */
     public function markSent(int $eventId): void;

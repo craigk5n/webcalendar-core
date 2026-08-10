@@ -100,6 +100,17 @@ final class PdoReminderRepository implements ReminderRepositoryInterface
         $stmt->execute(['id' => $eventId]);
     }
 
+    public function findByEventId(int $eventId): ?Reminder
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT * FROM {$this->tablePrefix}webcal_reminders WHERE cal_id = :id"
+        );
+        $stmt->execute(['id' => $eventId]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        return is_array($row) ? $this->mapRowToReminder($row) : null;
+    }
+
     /** @param array<string, mixed> $row */
     private function mapRowToReminder(array $row): Reminder
     {
