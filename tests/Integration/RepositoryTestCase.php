@@ -97,6 +97,9 @@ abstract class RepositoryTestCase extends TestCase
             'webcal_entry',
             'webcal_venue',
             'webcal_organizer',
+            'webcal_ticket_type',
+            'webcal_ticket_order',
+            'webcal_attendee',
             'webcal_user_pref',
             'webcal_user'
         ];

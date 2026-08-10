@@ -384,3 +384,50 @@ CREATE TABLE webcal_organizer (
 );
 
 CREATE INDEX idx_webcal_organizer_name ON webcal_organizer(organizer_name);
+
+CREATE TABLE webcal_ticket_type (
+  ticket_type_id INT NOT NULL,
+  cal_id INT NOT NULL,
+  ticket_name VARCHAR(80) NOT NULL,
+  ticket_price INT NOT NULL DEFAULT 0,
+  ticket_currency CHAR(3) NOT NULL DEFAULT 'USD',
+  ticket_capacity INT DEFAULT NULL,
+  ticket_sale_start INT DEFAULT NULL,
+  ticket_sale_end INT DEFAULT NULL,
+  ticket_status CHAR(1) NOT NULL DEFAULT 'A',
+  PRIMARY KEY ( ticket_type_id )
+);
+
+CREATE INDEX idx_webcal_ticket_type_event ON webcal_ticket_type(cal_id);
+
+CREATE TABLE webcal_ticket_order (
+  order_id INT NOT NULL,
+  ticket_type_id INT NOT NULL,
+  cal_id INT NOT NULL,
+  order_email VARCHAR(75) NOT NULL,
+  order_name VARCHAR(80) NOT NULL,
+  order_qty INT NOT NULL,
+  order_amount INT NOT NULL,
+  order_currency CHAR(3) NOT NULL,
+  order_status CHAR(1) NOT NULL DEFAULT 'P',
+  order_external_ref VARCHAR(120) DEFAULT NULL,
+  order_created INT NOT NULL DEFAULT 0,
+  PRIMARY KEY ( order_id )
+);
+
+CREATE INDEX idx_webcal_ticket_order_type ON webcal_ticket_order(ticket_type_id);
+CREATE INDEX idx_webcal_ticket_order_event ON webcal_ticket_order(cal_id);
+
+CREATE TABLE webcal_attendee (
+  attendee_id INT NOT NULL,
+  order_id INT NOT NULL,
+  cal_id INT NOT NULL,
+  attendee_name VARCHAR(80) NOT NULL,
+  attendee_email VARCHAR(75) DEFAULT NULL,
+  attendee_token VARCHAR(64) NOT NULL,
+  attendee_checked_in INT DEFAULT NULL,
+  PRIMARY KEY ( attendee_id )
+);
+
+CREATE UNIQUE INDEX idx_webcal_attendee_token ON webcal_attendee(attendee_token);
+CREATE INDEX idx_webcal_attendee_event ON webcal_attendee(cal_id);
