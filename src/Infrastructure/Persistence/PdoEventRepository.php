@@ -116,6 +116,128 @@ final class PdoEventRepository implements EventRepositoryInterface
         return new \WebCalendar\Core\Domain\ValueObject\EventCollection($events);
     }
 
+    public function searchByCriteria(
+        \WebCalendar\Core\Domain\ValueObject\SearchCriteria $criteria,
+    ): \WebCalendar\Core\Domain\ValueObject\EventCollection {
+        $sql = "SELECT e.* FROM {$this->tablePrefix}webcal_entry e";
+        $where = [];
+        $params = [];
+
+        if ($criteria->hasDistanceFilter()) {
+            $sql .= " LEFT JOIN {$this->tablePrefix}webcal_venue v ON v.venue_id = e.cal_venue_id";
+
+            /** @var float $lat */
+            $lat = $criteria->nearLatitude;
+            /** @var float $lon */
+            $lon = $criteria->nearLongitude;
+            /** @var float $radius */
+            $radius = $criteria->radiusKm;
+
+            // Bounding box around the point: ~111.32 km per degree of
+            // latitude; longitude degrees shrink with cos(latitude).
+            $latDelta = $radius / 111.32;
+            $cosLat = cos(deg2rad($lat));
+            $lonDelta = abs($cosLat) < 0.000001 ? 180.0 : $radius / (111.32 * $cosLat);
+
+            // Bounds are inlined as numeric literals: PDO binds floats as
+            // strings, and COALESCE() strips column affinity on SQLite, so
+            // a bound TEXT parameter would never compare equal to a REAL.
+            // The values are pure arithmetic over validated floats.
+            $where[] = sprintf(
+                'COALESCE(e.cal_geo_lat, v.venue_lat) BETWEEN %.7F AND %.7F',
+                $lat - $latDelta,
+                $lat + $latDelta
+            );
+            $where[] = sprintf(
+                'COALESCE(e.cal_geo_lon, v.venue_lon) BETWEEN %.7F AND %.7F',
+                $lon - abs($lonDelta),
+                $lon + abs($lonDelta)
+            );
+        }
+
+        if ($criteria->keyword !== null && $criteria->keyword !== '') {
+            // Distinct placeholders for the same value: native prepares
+            // reject reused named placeholders (same fix as search()).
+            $where[] = '(e.cal_name LIKE :kw_name OR e.cal_description LIKE :kw_desc)';
+            $like = '%' . $criteria->keyword . '%';
+            $params['kw_name'] = $like;
+            $params['kw_desc'] = $like;
+        }
+
+        if ($criteria->range !== null) {
+            $where[] = 'e.cal_date BETWEEN :range_start AND :range_end';
+            $params['range_start'] = (int)$criteria->range->startDate()->format('Ymd');
+            $params['range_end'] = (int)$criteria->range->endDate()->format('Ymd');
+        }
+
+        if ($criteria->categoryIds !== []) {
+            $placeholders = [];
+            foreach (array_values($criteria->categoryIds) as $i => $categoryId) {
+                $placeholders[] = ":cat_$i";
+                $params["cat_$i"] = $categoryId;
+            }
+            $where[] = "EXISTS (SELECT 1 FROM {$this->tablePrefix}webcal_entry_categories ec"
+                . ' WHERE ec.cal_id = e.cal_id AND ec.cat_id IN (' . implode(', ', $placeholders) . '))';
+        }
+
+        if ($criteria->venueIds !== []) {
+            $placeholders = [];
+            foreach (array_values($criteria->venueIds) as $i => $venueId) {
+                $placeholders[] = ":venue_$i";
+                $params["venue_$i"] = $venueId;
+            }
+            $where[] = 'e.cal_venue_id IN (' . implode(', ', $placeholders) . ')';
+        }
+
+        if ($criteria->organizerIds !== []) {
+            $placeholders = [];
+            foreach (array_values($criteria->organizerIds) as $i => $organizerId) {
+                $placeholders[] = ":org_$i";
+                $params["org_$i"] = $organizerId;
+            }
+            $where[] = 'e.cal_organizer_id IN (' . implode(', ', $placeholders) . ')';
+        }
+
+        if ($criteria->types !== []) {
+            $placeholders = [];
+            foreach (array_values($criteria->types) as $i => $type) {
+                $placeholders[] = ":type_$i";
+                $params["type_$i"] = $type->value;
+            }
+            $where[] = 'e.cal_type IN (' . implode(', ', $placeholders) . ')';
+        }
+
+        if ($where !== []) {
+            $sql .= ' WHERE ' . implode(' AND ', $where);
+        }
+
+        // LIMIT/OFFSET inlined: they are validated ints, and binding them
+        // as named parameters breaks under native prepares on MySQL.
+        $sql .= ' ORDER BY e.cal_date, e.cal_time, e.cal_id'
+            . ' LIMIT ' . $criteria->limit . ' OFFSET ' . $criteria->offset;
+
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute($params);
+
+        $rows = [];
+        $ids = [];
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            if (is_array($row)) {
+                $rows[] = $row;
+                $ids[] = is_numeric($row['cal_id'] ?? null) ? (int)$row['cal_id'] : 0;
+            }
+        }
+
+        $recurrences = $this->batchLoadRecurrences($ids);
+        $events = [];
+        foreach ($rows as $row) {
+            $id = is_numeric($row['cal_id'] ?? null) ? (int)$row['cal_id'] : 0;
+            $events[] = $this->mapRowToEvent($row, $recurrences[$id] ?? null);
+        }
+
+        return new \WebCalendar\Core\Domain\ValueObject\EventCollection($events);
+    }
+
     /**
      * @param string[]|null $users
      * @return Event[]

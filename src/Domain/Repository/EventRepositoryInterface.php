@@ -54,6 +54,16 @@ interface EventRepositoryInterface
     ): \WebCalendar\Core\Domain\ValueObject\EventCollection;
 
     /**
+     * Filtered, paginated event search — the shared query surface behind
+     * both apps' Filter Bars (Epic 25). All filtering happens in SQL;
+     * distance is a bounding-box prefilter over the event's own
+     * coordinates, falling back to its venue's.
+     */
+    public function searchByCriteria(
+        \WebCalendar\Core\Domain\ValueObject\SearchCriteria $criteria,
+    ): \WebCalendar\Core\Domain\ValueObject\EventCollection;
+
+    /**
      * Persists an event.
      */
     public function save(Event $event): void;

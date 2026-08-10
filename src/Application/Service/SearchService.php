@@ -33,4 +33,19 @@ final class SearchService
         $this->logger->debug('Searching events', ['keyword' => $keyword, 'user' => $user?->login()]);
         return $this->eventRepository->search($keyword, $range, $user);
     }
+
+    /**
+     * Filtered, paginated search — the Filter Bar surface (Epic 25).
+     * All filtering happens at the repository so no load-all-and-filter
+     * path exists.
+     */
+    public function searchByCriteria(\WebCalendar\Core\Domain\ValueObject\SearchCriteria $criteria): EventCollection
+    {
+        $this->logger->debug('Searching events by criteria', [
+            'keyword' => $criteria->keyword,
+            'limit' => $criteria->limit,
+            'offset' => $criteria->offset,
+        ]);
+        return $this->eventRepository->searchByCriteria($criteria);
+    }
 }
