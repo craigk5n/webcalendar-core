@@ -34,6 +34,8 @@ final class ImportService
         private readonly int $maxContentSize = 10485760, // 10MB default
         private readonly int $maxEvents = 1000, // 1000 events default
         ?LoggerInterface $logger = null,
+        // Appended so positional callers keep working (Epic 22 follow-up).
+        private readonly ?\WebCalendar\Core\Domain\Repository\OrganizerRepositoryInterface $organizerRepository = null,
     ) {
         $this->parser = new Parser(Parser::LENIENT);
         $this->logger = $logger ?? new NullLogger();
@@ -98,7 +100,10 @@ final class ImportService
         foreach ($components as $component) {
             if ($component instanceof VEvent) {
                 try {
-                    $event = $this->eventMapper->fromVEvent($component, $user->login());
+                    $event = $this->attachOrganizer(
+                        $component,
+                        $this->eventMapper->fromVEvent($component, $user->login())
+                    );
 
                     // Update detection: check if an event with the same UID already exists
                     $existingEvent = $this->eventRepository->findByUid($event->uid());
@@ -185,6 +190,46 @@ final class ImportService
     public function getMaxEvents(): int
     {
         return $this->maxEvents;
+    }
+
+    /**
+     * Match-or-create the VEVENT's ORGANIZER as an Organizer entity and
+     * point the event at it (Epic 22 follow-up). Without a configured
+     * organizer repository the event passes through untouched.
+     */
+    private function attachOrganizer(VEvent $component, Event $event): Event
+    {
+        if ($this->organizerRepository === null) {
+            return $event;
+        }
+        $data = $this->eventMapper->extractOrganizer($component);
+        if ($data === null) {
+            return $event;
+        }
+
+        $existing = $this->organizerRepository->findByName($data['name']);
+        if ($existing === null) {
+            try {
+                $existing = $this->organizerRepository->save(
+                    new \WebCalendar\Core\Domain\Entity\Organizer(
+                        id: new \WebCalendar\Core\Domain\ValueObject\OrganizerId(0),
+                        name: $data['name'],
+                        email: $data['email'],
+                    )
+                );
+            } catch (\InvalidArgumentException) {
+                // A malformed mailto address must not fail the event; keep
+                // the organizer as a name-only entity.
+                $existing = $this->organizerRepository->save(
+                    new \WebCalendar\Core\Domain\Entity\Organizer(
+                        id: new \WebCalendar\Core\Domain\ValueObject\OrganizerId(0),
+                        name: $data['name'],
+                    )
+                );
+            }
+        }
+
+        return $event->withOrganizerId($existing->id());
     }
 
     private function importCategories(VEvent $component, Event $event, User $user): void

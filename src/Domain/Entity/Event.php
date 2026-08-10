@@ -49,4 +49,65 @@ final class Event extends AbstractEntry
             $this->conferenceLabel,
         );
     }
+
+    /**
+     * A copy pointing at a (persisted) venue — how import paths link a
+     * mapped event to its matchOrCreate'd venue.
+     */
+    public function withVenueId(?\WebCalendar\Core\Domain\ValueObject\VenueId $venueId): self
+    {
+        return new self(
+            $this->id,
+            $this->uid,
+            $this->name,
+            $this->description,
+            $this->location,
+            $this->start,
+            $this->duration,
+            $this->createdBy,
+            $this->type,
+            $this->access,
+            $this->recurrence,
+            $this->sequence,
+            $this->status,
+            $this->allDay,
+            $this->modDate,
+            $this->modTime,
+            $this->image,
+            $venueId,
+            $this->organizerId,
+            $this->conferenceUrl,
+            $this->conferenceLabel,
+        );
+    }
+
+    /**
+     * A copy pointing at a (persisted) organizer.
+     */
+    public function withOrganizerId(?\WebCalendar\Core\Domain\ValueObject\OrganizerId $organizerId): self
+    {
+        return new self(
+            $this->id,
+            $this->uid,
+            $this->name,
+            $this->description,
+            $this->location,
+            $this->start,
+            $this->duration,
+            $this->createdBy,
+            $this->type,
+            $this->access,
+            $this->recurrence,
+            $this->sequence,
+            $this->status,
+            $this->allDay,
+            $this->modDate,
+            $this->modTime,
+            $this->image,
+            $this->venueId,
+            $organizerId,
+            $this->conferenceUrl,
+            $this->conferenceLabel,
+        );
+    }
 }
