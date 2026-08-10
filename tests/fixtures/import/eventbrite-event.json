@@ -1,0 +1,29 @@
+{
+  "id": "987654321012",
+  "name": { "text": "WC-FIX Makers Fair", "html": "<b>WC-FIX Makers Fair</b>" },
+  "description": { "text": "A day of making things.", "html": "<p>A day of making things.</p>" },
+  "url": "https://www.eventbrite.com/e/wc-fix-makers-fair-tickets-987654321012",
+  "start": { "timezone": "America/New_York", "local": "2026-10-03T10:00:00", "utc": "2026-10-03T14:00:00Z" },
+  "end": { "timezone": "America/New_York", "local": "2026-10-03T16:00:00", "utc": "2026-10-03T20:00:00Z" },
+  "online_event": false,
+  "status": "live",
+  "logo": { "url": "https://img.evbuc.com/wc-fix-logo.jpg" },
+  "venue": {
+    "id": "5150",
+    "name": "WC-FIX Fairgrounds",
+    "address": {
+      "address_1": "99 Fair Rd",
+      "city": "Harrisonburg",
+      "region": "VA",
+      "postal_code": "22801",
+      "country": "US",
+      "latitude": "38.4496",
+      "longitude": "-78.8689"
+    }
+  },
+  "organizer": {
+    "id": "777",
+    "name": "WC-FIX Makers Guild",
+    "url": "https://www.eventbrite.com/o/wc-fix-makers-guild-777"
+  }
+}

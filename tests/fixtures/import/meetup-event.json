@@ -1,0 +1,13 @@
+{
+  "id": "300123456",
+  "title": "WC-FIX PHP User Group",
+  "description": "Monthly meetup. Talks and pizza.",
+  "eventUrl": "https://www.meetup.com/wc-fix-php/events/300123456/",
+  "dateTime": "2026-10-07T18:30:00-04:00",
+  "endTime": "2026-10-07T20:30:00-04:00",
+  "eventType": "ONLINE",
+  "onlineVenue": { "type": "zoom", "url": "https://zoom.example.com/j/9955" },
+  "venue": null,
+  "group": { "name": "WC-FIX PHP", "urlname": "wc-fix-php" },
+  "imageUrl": "https://secure.meetupstatic.com/photos/wc-fix.jpeg"
+}
