@@ -232,16 +232,20 @@ final class PdoEventRepository implements EventRepositoryInterface
                 'image' => $event->image(),
                 'mod_date' => (int)$now->format('Ymd'),
                 'mod_time' => (int)$now->format('His'),
+                'venue_id' => $event->venueId()?->value(),
+                'organizer_id' => $event->organizerId()?->value(),
             ];
 
             if ($isNew) {
                 $sql = "INSERT INTO {$this->tablePrefix}webcal_entry
                         (cal_id, cal_create_by, cal_date, cal_time, cal_duration, cal_name,
                          cal_description, cal_location, cal_type, cal_access, cal_uid,
-                         cal_sequence, cal_status, cal_image, cal_mod_date, cal_mod_time)
+                         cal_sequence, cal_status, cal_image, cal_mod_date, cal_mod_time,
+                         cal_venue_id, cal_organizer_id)
                         VALUES (:id, :create_by, :date, :time, :duration, :name,
                                 :description, :location, :type, :access, :uid,
-                                :sequence, :status, :image, :mod_date, :mod_time)";
+                                :sequence, :status, :image, :mod_date, :mod_time,
+                                :venue_id, :organizer_id)";
             } else {
                 $sql = "UPDATE {$this->tablePrefix}webcal_entry SET
                         cal_create_by = :create_by,
@@ -258,7 +262,9 @@ final class PdoEventRepository implements EventRepositoryInterface
                         cal_status = :status,
                         cal_image = :image,
                         cal_mod_date = :mod_date,
-                        cal_mod_time = :mod_time
+                        cal_mod_time = :mod_time,
+                        cal_venue_id = :venue_id,
+                        cal_organizer_id = :organizer_id
                         WHERE cal_id = :id";
             }
 
@@ -560,6 +566,12 @@ final class PdoEventRepository implements EventRepositoryInterface
             modDate: is_numeric($row['cal_mod_date'] ?? null) ? (int)$row['cal_mod_date'] : null,
             modTime: is_numeric($row['cal_mod_time'] ?? null) ? (int)$row['cal_mod_time'] : null,
             image: $image,
+            venueId: is_numeric($row['cal_venue_id'] ?? null)
+                ? new \WebCalendar\Core\Domain\ValueObject\VenueId((int)$row['cal_venue_id'])
+                : null,
+            organizerId: is_numeric($row['cal_organizer_id'] ?? null)
+                ? new \WebCalendar\Core\Domain\ValueObject\OrganizerId((int)$row['cal_organizer_id'])
+                : null,
         );
     }
 

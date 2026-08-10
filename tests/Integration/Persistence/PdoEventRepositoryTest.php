@@ -12,6 +12,8 @@ use WebCalendar\Core\Domain\ValueObject\DateRange;
 use WebCalendar\Core\Domain\ValueObject\Recurrence;
 use WebCalendar\Core\Domain\ValueObject\RecurrenceRule;
 use WebCalendar\Core\Domain\ValueObject\ExDate;
+use WebCalendar\Core\Domain\ValueObject\OrganizerId;
+use WebCalendar\Core\Domain\ValueObject\VenueId;
 use WebCalendar\Core\Infrastructure\Persistence\PdoEventRepository;
 use WebCalendar\Core\Tests\Integration\RepositoryTestCase;
 
@@ -548,5 +550,49 @@ final class PdoEventRepositoryTest extends RepositoryTestCase
                 $pdo->exec($stmt);
             }
         }
+    }
+    public function testVenueAndOrganizerReferencesRoundTrip(): void
+    {
+        $event = new Event(
+            id: new EventId(0),
+            uid: 'uid-venue-1',
+            name: 'Placed Event',
+            description: '',
+            location: 'Community Hall',
+            start: new \DateTimeImmutable('2026-09-10 10:00:00'),
+            duration: 60,
+            createdBy: 'admin',
+            type: EventType::EVENT,
+            access: AccessLevel::PUBLIC,
+            venueId: new VenueId(5),
+            organizerId: new OrganizerId(3),
+        );
+
+        $this->repository->save($event);
+
+        $found = $this->repository->findByUid('uid-venue-1');
+        $this->assertNotNull($found);
+        $this->assertSame(5, $found->venueId()?->value());
+        $this->assertSame(3, $found->organizerId()?->value());
+
+        // Clearing the references persists too (venue removed from event).
+        $cleared = new Event(
+            id: $found->id(),
+            uid: 'uid-venue-1',
+            name: 'Placed Event',
+            description: '',
+            location: 'Community Hall',
+            start: new \DateTimeImmutable('2026-09-10 10:00:00'),
+            duration: 60,
+            createdBy: 'admin',
+            type: EventType::EVENT,
+            access: AccessLevel::PUBLIC,
+        );
+        $this->repository->save($cleared);
+
+        $refetched = $this->repository->findByUid('uid-venue-1');
+        $this->assertNotNull($refetched);
+        $this->assertNull($refetched->venueId());
+        $this->assertNull($refetched->organizerId());
     }
 }

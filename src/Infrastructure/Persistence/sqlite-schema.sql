@@ -55,6 +55,8 @@ CREATE TABLE webcal_entry (
     cal_created INT DEFAULT NULL,
     cal_created_time INT DEFAULT NULL,
     cal_image VARCHAR(2048) DEFAULT NULL,
+    cal_venue_id INT DEFAULT NULL,
+    cal_organizer_id INT DEFAULT NULL,
     PRIMARY KEY (cal_id)
 );
 
@@ -349,3 +351,31 @@ CREATE TABLE webcal_rate_limits (
 );
 
 CREATE INDEX idx_webcal_rate_limits_lookup ON webcal_rate_limits(cal_identifier, cal_action, cal_attempt_at);
+
+CREATE TABLE webcal_venue (
+    venue_id INT NOT NULL,
+    venue_name VARCHAR(100) NOT NULL,
+    venue_address VARCHAR(100) DEFAULT NULL,
+    venue_city VARCHAR(60) DEFAULT NULL,
+    venue_state VARCHAR(60) DEFAULT NULL,
+    venue_zip VARCHAR(20) DEFAULT NULL,
+    venue_country VARCHAR(60) DEFAULT NULL,
+    venue_lat DECIMAL(10,7) DEFAULT NULL,
+    venue_lon DECIMAL(10,7) DEFAULT NULL,
+    venue_url VARCHAR(255) DEFAULT NULL,
+    venue_phone VARCHAR(40) DEFAULT NULL,
+    PRIMARY KEY (venue_id)
+);
+
+CREATE INDEX idx_webcal_venue_name ON webcal_venue(venue_name);
+
+CREATE TABLE webcal_organizer (
+    organizer_id INT NOT NULL,
+    organizer_name VARCHAR(100) NOT NULL,
+    organizer_email VARCHAR(100) DEFAULT NULL,
+    organizer_phone VARCHAR(40) DEFAULT NULL,
+    organizer_url VARCHAR(255) DEFAULT NULL,
+    PRIMARY KEY (organizer_id)
+);
+
+CREATE INDEX idx_webcal_organizer_name ON webcal_organizer(organizer_name);
