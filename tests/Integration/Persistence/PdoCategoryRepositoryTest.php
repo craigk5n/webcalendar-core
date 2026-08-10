@@ -623,4 +623,121 @@ final class PdoCategoryRepositoryTest extends RepositoryTestCase
         $this->assertNotNull($survivor);
         $this->assertSame('Personal', $survivor->name());
     }
+
+    // ── Epic 23 follow-up: tags and categories share one link table ────
+    //
+    // assignToEvent() writes both into webcal_entry_categories, so every
+    // per-event read has to say which of the two it wants. The listing
+    // methods got notATag() in Epic 23; the per-event reads did not.
+
+    public function testGetForEventsBatchExcludesTags(): void
+    {
+        // The tag sorts first (cat_order 0), which is exactly the case that
+        // made the batch report a tag as the event's "primary category" —
+        // and with it a null colour, so the calendar pill lost its colour.
+        $this->repository->save(new Category(1, null, 'outdoors', null, true, isTag: true));
+        $this->repository->save(new Category(2, null, 'Work', '#0073aa'));
+        $this->insertEntry(100);
+        $this->repository->assignToEvent(new EventId(100), 'admin', [1, 2]);
+
+        $map = $this->repository->getForEventsBatch([new EventId(100)], 'admin');
+
+        $this->assertSame(2, $map[100]['id'], 'the category must win over the lower-ordered tag');
+        $this->assertSame('#0073aa', $map[100]['color']);
+    }
+
+    public function testGetForEventsBatchOmitsEventsCarryingOnlyTags(): void
+    {
+        $this->repository->save(new Category(1, null, 'outdoors', null, true, isTag: true));
+        $this->insertEntry(100);
+        $this->repository->assignToEvent(new EventId(100), 'admin', [1]);
+
+        $map = $this->repository->getForEventsBatch([new EventId(100)], 'admin');
+
+        $this->assertArrayNotHasKey(100, $map, 'a tag-only event has no category');
+    }
+
+    /**
+     * getForEvent() deliberately keeps returning both: it hands back whole
+     * Category objects, so callers can filter on isTag(), and
+     * EventDuplicationService depends on the mixed list to copy an event's
+     * tags along with its categories.
+     */
+    public function testGetForEventStillReturnsTagsAndCategoriesTogether(): void
+    {
+        $this->repository->save(new Category(1, null, 'outdoors', null, true, isTag: true));
+        $this->repository->save(new Category(2, null, 'Work', '#0073aa'));
+        $this->insertEntry(100);
+        $this->repository->assignToEvent(new EventId(100), 'admin', [1, 2]);
+
+        $all = $this->repository->getForEvent(new EventId(100), 'admin');
+
+        $this->assertCount(2, $all);
+        $this->assertSame([true, false], array_map(static fn (Category $c): bool => $c->isTag(), $all));
+    }
+
+    public function testGetTagsForEventReturnsOnlyTags(): void
+    {
+        $this->repository->save(new Category(1, null, 'Work', '#0073aa'));
+        $this->repository->save(new Category(2, null, 'outdoors', null, true, isTag: true));
+        $this->repository->save(new Category(3, null, 'family', null, true, isTag: true));
+        $this->insertEntry(100);
+        $this->repository->assignToEvent(new EventId(100), 'admin', [1, 2, 3]);
+
+        $tags = $this->repository->getTagsForEvent(new EventId(100), 'admin');
+
+        $names = array_map(static fn (Category $c): string => $c->name(), $tags);
+        $this->assertSame(['outdoors', 'family'], $names, 'assignment order is preserved');
+    }
+
+    public function testGetTagsForEventIsScopedToTheAssigningUser(): void
+    {
+        // Cross-scope isolation rule: two users' rows at the same cal_id.
+        $this->repository->save(new Category(1, null, 'outdoors', null, true, isTag: true));
+        $this->repository->save(new Category(2, null, 'family', null, true, isTag: true));
+        $this->insertEntry(100);
+        $this->repository->assignToEvent(new EventId(100), 'admin', [1]);
+        $this->repository->assignToEvent(new EventId(100), 'jdoe', [2]);
+
+        $adminTags = $this->repository->getTagsForEvent(new EventId(100), 'admin');
+        $jdoeTags = $this->repository->getTagsForEvent(new EventId(100), 'jdoe');
+
+        $this->assertSame(['outdoors'], array_map(static fn (Category $c): string => $c->name(), $adminTags));
+        $this->assertSame(['family'], array_map(static fn (Category $c): string => $c->name(), $jdoeTags));
+    }
+
+    public function testGetTagsForEventsBatchGroupsByEvent(): void
+    {
+        $this->repository->save(new Category(1, null, 'Work', '#0073aa'));
+        $this->repository->save(new Category(2, null, 'outdoors', null, true, isTag: true));
+        $this->repository->save(new Category(3, null, 'family', null, true, isTag: true));
+        $this->insertEntry(100);
+        $this->insertEntry(101);
+        $this->insertEntry(102);
+        $this->repository->assignToEvent(new EventId(100), 'admin', [1, 2, 3]);
+        $this->repository->assignToEvent(new EventId(101), 'admin', [2]);
+        $this->repository->assignToEvent(new EventId(102), 'admin', [1]);
+
+        $map = $this->repository->getTagsForEventsBatch(
+            [new EventId(100), new EventId(101), new EventId(102)],
+            'admin',
+        );
+
+        $this->assertSame(['outdoors', 'family'], array_column($map[100], 'name'));
+        $this->assertSame(['outdoors'], array_column($map[101], 'name'));
+        $this->assertArrayNotHasKey(102, $map, 'a category-only event contributes no tag row');
+    }
+
+    public function testGetTagsForEventsBatchDoesNotLeakOtherUsersTags(): void
+    {
+        $this->repository->save(new Category(1, null, 'outdoors', null, true, isTag: true));
+        $this->repository->save(new Category(2, null, 'family', null, true, isTag: true));
+        $this->insertEntry(100);
+        $this->repository->assignToEvent(new EventId(100), 'admin', [1]);
+        $this->repository->assignToEvent(new EventId(100), 'jdoe', [2]);
+
+        $map = $this->repository->getTagsForEventsBatch([new EventId(100)], 'admin');
+
+        $this->assertSame(['outdoors'], array_column($map[100], 'name'));
+    }
 }

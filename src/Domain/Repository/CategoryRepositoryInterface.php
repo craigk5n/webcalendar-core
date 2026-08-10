@@ -77,24 +77,58 @@ interface CategoryRepositoryInterface
 
     /**
      * Assigns categories to an event for a specific user.
-     * 
+     *
+     * Replaces the whole assignment set for `(event, user)` — categories
+     * and tags share this junction table, so a caller that manages both
+     * must pass both in one call or the omitted kind is deleted.
+     *
      * @param int[] $categoryIds
      */
     public function assignToEvent(EventId $eventId, string $userLogin, array $categoryIds): void;
 
     /**
-     * Gets categories assigned to an event for a user.
+     * Gets everything assigned to an event for a user — categories *and*
+     * tags, in assignment order.
+     *
+     * Deliberately unfiltered: it returns whole Category objects, so
+     * callers select with {@see Category::isTag()}, and copy operations
+     * (EventDuplicationService) need the complete set. Use
+     * {@see getTagsForEvent()} when only tags are wanted, and
+     * {@see getForEventsBatch()} for the primary category alone.
+     *
      * @return Category[]
      */
     public function getForEvent(EventId $eventId, string $userLogin): array;
 
     /**
+     * Gets tags assigned to an event for a user, in assignment order.
+     *
+     * @return Category[] Every element has `isTag() === true`.
+     */
+    public function getTagsForEvent(EventId $eventId, string $userLogin): array;
+
+    /**
      * Gets the primary category for multiple events in a batch query.
+     *
+     * Tags are excluded: they share the junction table with categories, so
+     * without the filter a tag ordered ahead of the category was returned
+     * as the event's category, carrying a null colour with it.
      *
      * @param EventId[] $eventIds
      * @return array<int, array{id: int, color: string|null}> Map of event_id => category info.
      */
     public function getForEventsBatch(array $eventIds, string $userLogin): array;
+
+    /**
+     * Gets tags for multiple events in a batch query.
+     *
+     * Events with no tags are absent from the map rather than present with
+     * an empty list; callers use `?? []`.
+     *
+     * @param EventId[] $eventIds
+     * @return array<int, list<array{id: int, name: string}>> Map of event_id => tags.
+     */
+    public function getTagsForEventsBatch(array $eventIds, string $userLogin): array;
 
     /**
      * Gets the number of events assigned to a category.

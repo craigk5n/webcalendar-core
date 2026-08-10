@@ -117,10 +117,25 @@ final class PdoCategoryRepository implements CategoryRepositoryInterface
     /**
      * Tag-exclusion predicate. NULL-tolerant so rows predating the
      * `cat_is_tag` column (added Epic 23) keep counting as categories.
+     *
+     * @param string $alias Table alias to qualify the column with, for the
+     *                      per-event reads that join the junction table.
      */
-    private function notATag(): string
+    private function notATag(string $alias = ''): string
     {
-        return "(cat_is_tag IS NULL OR cat_is_tag <> 'Y')";
+        $column = ('' === $alias ? '' : $alias . '.') . 'cat_is_tag';
+        return "($column IS NULL OR $column <> 'Y')";
+    }
+
+    /**
+     * Tag-only predicate — the complement of {@see notATag()}.
+     *
+     * @param string $alias Table alias to qualify the column with.
+     */
+    private function isATag(string $alias = ''): string
+    {
+        $column = ('' === $alias ? '' : $alias . '.') . 'cat_is_tag';
+        return "$column = 'Y'";
     }
 
     public function nextId(): int
@@ -293,6 +308,97 @@ final class PdoCategoryRepository implements CategoryRepositoryInterface
         return $categories;
     }
 
+    /**
+     * Tags assigned to a single event, in assignment order.
+     *
+     * Same global/personal resolution as {@see getForEvent()}; tags are
+     * always global, but the junction row still carries the assigning
+     * user's login, which is what scopes the read.
+     *
+     * @return Category[]
+     */
+    public function getTagsForEvent(EventId $eventId, string $userLogin): array
+    {
+        $sql = "SELECT c.*
+                FROM {$this->tablePrefix}webcal_categories c
+                JOIN {$this->tablePrefix}webcal_entry_categories ec
+                  ON c.cat_id = ec.cat_id
+                 AND c.cat_owner IN (ec.cat_owner, '')
+                WHERE ec.cal_id = :cal_id AND ec.cat_owner = :owner
+                  AND {$this->isATag('c')}
+                ORDER BY ec.cat_order ASC";
+
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute(['cal_id' => $eventId->value(), 'owner' => $userLogin]);
+
+        $tags = [];
+        $seen = [];
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $catId = (int) $row['cat_id'];
+            if (isset($seen[$catId])) {
+                continue;
+            }
+            $seen[$catId] = true;
+            $tags[] = $this->mapRowToCategory($row);
+        }
+
+        return $tags;
+    }
+
+    /**
+     * @param EventId[] $eventIds
+     * @return array<int, list<array{id: int, name: string}>>
+     */
+    public function getTagsForEventsBatch(array $eventIds, string $userLogin): array
+    {
+        if (empty($eventIds)) {
+            return [];
+        }
+
+        $ids = array_map(fn (EventId $id) => $id->value(), $eventIds);
+        $map = [];
+        // Guards against the global/personal join returning a cat_id twice.
+        $seen = [];
+
+        // Chunked for the same placeholder-ceiling reason as
+        // getForEventsBatch(); each event id lands in exactly one chunk, so
+        // the per-event dedup below is unaffected.
+        foreach ($this->chunkForInClause($ids) as $chunk) {
+            $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+            $params = array_merge($chunk, [$userLogin]);
+
+            $stmt = $this->pdo->prepare(
+                "SELECT ec.cal_id, c.cat_id, c.cat_name
+                 FROM {$this->tablePrefix}webcal_entry_categories ec
+                 JOIN {$this->tablePrefix}webcal_categories c
+                   ON c.cat_id = ec.cat_id
+                  AND c.cat_owner IN (ec.cat_owner, '')
+                 WHERE ec.cal_id IN ($placeholders) AND ec.cat_owner = ?
+                   AND {$this->isATag('c')}
+                 ORDER BY ec.cal_id, ec.cat_order ASC"
+            );
+            $stmt->execute($params);
+
+            foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $eid = (int) $row['cal_id'];
+                $catId = (int) $row['cat_id'];
+                if (isset($seen[$eid][$catId])) {
+                    continue;
+                }
+                $seen[$eid][$catId] = true;
+                $map[$eid][] = [
+                    'id' => $catId,
+                    'name' => (string) $row['cat_name'],
+                ];
+            }
+        }
+
+        return $map;
+    }
+
     public function getForEventsBatch(array $eventIds, string $userLogin): array
     {
         if (empty($eventIds)) {
@@ -322,6 +428,7 @@ final class PdoCategoryRepository implements CategoryRepositoryInterface
                    ON c.cat_id = ec.cat_id
                   AND c.cat_owner IN (ec.cat_owner, '')
                  WHERE ec.cal_id IN ($placeholders) AND ec.cat_owner = ?
+                   AND {$this->notATag('c')}
                  ORDER BY ec.cal_id, ec.cat_order ASC,
                           CASE WHEN c.cat_owner = ec.cat_owner THEN 0 ELSE 1 END"
             );
