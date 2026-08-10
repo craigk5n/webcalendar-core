@@ -203,4 +203,29 @@ final class EventTest extends TestCase
         $this->assertSame(5, $saved->venueId()?->value());
         $this->assertSame(3, $saved->organizerId()?->value());
     }
+
+    public function testConferenceFieldsRoundTripThroughWithId(): void
+    {
+        $event = new Event(
+            id: new EventId(1),
+            uid: 'uid',
+            name: 'Virtual Event',
+            description: '',
+            location: '',
+            start: new \DateTimeImmutable(),
+            duration: 60,
+            createdBy: 'admin',
+            type: EventType::EVENT,
+            access: AccessLevel::PUBLIC,
+            conferenceUrl: 'https://zoom.example.com/j/123',
+            conferenceLabel: 'Zoom',
+        );
+
+        $this->assertSame('https://zoom.example.com/j/123', $event->conferenceUrl());
+        $this->assertSame('Zoom', $event->conferenceLabel());
+
+        $copy = $event->withId(new EventId(9));
+        $this->assertSame('https://zoom.example.com/j/123', $copy->conferenceUrl());
+        $this->assertSame('Zoom', $copy->conferenceLabel());
+    }
 }

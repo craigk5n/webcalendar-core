@@ -39,6 +39,8 @@ abstract class AbstractEntry
         protected readonly ?string $image = null,
         protected readonly ?VenueId $venueId = null,
         protected readonly ?OrganizerId $organizerId = null,
+        protected readonly ?string $conferenceUrl = null,
+        protected readonly ?string $conferenceLabel = null,
     ) {
         if (empty(trim($this->name))) {
             throw new \InvalidArgumentException('Name cannot be empty.');
@@ -148,6 +150,22 @@ abstract class AbstractEntry
     public function organizerId(): ?OrganizerId
     {
         return $this->organizerId;
+    }
+
+    /**
+     * Virtual/hybrid meeting URL (RFC 7986 CONFERENCE) — Epic 26.
+     */
+    public function conferenceUrl(): ?string
+    {
+        return $this->conferenceUrl;
+    }
+
+    /**
+     * Display label for the meeting link (e.g. "Zoom", "Google Meet").
+     */
+    public function conferenceLabel(): ?string
+    {
+        return $this->conferenceLabel;
     }
 
     public function end(): \DateTimeImmutable

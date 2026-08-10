@@ -570,4 +570,55 @@ final class EventMapperTest extends TestCase
     {
         $this->assertNull($this->mapper->extractOrganizer(new VEvent()));
     }
+
+    // ── Epic 26: RFC 7986 CONFERENCE ────────────────────────────────
+
+    public function testToVEventEmitsConferenceWithLabelAndUriValue(): void
+    {
+        $event = new Event(
+            id: new EventId(1),
+            uid: 'uid-conf',
+            name: 'Virtual Event',
+            description: '',
+            location: '',
+            start: new \DateTimeImmutable('2026-09-10 10:00:00'),
+            duration: 60,
+            createdBy: 'admin',
+            type: EventType::EVENT,
+            access: AccessLevel::PUBLIC,
+            conferenceUrl: 'https://zoom.example.com/j/123',
+            conferenceLabel: 'Zoom',
+        );
+
+        $vevent = $this->mapper->toVEvent($event);
+
+        $this->assertSame('https://zoom.example.com/j/123', $vevent->getConference());
+        $prop = $vevent->getProperty('CONFERENCE');
+        $this->assertNotNull($prop);
+        $this->assertSame('URI', $prop->getParameter('VALUE'));
+        $this->assertSame('Zoom', $prop->getParameter('LABEL'));
+    }
+
+    public function testToVEventOmitsConferenceWhenAbsent(): void
+    {
+        $vevent = $this->mapper->toVEvent($this->placedEvent());
+
+        $this->assertNull($vevent->getProperty('CONFERENCE'));
+    }
+
+    public function testFromVEventReadsConferenceAndLabel(): void
+    {
+        $vevent = new VEvent();
+        $vevent->setUid('uid-conf');
+        $vevent->setSummary('Virtual Event');
+        $vevent->setDtStart('20260910T100000');
+        $vevent->setDuration('PT1H');
+        $vevent->setConference('https://meet.example.com/abc');
+        $vevent->getProperty('CONFERENCE')?->setParameter('LABEL', 'Google Meet');
+
+        $event = $this->mapper->fromVEvent($vevent, 'admin');
+
+        $this->assertSame('https://meet.example.com/abc', $event->conferenceUrl());
+        $this->assertSame('Google Meet', $event->conferenceLabel());
+    }
 }

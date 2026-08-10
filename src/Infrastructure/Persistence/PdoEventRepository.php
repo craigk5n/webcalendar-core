@@ -356,6 +356,8 @@ final class PdoEventRepository implements EventRepositoryInterface
                 'mod_time' => (int)$now->format('His'),
                 'venue_id' => $event->venueId()?->value(),
                 'organizer_id' => $event->organizerId()?->value(),
+                'conference' => $event->conferenceUrl(),
+                'conference_label' => $event->conferenceLabel(),
             ];
 
             if ($isNew) {
@@ -363,11 +365,11 @@ final class PdoEventRepository implements EventRepositoryInterface
                         (cal_id, cal_create_by, cal_date, cal_time, cal_duration, cal_name,
                          cal_description, cal_location, cal_type, cal_access, cal_uid,
                          cal_sequence, cal_status, cal_image, cal_mod_date, cal_mod_time,
-                         cal_venue_id, cal_organizer_id)
+                         cal_venue_id, cal_organizer_id, cal_conference, cal_conference_label)
                         VALUES (:id, :create_by, :date, :time, :duration, :name,
                                 :description, :location, :type, :access, :uid,
                                 :sequence, :status, :image, :mod_date, :mod_time,
-                                :venue_id, :organizer_id)";
+                                :venue_id, :organizer_id, :conference, :conference_label)";
             } else {
                 $sql = "UPDATE {$this->tablePrefix}webcal_entry SET
                         cal_create_by = :create_by,
@@ -386,7 +388,9 @@ final class PdoEventRepository implements EventRepositoryInterface
                         cal_mod_date = :mod_date,
                         cal_mod_time = :mod_time,
                         cal_venue_id = :venue_id,
-                        cal_organizer_id = :organizer_id
+                        cal_organizer_id = :organizer_id,
+                        cal_conference = :conference,
+                        cal_conference_label = :conference_label
                         WHERE cal_id = :id";
             }
 
@@ -693,6 +697,12 @@ final class PdoEventRepository implements EventRepositoryInterface
                 : null,
             organizerId: is_numeric($row['cal_organizer_id'] ?? null)
                 ? new \WebCalendar\Core\Domain\ValueObject\OrganizerId((int)$row['cal_organizer_id'])
+                : null,
+            conferenceUrl: is_string($row['cal_conference'] ?? null) && $row['cal_conference'] !== ''
+                ? $row['cal_conference']
+                : null,
+            conferenceLabel: is_string($row['cal_conference_label'] ?? null) && $row['cal_conference_label'] !== ''
+                ? $row['cal_conference_label']
                 : null,
         );
     }

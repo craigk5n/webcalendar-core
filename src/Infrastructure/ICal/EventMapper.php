@@ -127,6 +127,8 @@ final class EventMapper
             status: $this->extractStringProperty($vevent, 'STATUS'),
             allDay: $allDay,
             image: $vevent->getImage(),
+            conferenceUrl: $vevent->getConference(),
+            conferenceLabel: $vevent->getProperty('CONFERENCE')?->getParameter('LABEL'),
         );
     }
 
@@ -149,6 +151,16 @@ final class EventMapper
         if ($venue !== null && $venue->hasCoordinates()) {
             /** @psalm-suppress PossiblyNullArgument -- hasCoordinates() guarantees both */
             $vevent->setGeo((float) $venue->latitude(), (float) $venue->longitude());
+        }
+
+        // RFC 7986 CONFERENCE — the virtual-meeting link (Epic 26).
+        if ($event->conferenceUrl() !== null) {
+            $vevent->setConference($event->conferenceUrl());
+            $conference = $vevent->getProperty('CONFERENCE');
+            $conference?->setParameter('VALUE', 'URI');
+            if ($event->conferenceLabel() !== null) {
+                $conference?->setParameter('LABEL', $event->conferenceLabel());
+            }
         }
 
         // RFC 5545 ORGANIZER values must be cal-addresses (mailto:); an

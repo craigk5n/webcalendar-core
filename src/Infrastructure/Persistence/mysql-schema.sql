@@ -51,6 +51,7 @@ CREATE TABLE webcal_entry (
   cal_geo_lon DECIMAL(10,7) DEFAULT NULL,
   cal_color VARCHAR(16) DEFAULT NULL,
   cal_conference VARCHAR(255) DEFAULT NULL,
+  cal_conference_label VARCHAR(60) DEFAULT NULL,
   cal_organizer VARCHAR(255) DEFAULT NULL,
   cal_created INT DEFAULT NULL,
   cal_created_time INT DEFAULT NULL,

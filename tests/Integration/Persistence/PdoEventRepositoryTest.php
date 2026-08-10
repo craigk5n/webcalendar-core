@@ -595,4 +595,45 @@ final class PdoEventRepositoryTest extends RepositoryTestCase
         $this->assertNull($refetched->venueId());
         $this->assertNull($refetched->organizerId());
     }
+
+    public function testConferenceFieldsRoundTrip(): void
+    {
+        $this->repository->save(new Event(
+            id: new EventId(0),
+            uid: 'uid-conf-1',
+            name: 'Virtual Standup',
+            description: '',
+            location: '',
+            start: new \DateTimeImmutable('2026-09-10 10:00:00'),
+            duration: 30,
+            createdBy: 'admin',
+            type: EventType::EVENT,
+            access: AccessLevel::PUBLIC,
+            conferenceUrl: 'https://meet.example.com/abc',
+            conferenceLabel: 'Google Meet',
+        ));
+
+        $found = $this->repository->findByUid('uid-conf-1');
+        $this->assertNotNull($found);
+        $this->assertSame('https://meet.example.com/abc', $found->conferenceUrl());
+        $this->assertSame('Google Meet', $found->conferenceLabel());
+
+        // Clearing persists (meeting cancelled, event kept).
+        $this->repository->save(new Event(
+            id: $found->id(),
+            uid: 'uid-conf-1',
+            name: 'Virtual Standup',
+            description: '',
+            location: '',
+            start: new \DateTimeImmutable('2026-09-10 10:00:00'),
+            duration: 30,
+            createdBy: 'admin',
+            type: EventType::EVENT,
+            access: AccessLevel::PUBLIC,
+        ));
+        $cleared = $this->repository->findByUid('uid-conf-1');
+        $this->assertNotNull($cleared);
+        $this->assertNull($cleared->conferenceUrl());
+        $this->assertNull($cleared->conferenceLabel());
+    }
 }

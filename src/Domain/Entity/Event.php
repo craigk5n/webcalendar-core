@@ -45,6 +45,8 @@ final class Event extends AbstractEntry
             $this->image,
             $this->venueId,
             $this->organizerId,
+            $this->conferenceUrl,
+            $this->conferenceLabel,
         );
     }
 }
