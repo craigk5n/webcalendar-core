@@ -198,4 +198,41 @@ final class CategoryServiceTest extends TestCase
     $this->expectException(\DomainException::class);
     $this->categoryService->deleteCategory(999, null, $actor);
   }
+
+  // ── Epic 23: tags ───────────────────────────────────────────────
+
+  public function testGetAllTagsDelegatesToTheRepository(): void
+  {
+    $tag = new Category(3, null, 'outdoors', null, true, isTag: true);
+    $this->categoryRepository->expects($this->once())
+      ->method('findAllTags')
+      ->willReturn([$tag]);
+
+    $this->assertSame([$tag], $this->categoryService->getAllTags());
+  }
+
+  public function testMatchOrCreateTagReturnsTheExistingTag(): void
+  {
+    $existing = new Category(3, null, 'outdoors', null, true, isTag: true);
+    $this->categoryRepository->method('findTagByName')->with('outdoors')->willReturn($existing);
+    $this->categoryRepository->expects($this->never())->method('save');
+
+    $this->assertSame($existing, $this->categoryService->matchOrCreateTag('outdoors', $this->createUser('jdoe')));
+  }
+
+  public function testMatchOrCreateTagCreatesAGlobalTagWhenMissing(): void
+  {
+    $this->categoryRepository->method('findTagByName')->willReturn(null);
+    $this->categoryRepository->method('nextId')->willReturn(7);
+    $this->categoryRepository->expects($this->once())
+      ->method('save')
+      ->with($this->callback(
+        static fn (Category $tag): bool => $tag->isTag() && $tag->isGlobal() && $tag->name() === 'music' && $tag->id() === 7
+      ));
+
+    $created = $this->categoryService->matchOrCreateTag('music', $this->createUser('jdoe'));
+
+    $this->assertTrue($created->isTag());
+    $this->assertSame(7, $created->id());
+  }
 }

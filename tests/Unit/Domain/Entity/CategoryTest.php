@@ -39,4 +39,27 @@ final class CategoryTest extends TestCase
         $this->assertNull($category->owner());
         $this->assertTrue($category->isGlobal());
     }
+
+    // ── Epic 23: tags (flat, global category variant) ─────────────
+
+    public function testIsNotATagByDefault(): void
+    {
+        $category = new Category(id: 1, owner: null, name: 'Work', color: null);
+
+        $this->assertFalse($category->isTag());
+    }
+
+    public function testTagIsGlobalAndFlat(): void
+    {
+        $tag = new Category(id: 3, owner: null, name: 'outdoors', color: null, isTag: true);
+
+        $this->assertTrue($tag->isTag());
+        $this->assertTrue($tag->isGlobal());
+    }
+
+    public function testOwnedTagIsRejected(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        new Category(id: 3, owner: 'jdoe', name: 'mine', color: null, isTag: true);
+    }
 }

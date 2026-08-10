@@ -40,6 +40,43 @@ final class CategoryService
     }
 
     /**
+     * All tags, ordered by name — Epic 23. Tags are global, flat labels
+     * stored as a category variant; category listings never include them.
+     *
+     * @return Category[]
+     */
+    public function getAllTags(): array
+    {
+        return $this->categoryRepository->findAllTags();
+    }
+
+    /**
+     * Returns the tag already stored under this name (case-insensitive),
+     * or creates it. Import paths use this so repeated imports never
+     * duplicate tags.
+     */
+    public function matchOrCreateTag(string $name, User $actor): Category
+    {
+        $existing = $this->categoryRepository->findTagByName($name);
+        if ($existing !== null) {
+            return $existing;
+        }
+
+        $tag = new Category(
+            id: $this->categoryRepository->nextId(),
+            owner: null,
+            name: $name,
+            color: null,
+            enabled: true,
+            isTag: true,
+        );
+        $this->logger->info('Tag created', ['id' => $tag->id(), 'name' => $tag->name(), 'actor' => $actor->login()]);
+        $this->categoryRepository->save($tag);
+
+        return $tag;
+    }
+
+    /**
      * Creates a new category.
      */
     public function createCategory(Category $category, User $actor): void

@@ -552,4 +552,75 @@ final class PdoCategoryRepositoryTest extends RepositoryTestCase
              VALUES ($calId, 'Test Event $calId', 20260214, 100000, 60, 'admin', 'E', 'P')"
         );
     }
+
+    // ── Epic 23: tags (flat, global category variant) ──────────────────
+
+    public function testTagFlagRoundTrips(): void
+    {
+        $this->repository->save(new Category(1, null, 'outdoors', null, true, isTag: true));
+
+        $found = $this->repository->findByCompositeKey(1, '');
+        $this->assertNotNull($found);
+        $this->assertTrue($found->isTag());
+
+        // And flips off again on update.
+        $this->repository->save(new Category(1, null, 'outdoors', null, true, isTag: false));
+        $refetched = $this->repository->findByCompositeKey(1, '');
+        $this->assertNotNull($refetched);
+        $this->assertFalse($refetched->isTag());
+    }
+
+    public function testCategoryListingsExcludeTags(): void
+    {
+        $this->repository->save(new Category(1, null, 'Work', '#0073aa'));
+        $this->repository->save(new Category(2, null, 'outdoors', null, true, isTag: true));
+        $this->repository->save(new Category(3, 'jdoe', 'Personal', '#00ff00'));
+
+        $globalNames = array_map(static fn (Category $c): string => $c->name(), $this->repository->findAllGlobal());
+        $this->assertSame(['Work'], $globalNames);
+
+        $ownedNames = array_map(static fn (Category $c): string => $c->name(), $this->repository->findByOwner('jdoe'));
+        $this->assertSame(['Personal'], $ownedNames);
+
+        $this->assertNull($this->repository->findByName('outdoors'), 'findByName is a category lookup, not a tag lookup');
+    }
+
+    public function testFindAllTagsReturnsOnlyTagsOrderedByName(): void
+    {
+        $this->repository->save(new Category(1, null, 'Work', '#0073aa'));
+        $this->repository->save(new Category(2, null, 'zebra', null, true, isTag: true));
+        $this->repository->save(new Category(3, null, 'apple', null, true, isTag: true));
+
+        $names = array_map(static fn (Category $c): string => $c->name(), $this->repository->findAllTags());
+
+        $this->assertSame(['apple', 'zebra'], $names);
+    }
+
+    public function testFindTagByNameIsCaseInsensitiveAndTagOnly(): void
+    {
+        $this->repository->save(new Category(1, null, 'Music', '#0073aa'));
+        $this->repository->save(new Category(2, null, 'music', null, true, isTag: true));
+
+        $tag = $this->repository->findTagByName('MUSIC');
+        $this->assertNotNull($tag);
+        $this->assertTrue($tag->isTag());
+        $this->assertSame(2, $tag->id());
+
+        $this->assertNull($this->repository->findTagByName('Work'));
+    }
+
+    public function testTagAndOwnedCategoryCollidingOnCatIdStayIndependent(): void
+    {
+        // Composite-PK fixture rule: two rows at cat_id=1 with different
+        // owners, one of them a tag.
+        $this->repository->save(new Category(1, null, 'shared-name', null, true, isTag: true));
+        $this->repository->save(new Category(1, 'jdoe', 'Personal', '#00ff00'));
+
+        $this->repository->deleteByCompositeKey(1, '');
+
+        $this->assertNull($this->repository->findTagByName('shared-name'));
+        $survivor = $this->repository->findByCompositeKey(1, 'jdoe');
+        $this->assertNotNull($survivor);
+        $this->assertSame('Personal', $survivor->name());
+    }
 }

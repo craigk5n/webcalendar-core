@@ -214,6 +214,7 @@ CREATE TABLE webcal_categories (
     cat_name VARCHAR(80) NOT NULL,
     cat_color VARCHAR(16) NULL, -- Increased to 16 for hex colors
     cat_status CHAR(1) DEFAULT 'A',
+    cat_is_tag CHAR(1) DEFAULT 'N',
     cat_icon_mime VARCHAR(32) DEFAULT NULL,
     cat_icon_blob BLOB DEFAULT NULL,
     PRIMARY KEY (cat_id, cat_owner)

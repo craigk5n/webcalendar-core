@@ -68,10 +68,10 @@ final class PdoCategoryRepository implements CategoryRepositoryInterface
     public function findByName(string $name, ?string $owner = null): ?Category
     {
         if ($owner !== null) {
-            $stmt = $this->pdo->prepare("SELECT * FROM {$this->tablePrefix}webcal_categories WHERE LOWER(cat_name) = LOWER(:name) AND cat_owner = :owner LIMIT 1");
+            $stmt = $this->pdo->prepare("SELECT * FROM {$this->tablePrefix}webcal_categories WHERE LOWER(cat_name) = LOWER(:name) AND cat_owner = :owner AND {$this->notATag()} LIMIT 1");
             $stmt->execute(['name' => $name, 'owner' => $owner]);
         } else {
-            $stmt = $this->pdo->prepare("SELECT * FROM {$this->tablePrefix}webcal_categories WHERE LOWER(cat_name) = LOWER(:name) LIMIT 1");
+            $stmt = $this->pdo->prepare("SELECT * FROM {$this->tablePrefix}webcal_categories WHERE LOWER(cat_name) = LOWER(:name) AND {$this->notATag()} LIMIT 1");
             $stmt->execute(['name' => $name]);
         }
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -81,6 +81,46 @@ final class PdoCategoryRepository implements CategoryRepositoryInterface
         }
 
         return $this->mapRowToCategory($row);
+    }
+
+    public function findTagByName(string $name): ?Category
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT * FROM {$this->tablePrefix}webcal_categories
+              WHERE LOWER(cat_name) = LOWER(:name) AND cat_is_tag = 'Y' LIMIT 1"
+        );
+        $stmt->execute(['name' => $name]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        return is_array($row) ? $this->mapRowToCategory($row) : null;
+    }
+
+    /**
+     * @return Category[] Tags ordered by name.
+     */
+    public function findAllTags(): array
+    {
+        $stmt = $this->pdo->query(
+            "SELECT * FROM {$this->tablePrefix}webcal_categories WHERE cat_is_tag = 'Y' ORDER BY cat_name"
+        );
+        $tags = [];
+        if ($stmt) {
+            while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                if (is_array($row)) {
+                    $tags[] = $this->mapRowToCategory($row);
+                }
+            }
+        }
+        return $tags;
+    }
+
+    /**
+     * Tag-exclusion predicate. NULL-tolerant so rows predating the
+     * `cat_is_tag` column (added Epic 23) keep counting as categories.
+     */
+    private function notATag(): string
+    {
+        return "(cat_is_tag IS NULL OR cat_is_tag <> 'Y')";
     }
 
     public function nextId(): int
@@ -95,7 +135,7 @@ final class PdoCategoryRepository implements CategoryRepositoryInterface
      */
     public function findByOwner(?string $owner): array
     {
-        $stmt = $this->pdo->prepare("SELECT * FROM {$this->tablePrefix}webcal_categories WHERE cat_owner = :owner");
+        $stmt = $this->pdo->prepare("SELECT * FROM {$this->tablePrefix}webcal_categories WHERE cat_owner = :owner AND {$this->notATag()}");
         $stmt->execute(['owner' => $owner ?? '']);
         $categories = [];
 
@@ -113,7 +153,7 @@ final class PdoCategoryRepository implements CategoryRepositoryInterface
      */
     public function findAllGlobal(): array
     {
-        $stmt = $this->pdo->query("SELECT * FROM {$this->tablePrefix}webcal_categories WHERE cat_owner = '' OR cat_owner IS NULL");
+        $stmt = $this->pdo->query("SELECT * FROM {$this->tablePrefix}webcal_categories WHERE (cat_owner = '' OR cat_owner IS NULL) AND {$this->notATag()}");
         $categories = [];
 
         if ($stmt) {
@@ -134,21 +174,23 @@ final class PdoCategoryRepository implements CategoryRepositoryInterface
             'owner' => $category->owner() ?? '',
             'name' => $category->name(),
             'color' => $category->color(),
-            'status' => $category->isEnabled() ? 'A' : 'D'
+            'status' => $category->isEnabled() ? 'A' : 'D',
+            'is_tag' => $category->isTag() ? 'Y' : 'N',
         ];
 
         $stmt = $this->pdo->prepare("SELECT 1 FROM {$this->tablePrefix}webcal_categories WHERE cat_id = :id AND cat_owner = :owner");
         $stmt->execute(['id' => $category->id(), 'owner' => $data['owner']]);
-        
+
         if ($stmt->fetch()) {
-            $sql = "UPDATE {$this->tablePrefix}webcal_categories SET 
-                    cat_name = :name, 
-                    cat_color = :color, 
-                    cat_status = :status 
+            $sql = "UPDATE {$this->tablePrefix}webcal_categories SET
+                    cat_name = :name,
+                    cat_color = :color,
+                    cat_status = :status,
+                    cat_is_tag = :is_tag
                     WHERE cat_id = :id AND cat_owner = :owner";
         } else {
-            $sql = "INSERT INTO {$this->tablePrefix}webcal_categories (cat_id, cat_owner, cat_name, cat_color, cat_status)
-                    VALUES (:id, :owner, :name, :color, :status)";
+            $sql = "INSERT INTO {$this->tablePrefix}webcal_categories (cat_id, cat_owner, cat_name, cat_color, cat_status, cat_is_tag)
+                    VALUES (:id, :owner, :name, :color, :status, :is_tag)";
         }
 
         $this->pdo->prepare($sql)->execute($data);
@@ -431,7 +473,8 @@ final class PdoCategoryRepository implements CategoryRepositoryInterface
             owner: $owner === '' ? null : $owner,
             name: $name,
             color: $color,
-            enabled: ($row['cat_status'] ?? 'A') === 'A'
+            enabled: ($row['cat_status'] ?? 'A') === 'A',
+            isTag: ($row['cat_is_tag'] ?? 'N') === 'Y',
         );
     }
 

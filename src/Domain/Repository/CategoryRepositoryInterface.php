@@ -24,7 +24,25 @@ interface CategoryRepositoryInterface
      */
     public function findByCompositeKey(int $id, string $owner): ?Category;
 
+    /**
+     * Category lookup by name (case-insensitive). Tags are excluded —
+     * use {@see findTagByName()} for those.
+     */
     public function findByName(string $name, ?string $owner = null): ?Category;
+
+    /**
+     * Tag lookup by name (case-insensitive) — the imports'
+     * match-or-create seam for tags.
+     */
+    public function findTagByName(string $name): ?Category;
+
+    /**
+     * All tags, ordered by name. Category listings (findByOwner,
+     * findAllGlobal) never include tags.
+     *
+     * @return Category[]
+     */
+    public function findAllTags(): array;
 
     public function nextId(): int;
 
