@@ -466,4 +466,108 @@ final class EventMapperTest extends TestCase
 
         $this->assertSame('Just plain text', $event->description());
     }
+
+    // ── Epic 22.3: venue / organizer mapping ────────────────────────
+
+    private function placedEvent(): Event
+    {
+        return new Event(
+            id: new EventId(1),
+            uid: 'uid-placed',
+            name: 'Placed Event',
+            description: '',
+            location: 'Old Location String',
+            start: new \DateTimeImmutable('2026-09-10 10:00:00'),
+            duration: 60,
+            createdBy: 'admin',
+            type: EventType::EVENT,
+            access: AccessLevel::PUBLIC,
+        );
+    }
+
+    public function testToVEventWithVenueWinsOverLocationAndSetsGeo(): void
+    {
+        $venue = new \WebCalendar\Core\Domain\Entity\Venue(
+            id: new \WebCalendar\Core\Domain\ValueObject\VenueId(5),
+            name: 'Community Hall',
+            latitude: 38.4496,
+            longitude: -78.8689,
+        );
+
+        $vevent = $this->mapper->toVEvent($this->placedEvent(), $venue);
+
+        $this->assertSame('Community Hall', $vevent->getLocation());
+        $geo = $vevent->getGeo();
+        $this->assertNotNull($geo);
+        $this->assertEqualsWithDelta(38.4496, $geo['latitude'], 0.0001);
+        $this->assertEqualsWithDelta(-78.8689, $geo['longitude'], 0.0001);
+    }
+
+    public function testToVEventWithoutVenueKeepsTheLocationString(): void
+    {
+        $vevent = $this->mapper->toVEvent($this->placedEvent());
+
+        $this->assertSame('Old Location String', $vevent->getLocation());
+    }
+
+    public function testToVEventWithOrganizerEmitsOrganizerProperty(): void
+    {
+        $organizer = new \WebCalendar\Core\Domain\Entity\Organizer(
+            id: new \WebCalendar\Core\Domain\ValueObject\OrganizerId(3),
+            name: 'Alice Organizer',
+            email: 'alice@example.com',
+        );
+
+        $vevent = $this->mapper->toVEvent($this->placedEvent(), null, $organizer);
+
+        $prop = $vevent->getProperty('ORGANIZER');
+        $this->assertNotNull($prop);
+        $this->assertSame('mailto:alice@example.com', $prop->getValue()->getRawValue());
+        $this->assertSame('Alice Organizer', $prop->getParameter('CN'));
+    }
+
+    public function testToVEventOmitsOrganizerWithoutEmail(): void
+    {
+        // RFC 5545 ORGANIZER values must be cal-addresses; a name alone
+        // cannot be expressed, so the property is omitted.
+        $organizer = new \WebCalendar\Core\Domain\Entity\Organizer(
+            id: new \WebCalendar\Core\Domain\ValueObject\OrganizerId(3),
+            name: 'Bob NoContact',
+        );
+
+        $vevent = $this->mapper->toVEvent($this->placedEvent(), null, $organizer);
+
+        $this->assertNull($vevent->getProperty('ORGANIZER'));
+    }
+
+    public function testExtractOrganizerReadsCnAndMailto(): void
+    {
+        $vevent = new VEvent();
+        $prop = GenericProperty::create('ORGANIZER', 'mailto:alice@example.com');
+        $prop->setParameter('CN', 'Alice Organizer');
+        $vevent->addProperty($prop);
+
+        $extracted = $this->mapper->extractOrganizer($vevent);
+
+        $this->assertNotNull($extracted);
+        $this->assertSame('Alice Organizer', $extracted['name']);
+        $this->assertSame('alice@example.com', $extracted['email']);
+    }
+
+    public function testExtractOrganizerWithoutCnFallsBackToTheAddress(): void
+    {
+        $vevent = new VEvent();
+        $vevent->addProperty(GenericProperty::create('ORGANIZER', 'mailto:bob@example.com'));
+
+        $extracted = $this->mapper->extractOrganizer($vevent);
+
+        $this->assertNotNull($extracted);
+        $this->assertSame('bob@example.com', $extracted['name']);
+        $this->assertSame('bob@example.com', $extracted['email']);
+    }
+
+    public function testExtractOrganizerIsNullWhenAbsent(): void
+    {
+        $this->assertNull($this->mapper->extractOrganizer(new VEvent()));
+    }
 }

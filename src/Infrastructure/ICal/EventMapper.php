@@ -133,13 +133,34 @@ final class EventMapper
     /**
      * Maps a Domain Event entity to a VEvent component.
      */
-    public function toVEvent(Event $event): VEvent
-    {
+    public function toVEvent(
+        Event $event,
+        ?\WebCalendar\Core\Domain\Entity\Venue $venue = null,
+        ?\WebCalendar\Core\Domain\Entity\Organizer $organizer = null,
+    ): VEvent {
         $vevent = new VEvent();
         $vevent->setUid($event->uid());
         $vevent->setSummary($event->name());
         $this->setDescription($vevent, $event->description());
-        $vevent->setLocation($event->location());
+
+        // Epic 22.3: a resolved venue wins over the legacy location string,
+        // and its coordinates become GEO.
+        $vevent->setLocation($venue !== null ? $venue->name() : $event->location());
+        if ($venue !== null && $venue->hasCoordinates()) {
+            /** @psalm-suppress PossiblyNullArgument -- hasCoordinates() guarantees both */
+            $vevent->setGeo((float) $venue->latitude(), (float) $venue->longitude());
+        }
+
+        // RFC 5545 ORGANIZER values must be cal-addresses (mailto:); an
+        // organizer without an email cannot be expressed and is omitted.
+        if ($organizer !== null && $organizer->email() !== null) {
+            $property = \Icalendar\Property\GenericProperty::create(
+                'ORGANIZER',
+                'mailto:' . $organizer->email()
+            );
+            $property->setParameter('CN', $organizer->name());
+            $vevent->addProperty($property);
+        }
 
         if ($event->isAllDay()) {
             // RFC 5545: all-day events use VALUE=DATE format
@@ -178,6 +199,38 @@ final class EventMapper
         }
 
         return $vevent;
+    }
+
+    /**
+     * The ORGANIZER property's name and email, for match-or-create on
+     * import (Epic 22.3). CN falls back to the mail address so an
+     * organizer without a display name still gets a usable entity name.
+     *
+     * @return array{name: string, email: string}|null Null when absent or
+     *         not a mailto: cal-address.
+     */
+    public function extractOrganizer(VEvent $vevent): ?array
+    {
+        $property = $vevent->getProperty('ORGANIZER');
+        if ($property === null) {
+            return null;
+        }
+
+        $value = $property->getValue()->getRawValue();
+        if (stripos($value, 'mailto:') !== 0) {
+            return null;
+        }
+        $email = substr($value, strlen('mailto:'));
+        if ($email === '') {
+            return null;
+        }
+
+        $cn = $property->getParameter('CN');
+
+        return [
+            'name' => $cn !== null && $cn !== '' ? $cn : $email,
+            'email' => $email,
+        ];
     }
 
     /**
