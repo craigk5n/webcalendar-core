@@ -7,7 +7,9 @@ namespace WebCalendar\Core\Domain\Entity;
 use WebCalendar\Core\Domain\ValueObject\EventId;
 use WebCalendar\Core\Domain\ValueObject\EventType;
 use WebCalendar\Core\Domain\ValueObject\AccessLevel;
+use WebCalendar\Core\Domain\ValueObject\OrganizerId;
 use WebCalendar\Core\Domain\ValueObject\Recurrence;
+use WebCalendar\Core\Domain\ValueObject\VenueId;
 
 /**
  * Base class for all calendar entries (Events, Tasks, Journals).
@@ -35,6 +37,8 @@ abstract class AbstractEntry
         protected readonly ?int $modDate = null,
         protected readonly ?int $modTime = null,
         protected readonly ?string $image = null,
+        protected readonly ?VenueId $venueId = null,
+        protected readonly ?OrganizerId $organizerId = null,
     ) {
         if (empty(trim($this->name))) {
             throw new \InvalidArgumentException('Name cannot be empty.');
@@ -134,6 +138,16 @@ abstract class AbstractEntry
     public function image(): ?string
     {
         return $this->image;
+    }
+
+    public function venueId(): ?VenueId
+    {
+        return $this->venueId;
+    }
+
+    public function organizerId(): ?OrganizerId
+    {
+        return $this->organizerId;
     }
 
     public function end(): \DateTimeImmutable

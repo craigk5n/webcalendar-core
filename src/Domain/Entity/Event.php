@@ -43,6 +43,8 @@ final class Event extends AbstractEntry
             $this->modDate,
             $this->modTime,
             $this->image,
+            $this->venueId,
+            $this->organizerId,
         );
     }
 }

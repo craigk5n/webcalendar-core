@@ -138,4 +138,69 @@ final class EventTest extends TestCase
 
         $this->assertSame(7, $event->id()->value());
     }
+
+    public function testEventCarriesOptionalVenueAndOrganizerReferences(): void
+    {
+        $event = new Event(
+            id: new EventId(1),
+            uid: 'uid',
+            name: 'Placed Event',
+            description: '',
+            location: 'Community Hall',
+            start: new \DateTimeImmutable(),
+            duration: 60,
+            createdBy: 'admin',
+            type: EventType::EVENT,
+            access: AccessLevel::PUBLIC,
+            venueId: new \WebCalendar\Core\Domain\ValueObject\VenueId(5),
+            organizerId: new \WebCalendar\Core\Domain\ValueObject\OrganizerId(3),
+        );
+
+        $this->assertSame(5, $event->venueId()?->value());
+        $this->assertSame(3, $event->organizerId()?->value());
+        // The legacy location string is retained alongside the reference.
+        $this->assertSame('Community Hall', $event->location());
+    }
+
+    public function testVenueAndOrganizerReferencesDefaultToNull(): void
+    {
+        $event = new Event(
+            id: new EventId(1),
+            uid: 'uid',
+            name: 'Plain Event',
+            description: '',
+            location: '',
+            start: new \DateTimeImmutable(),
+            duration: 0,
+            createdBy: 'admin',
+            type: EventType::EVENT,
+            access: AccessLevel::PUBLIC
+        );
+
+        $this->assertNull($event->venueId());
+        $this->assertNull($event->organizerId());
+    }
+
+    public function testWithIdCarriesVenueAndOrganizerReferences(): void
+    {
+        $event = new Event(
+            id: new EventId(0),
+            uid: 'uid',
+            name: 'Placed Event',
+            description: '',
+            location: '',
+            start: new \DateTimeImmutable(),
+            duration: 0,
+            createdBy: 'admin',
+            type: EventType::EVENT,
+            access: AccessLevel::PUBLIC,
+            venueId: new \WebCalendar\Core\Domain\ValueObject\VenueId(5),
+            organizerId: new \WebCalendar\Core\Domain\ValueObject\OrganizerId(3),
+        );
+
+        $saved = $event->withId(new EventId(9));
+
+        $this->assertSame(5, $saved->venueId()?->value());
+        $this->assertSame(3, $saved->organizerId()?->value());
+    }
 }
