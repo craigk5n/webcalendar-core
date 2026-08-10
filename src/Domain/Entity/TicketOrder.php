@@ -126,6 +126,27 @@ final class TicketOrder
         );
     }
 
+    /**
+     * The provider's payment reference, attached when checkout starts
+     * (before any status change).
+     */
+    public function withExternalRef(string $externalRef): self
+    {
+        return new self(
+            $this->id,
+            $this->ticketTypeId,
+            $this->eventId,
+            $this->email,
+            $this->name,
+            $this->quantity,
+            $this->amountMinor,
+            $this->currency,
+            $this->status,
+            $externalRef,
+            $this->createdAt,
+        );
+    }
+
     public function withId(int $id): self
     {
         return new self(
