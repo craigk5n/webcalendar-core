@@ -67,3 +67,37 @@ jobs:
 
     - name: Run Psalm Taint Analysis
       run: vendor/bin/psalm --taint-analysis --no-cache
+
+  php-compat:
+    # src/ ships inside webcalendar-wp's plugin zip, whose "Requires PHP" is
+    # 8.1, but every job above runs 8.2 — so nothing here would notice a
+    # syntax feature that breaks the minimum. This lints only src/, since
+    # only src/ ships, and needs no dependencies to do it.
+    name: PHP ${{ matrix.php }} compatibility (lint shipped code)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.1', '8.4']
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup PHP ${{ matrix.php }}
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: ${{ matrix.php }}
+
+    - name: Lint every shipped PHP file on ${{ matrix.php }}
+      shell: bash
+      run: |
+        set -uo pipefail
+        COUNT=$(find src -name '*.php' -type f | wc -l)
+        OUT=$(find src -name '*.php' -type f -print0 \
+          | xargs -0 -n60 -P4 php -l 2>&1 | grep -v '^No syntax errors' || true)
+        if [ -n "$OUT" ]; then
+          echo "::error::PHP ${{ matrix.php }} syntax errors in shipped code:"
+          echo "$OUT"
+          exit 1
+        fi
+        echo "All $COUNT shipped files parse on PHP ${{ matrix.php }}."
