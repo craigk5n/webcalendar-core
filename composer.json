@@ -53,7 +53,7 @@
   },
   "extra": {
     "branch-alias": {
-      "dev-main": "4.9.x-dev"
+      "dev-main": "4.10.x-dev"
     }
   },
   "minimum-stability": "stable",

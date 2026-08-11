@@ -270,6 +270,90 @@ final class EventMapper
     }
 
     /**
+     * The property naming which of an event's CATEGORIES are tags.
+     *
+     * RFC 5545 has no tag concept — CATEGORIES is the only labelling
+     * property, and RFC 7986 did not add one — so tags go out in CATEGORIES
+     * like everything else (other calendars then show them all) and are
+     * named a second time here. Import intersects the two to restore the
+     * distinction, and anything that does not understand this property
+     * simply sees one flat label list.
+     */
+    private const TAGS_PROPERTY = 'X-WEBCAL-TAGS';
+
+    /**
+     * Records which of the event's category names are tags.
+     *
+     * @param string[] $names
+     */
+    public function addTagNames(VEvent $vevent, array $names): void
+    {
+        if ([] === $names) {
+            return;
+        }
+
+        $vevent->addProperty(
+            \Icalendar\Property\GenericProperty::create(
+                self::TAGS_PROPERTY,
+                implode(',', array_map(
+                    // The writer round-trips this value verbatim rather than
+                    // treating it as a TEXT list, so the separator escaping
+                    // is ours to do — and to undo on the way back in.
+                    static fn (string $name): string => str_replace(['\\', ','], ['\\\\', '\\,'], $name),
+                    $names
+                ))
+            )
+        );
+    }
+
+    /**
+     * Tag names recorded on a VEvent, or [] when the property is absent.
+     *
+     * @return list<string>
+     */
+    public function extractTagNames(VEvent $vevent): array
+    {
+        $property = $vevent->getProperty(self::TAGS_PROPERTY);
+        if ($property === null) {
+            return [];
+        }
+
+        $raw = $property->getValue()->getRawValue();
+
+        // Split on commas that are not escaped, then unescape.
+        $names = [];
+        $current = '';
+        $escaped = false;
+        foreach (str_split($raw) as $char) {
+            if ($escaped) {
+                $current .= $char;
+                $escaped = false;
+                continue;
+            }
+            if ('\\' === $char) {
+                $escaped = true;
+                continue;
+            }
+            if (',' === $char) {
+                $names[] = $current;
+                $current = '';
+                continue;
+            }
+            $current .= $char;
+        }
+        $names[] = $current;
+
+        $result = [];
+        foreach ($names as $name) {
+            $name = trim($name);
+            if ('' !== $name) {
+                $result[] = $name;
+            }
+        }
+        return $result;
+    }
+
+    /**
      * Extract the best available description from a VEvent.
      *
      * Priority: STYLED-DESCRIPTION (RFC 9073) → X-ALT-DESC (Outlook) → DESCRIPTION (plain).

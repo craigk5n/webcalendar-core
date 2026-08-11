@@ -243,11 +243,43 @@ final class ImportService
             return;
         }
 
+        $names = $this->categoryNames($categories->getValue());
+
+        // X-WEBCAL-TAGS says which of the event's labels are tags; it does
+        // not add any. Iterating CATEGORIES rather than the tag list is what
+        // enforces that, and it matters: the two properties are one source
+        // of truth split in two, so anything that rewrites CATEGORIES — a
+        // hand edit, another calendar app — can leave the tag list naming
+        // labels the event no longer carries. Those are ignored here rather
+        // than resurrected as labels the file no longer claims.
+        $tagNames = $this->eventMapper->extractTagNames($component);
+
         $categoryIds = [];
-        foreach ($this->categoryNames($categories->getValue()) as $catName) {
+        $tagIds = [];
+        foreach ($names as $catName) {
+            if (in_array($catName, $tagNames, true)) {
+                $tag = $this->categoryRepository->findTagByName($catName);
+                if ($tag === null) {
+                    // Tags are global, so no owner — the entity rejects one.
+                    $this->categoryRepository->create(
+                        new Category($this->categoryRepository->nextId(), null, $catName, null, true, true)
+                    );
+                    $tag = $this->categoryRepository->findTagByName($catName);
+                }
+                if ($tag !== null) {
+                    $tagIds[] = $tag->id();
+                }
+                continue;
+            }
+
             $category = $this->categoryRepository->findByName($catName, $user->login());
             if ($category === null) {
-                $category = new Category(0, $user->login(), $catName, null);
+                // A real id, not 0: save() writes the id it is given, and the
+                // composite key is (cat_id, cat_owner). Creating every new
+                // category as id 0 made the second one an UPDATE of the
+                // first, so a file introducing two categories ended up with
+                // only the last — having overwritten the other.
+                $category = new Category($this->categoryRepository->nextId(), $user->login(), $catName, null);
                 $this->categoryRepository->create($category);
                 $category = $this->categoryRepository->findByName($catName, $user->login());
             }
@@ -259,10 +291,13 @@ final class ImportService
 
         // Assign the full set in one call. assignToEvent() replaces the event's
         // assignments wholesale (delete-then-insert), so a single call both
-        // preserves every category on the event (calling it per-name would keep
-        // only the last) and lets an update overwrite the previous set.
-        if ($categoryIds !== []) {
-            $this->categoryRepository->assignToEvent($event->id(), $user->login(), $categoryIds);
+        // preserves every label on the event (calling it per-name would keep
+        // only the last, and calling it once per kind would keep only the
+        // second kind) and lets an update overwrite the previous set.
+        // Categories lead so the colour-bearing label stays primary.
+        $labelIds = array_merge($categoryIds, $tagIds);
+        if ($labelIds !== []) {
+            $this->categoryRepository->assignToEvent($event->id(), $user->login(), $labelIds);
         }
     }
 

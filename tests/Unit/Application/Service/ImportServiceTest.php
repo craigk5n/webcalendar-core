@@ -163,6 +163,12 @@ ICS;
     /** @var list<string> */
     private array $lookedUpNames = [];
 
+    /** @var list<string> */
+    private array $lookedUpTagNames = [];
+
+    /** @var list<string> */
+    private array $createdTagNames = [];
+
     /**
      * Builds an ImportService wired to a category-repository mock. findByName
      * resolves any name to a stable id (hash of the name) so distinct names get
@@ -173,11 +179,28 @@ ICS;
         $this->categoryRepository = $this->createMock(CategoryRepositoryInterface::class);
         $this->assignCalls = [];
         $this->lookedUpNames = [];
+        $this->lookedUpTagNames = [];
+        $this->createdTagNames = [];
 
         $this->categoryRepository->method('findByName')
             ->willReturnCallback(function (string $name, ?string $owner = null): Category {
                 $this->lookedUpNames[] = $name;
                 return new Category($this->catId($name), $owner, $name, null);
+            });
+
+        // Tags are global and resolve by their own lookup, so a name that is
+        // both a tag and a category on the same site stays two rows.
+        $this->categoryRepository->method('findTagByName')
+            ->willReturnCallback(function (string $name): Category {
+                $this->lookedUpTagNames[] = $name;
+                return new Category($this->tagId($name), null, $name, null, true, true);
+            });
+
+        $this->categoryRepository->method('create')
+            ->willReturnCallback(function (Category $category): void {
+                if ($category->isTag()) {
+                    $this->createdTagNames[] = $category->name();
+                }
             });
 
         $this->categoryRepository->method('assignToEvent')
@@ -196,6 +219,12 @@ ICS;
     private function catId(string $name): int
     {
         return (int) sprintf('%u', crc32($name)) % 100000 + 1;
+    }
+
+    /** Distinct from catId(), so a same-named tag and category cannot pass for each other. */
+    private function tagId(string $name): int
+    {
+        return $this->catId($name) + 500000;
     }
 
     private static function icsWithCategories(string $categoriesLine): string
@@ -308,5 +337,101 @@ ICS;
         $service->importIcal(self::icsWithCategories('Work'), $user, false);
 
         $this->assertSame([], $this->assignCalls, 'skip path must not modify categories');
+    }
+
+    // ---- Tags (X-WEBCAL-TAGS) -----------------------------------------------
+    //
+    // RFC 5545 has only CATEGORIES, so an export writes every label there —
+    // other calendars then show them all — and names which are tags a second
+    // time in X-WEBCAL-TAGS. Import uses that to restore the distinction.
+
+    private static function icsWithLabels(string $categoriesLine, ?string $tagsLine): string
+    {
+        $tags = null === $tagsLine ? '' : "X-WEBCAL-TAGS:{$tagsLine}\n";
+        return "BEGIN:VCALENDAR\n"
+            . "VERSION:2.0\n"
+            . "PRODID:-//WebCalendar//NONSGML v1.0//EN\n"
+            . "BEGIN:VEVENT\n"
+            . "UID:uid-1\n"
+            . "SUMMARY:Event 1\n"
+            . "DTSTART:20260211T100000Z\n"
+            . "DURATION:PT1H\n"
+            . "CATEGORIES:{$categoriesLine}\n"
+            . $tags
+            . "END:VEVENT\n"
+            . "END:VCALENDAR\n";
+    }
+
+    private function importLabels(string $categories, ?string $tags): void
+    {
+        $service = $this->serviceWithCategories();
+        $user = new User('jdoe', 'John', 'Doe', 'john@example.com', false, true);
+
+        $persisted = $this->existingEvent(7, 'uid-1');
+        $this->eventRepository->method('findByUid')
+            ->willReturnOnConsecutiveCalls(null, $persisted);
+
+        $service->importIcal(self::icsWithLabels($categories, $tags), $user);
+    }
+
+    public function testNamesListedAsTagsAreCreatedAsTags(): void
+    {
+        $this->importLabels('Work,outdoors', 'outdoors');
+
+        $this->assertSame(['Work'], $this->lookedUpNames, 'only the category is looked up as a category');
+        $this->assertSame(['outdoors'], $this->lookedUpTagNames);
+    }
+
+    public function testWithoutTheTagPropertyEverythingStaysACategory(): void
+    {
+        // Files from other calendars, and WebCalendar exports predating this,
+        // carry no X-WEBCAL-TAGS. Behaviour there must not change.
+        $this->importLabels('Work,outdoors', null);
+
+        $this->assertSame(['Work', 'outdoors'], $this->lookedUpNames);
+        $this->assertSame([], $this->lookedUpTagNames);
+    }
+
+    /**
+     * A tag name that is not also in CATEGORIES is ignored.
+     *
+     * The two properties are one source of truth split in two, so anything
+     * that rewrites CATEGORIES — a hand edit, another calendar app — can
+     * leave the tag list naming labels the event no longer has. Intersecting
+     * degrades that to "it became a category" instead of resurrecting a
+     * label the file no longer claims.
+     */
+    public function testTagNamesAbsentFromCategoriesAreIgnored(): void
+    {
+        $this->importLabels('Work', 'outdoors');
+
+        $this->assertSame(['Work'], $this->lookedUpNames);
+        $this->assertSame([], $this->lookedUpTagNames);
+    }
+
+    public function testTagsAndCategoriesAreAssignedTogetherInOneCall(): void
+    {
+        // Same reason as categories: assignToEvent replaces the whole set, so
+        // two calls would leave only the second kind on the event.
+        $this->importLabels('Work,outdoors,family', 'outdoors,family');
+
+        $this->assertCount(1, $this->assignCalls);
+        $this->assertSame(
+            [$this->catId('Work'), $this->tagId('outdoors'), $this->tagId('family')],
+            $this->assignCalls[0]['ids'],
+            'categories first, so the colour-bearing label stays primary'
+        );
+    }
+
+    // A tag name containing a comma is covered by the export→import
+    // round-trip in ExportServiceTest, where the writer does the encoding.
+    // Hand-writing the escaped form here would only assert my guess at it.
+
+    public function testAnExistingTagIsReusedRatherThanRecreated(): void
+    {
+        $this->importLabels('outdoors', 'outdoors');
+
+        $this->assertSame(['outdoors'], $this->lookedUpTagNames);
+        $this->assertSame([], $this->createdTagNames, 'findTagByName already resolved it');
     }
 }
