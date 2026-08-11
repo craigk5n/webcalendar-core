@@ -63,24 +63,16 @@ final class EventDuplicationService
             throw new \InvalidArgumentException(sprintf('An event with uid "%s" already exists.', $newUid));
         }
 
-        $copy = new Event(
+        // Everything not named here is carried over by with(), so a field
+        // added to Event later cannot silently go missing from copies.
+        // Listing fields explicitly is what lost duplicates their meeting
+        // link when the conference fields were introduced.
+        $copy = $original->with(
             id: new EventId(0),
             uid: $newUid,
             name: $newName ?? $original->name(),
-            description: $original->description(),
-            location: $original->location(),
-            start: $original->start(),
-            duration: $original->duration(),
             createdBy: $actor->login(),
-            type: $original->type(),
-            access: $original->access(),
-            recurrence: $original->recurrence(),
             sequence: 0,
-            status: $original->status(),
-            allDay: $original->isAllDay(),
-            image: $original->image(),
-            venueId: $original->venueId(),
-            organizerId: $original->organizerId(),
         );
 
         $this->eventRepository->save($copy);

@@ -80,8 +80,49 @@ final class EventDuplicationServiceTest extends TestCase
             type: EventType::REPEATING_EVENT,
             access: AccessLevel::PUBLIC,
             recurrence: new Recurrence(new RecurrenceRule('FREQ=WEEKLY;COUNT=8')),
+            image: 'https://example.com/class.png',
             venueId: new \WebCalendar\Core\Domain\ValueObject\VenueId(5),
+            organizerId: new \WebCalendar\Core\Domain\ValueObject\OrganizerId(7),
+            conferenceUrl: 'https://meet.example.com/class',
+            conferenceLabel: 'Google Meet',
         );
+    }
+
+    /**
+     * Every descriptive field the original carries must reach the copy.
+     *
+     * Written field-by-field on purpose: the duplicate used to be built with
+     * a hand-rolled constructor call that simply never mentioned the
+     * conference fields, so they were silently dropped. Anything added to
+     * Event from here on is carried by with() and covered by the
+     * Event::with() reflection guard.
+     */
+    public function testDuplicateCarriesEveryDescriptiveField(): void
+    {
+        $this->events->method('findById')->with(new EventId(10))->willReturn($this->original());
+        $capturedSave = null;
+        $this->wireSaveThenFind($capturedSave);
+
+        $this->service->duplicate(new EventId(10), 'copy-uid', $this->actor());
+
+        $this->assertNotNull($capturedSave);
+        $original = $this->original();
+        $this->assertSame($original->description(), $capturedSave->description());
+        $this->assertSame($original->location(), $capturedSave->location());
+        $this->assertEquals($original->start(), $capturedSave->start());
+        $this->assertSame($original->duration(), $capturedSave->duration());
+        $this->assertSame($original->type(), $capturedSave->type());
+        $this->assertSame($original->access(), $capturedSave->access());
+        $this->assertEquals($original->recurrence(), $capturedSave->recurrence());
+        $this->assertSame($original->status(), $capturedSave->status());
+        $this->assertSame($original->isAllDay(), $capturedSave->isAllDay());
+        $this->assertSame($original->image(), $capturedSave->image());
+        $this->assertEquals($original->venueId(), $capturedSave->venueId());
+        $this->assertEquals($original->organizerId(), $capturedSave->organizerId());
+        // Regression: a duplicated online/hybrid event kept its physical
+        // location but lost the link people actually join through.
+        $this->assertSame($original->conferenceUrl(), $capturedSave->conferenceUrl());
+        $this->assertSame($original->conferenceLabel(), $capturedSave->conferenceLabel());
     }
 
     /**
