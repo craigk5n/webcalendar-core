@@ -65,6 +65,25 @@ final class ExternalMapperTest extends TestCase
         );
     }
 
+    /**
+     * An empty timezone must fall back to UTC, not cost the event its date.
+     *
+     * `new \DateTimeZone('')` throws, and the surrounding catch turns that
+     * into a null start — so an event that merely had a blank timezone
+     * string was imported with no date at all.
+     */
+    public function testEventbriteBlankTimezoneFallsBackToUtc(): void
+    {
+        $payload = $this->fixture('eventbrite-event.json');
+        assert(is_array($payload['start']));
+        $payload['start']['timezone'] = '';
+
+        $mapped = (new EventbriteMapper('example.test'))->map($payload, 'importer');
+
+        $this->assertSame('2026-10-03 10:00', $mapped->event->start()->format('Y-m-d H:i'));
+        $this->assertSame('UTC', $mapped->event->start()->getTimezone()->getName());
+    }
+
     public function testEventbriteRejectsPayloadWithoutId(): void
     {
         $payload = $this->fixture('eventbrite-event.json');

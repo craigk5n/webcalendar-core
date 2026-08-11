@@ -129,9 +129,10 @@ final class EventDuplicationServiceTest extends TestCase
      * Wire findByUid/save so 'copy-uid' resolves only AFTER save ran —
      * the pre-save collision check must see it as free.
      *
-     * @return Event The event findByUid returns post-save.
+     * Callers assert against $capturedSave (what the service tried to
+     * persist), so the stored entity is not returned.
      */
-    private function wireSaveThenFind(?Event &$capturedSave): Event
+    private function wireSaveThenFind(?Event &$capturedSave): void
     {
         $saved = $this->original()->withId(new EventId(99));
         $stored = null;
@@ -146,7 +147,6 @@ final class EventDuplicationServiceTest extends TestCase
                 return $uid === 'copy-uid' ? $stored : null;
             }
         );
-        return $saved;
     }
 
     public function testDuplicateCopiesTheWholeSeriesUnderANewIdentity(): void

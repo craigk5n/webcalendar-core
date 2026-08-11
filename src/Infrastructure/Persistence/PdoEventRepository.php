@@ -172,7 +172,7 @@ final class PdoEventRepository implements EventRepositoryInterface
 
         if ($criteria->categoryIds !== []) {
             $placeholders = [];
-            foreach (array_values($criteria->categoryIds) as $i => $categoryId) {
+            foreach ($criteria->categoryIds as $i => $categoryId) {
                 $placeholders[] = ":cat_$i";
                 $params["cat_$i"] = $categoryId;
             }
@@ -182,7 +182,7 @@ final class PdoEventRepository implements EventRepositoryInterface
 
         if ($criteria->venueIds !== []) {
             $placeholders = [];
-            foreach (array_values($criteria->venueIds) as $i => $venueId) {
+            foreach ($criteria->venueIds as $i => $venueId) {
                 $placeholders[] = ":venue_$i";
                 $params["venue_$i"] = $venueId;
             }
@@ -191,7 +191,7 @@ final class PdoEventRepository implements EventRepositoryInterface
 
         if ($criteria->organizerIds !== []) {
             $placeholders = [];
-            foreach (array_values($criteria->organizerIds) as $i => $organizerId) {
+            foreach ($criteria->organizerIds as $i => $organizerId) {
                 $placeholders[] = ":org_$i";
                 $params["org_$i"] = $organizerId;
             }
@@ -200,7 +200,7 @@ final class PdoEventRepository implements EventRepositoryInterface
 
         if ($criteria->types !== []) {
             $placeholders = [];
-            foreach (array_values($criteria->types) as $i => $type) {
+            foreach ($criteria->types as $i => $type) {
                 $placeholders[] = ":type_$i";
                 $params["type_$i"] = $type->value;
             }

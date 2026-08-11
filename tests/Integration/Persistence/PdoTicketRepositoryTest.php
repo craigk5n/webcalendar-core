@@ -146,6 +146,10 @@ final class PdoTicketRepositoryTest extends RepositoryTestCase
             email: 'guest@example.com',
         ));
 
+        // Saving assigns the id, so the caller can act on the attendee it
+        // just created without re-reading it.
+        $this->assertGreaterThan(0, $attendee->id());
+
         $found = $this->repository->findAttendeeByToken('abcdef0123456789abcdef0123456789');
         $this->assertNotNull($found);
         $this->assertSame('Guest One', $found->name());

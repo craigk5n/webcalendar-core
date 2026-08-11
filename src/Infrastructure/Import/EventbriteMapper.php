@@ -141,7 +141,12 @@ final class EventbriteMapper
         if (!is_array($raw) || !is_scalar($raw['local'] ?? null)) {
             return null;
         }
-        $timezone = is_scalar($raw['timezone'] ?? null) ? (string) $raw['timezone'] : 'UTC';
+        // An empty timezone string would make DateTimeZone throw, costing the
+        // event its start date entirely; treat it the same as a missing one.
+        $timezone = is_scalar($raw['timezone'] ?? null) ? (string) $raw['timezone'] : '';
+        if ('' === $timezone) {
+            $timezone = 'UTC';
+        }
         try {
             return new \DateTimeImmutable((string) $raw['local'], new \DateTimeZone($timezone));
         } catch (\Exception) {

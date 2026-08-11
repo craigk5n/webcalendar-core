@@ -154,12 +154,14 @@ final class EventMapper
         }
 
         // RFC 7986 CONFERENCE — the virtual-meeting link (Epic 26).
-        if ($event->conferenceUrl() !== null) {
-            $vevent->setConference($event->conferenceUrl());
-            $conference = $vevent->getProperty('CONFERENCE');
+        $conferenceUrl = $event->conferenceUrl();
+        if ($conferenceUrl !== null) {
+            $vevent->setConference($conferenceUrl);
+            $conference     = $vevent->getProperty('CONFERENCE');
             $conference?->setParameter('VALUE', 'URI');
-            if ($event->conferenceLabel() !== null) {
-                $conference?->setParameter('LABEL', $event->conferenceLabel());
+            $conferenceLabel = $event->conferenceLabel();
+            if ($conferenceLabel !== null) {
+                $conference?->setParameter('LABEL', $conferenceLabel);
             }
         }
 
