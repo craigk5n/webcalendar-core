@@ -164,6 +164,15 @@ final class PdoEventRepository implements EventRepositoryInterface
             $params['kw_desc'] = $like;
         }
 
+        if ($criteria->eventIds !== []) {
+            $placeholders = [];
+            foreach ($criteria->eventIds as $i => $eventId) {
+                $placeholders[] = ":eid_$i";
+                $params["eid_$i"] = $eventId;
+            }
+            $where[] = 'e.cal_id IN (' . implode(', ', $placeholders) . ')';
+        }
+
         if ($criteria->range !== null) {
             $where[] = 'e.cal_date BETWEEN :range_start AND :range_end';
             $params['range_start'] = (int)$criteria->range->startDate()->format('Ymd');

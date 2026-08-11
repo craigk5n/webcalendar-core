@@ -15,6 +15,15 @@ use WebCalendar\Core\Domain\ValueObject\EventType;
  * Tags share the categories table, so tag filtering is category-id
  * filtering with tag ids.
  *
+ * `eventIds` narrows an id set the caller has already decided on, rather
+ * than searching the table from scratch. A calendar view needs this: it
+ * has resolved which events the viewer may see, and has picked its date
+ * window with recurrence-aware logic (a weekly event starting in January
+ * belongs in a March view, which the `range` filter's plain `cal_date`
+ * comparison would exclude). Filtering that set here keeps the permission
+ * and recurrence rules where they already work, and can only ever remove
+ * rows — so a Filter Bar built on it cannot widen what a viewer sees.
+ *
  * Distance filtering is a bounding-box prefilter around the given point
  * (portable across MySQL/PostgreSQL/SQLite): matches fall within the
  * box that circumscribes the radius, so corner results up to ~1.41×
@@ -36,6 +45,9 @@ final class SearchCriteria
      * @param ?float $radiusKm       Distance filter radius (with the other two).
      * @param int $limit             Page size, 1..MAX_LIMIT.
      * @param int $offset            Rows to skip.
+     * @param list<int> $eventIds    Restrict to these event ids; `[]` means
+     *        no restriction. Declared last to keep positional callers of
+     *        earlier versions working.
      */
     public function __construct(
         public readonly ?string $keyword = null,
@@ -49,6 +61,7 @@ final class SearchCriteria
         public readonly ?float $radiusKm = null,
         public readonly int $limit = 100,
         public readonly int $offset = 0,
+        public readonly array $eventIds = [],
     ) {
         $distanceParts = [$this->nearLatitude, $this->nearLongitude, $this->radiusKm];
         $given = count(array_filter($distanceParts, static fn (?float $v): bool => $v !== null));

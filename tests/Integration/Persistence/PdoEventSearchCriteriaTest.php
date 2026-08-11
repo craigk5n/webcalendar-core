@@ -177,4 +177,65 @@ final class PdoEventSearchCriteriaTest extends RepositoryTestCase
 
         $this->assertSame(['Yoga in the Park'], $this->names($criteria));
     }
+
+    // ---- eventIds: the refinement surface -------------------------------
+    //
+    // A calendar view has already decided which events the viewer may see,
+    // and has done so with recurrence-aware date logic that a plain
+    // `cal_date BETWEEN` cannot reproduce. Handing that id set back in lets
+    // a Filter Bar narrow it with the criteria above without re-deriving —
+    // or weakening — the permission and recurrence rules.
+
+    public function testEventIdsRestrictTheResultToThatSet(): void
+    {
+        $ids = [$this->idOf('u-yoga'), $this->idOf('u-board')];
+
+        $this->assertSame(
+            ['Yoga in the Park', 'Board Meeting'],
+            $this->names(new SearchCriteria(eventIds: $ids))
+        );
+    }
+
+    public function testEventIdsCombineWithOtherFiltersAsAnAnd(): void
+    {
+        $ids = [$this->idOf('u-yoga'), $this->idOf('u-board')];
+
+        // 'yoga' alone would also match the task; the id set excludes it.
+        $this->assertSame(
+            ['Yoga in the Park'],
+            $this->names(new SearchCriteria(keyword: 'yoga', eventIds: $ids))
+        );
+    }
+
+    /**
+     * The property the whole design rests on: eventIds can only ever
+     * remove. If it could widen the set, a Filter Bar built on it would be
+     * an access-control bypass rather than a refinement.
+     */
+    public function testEventIdsCannotWidenTheResult(): void
+    {
+        $ids = [$this->idOf('u-yoga')];
+
+        // Category 5 belongs to Board Meeting, which is not in the id set.
+        $this->assertSame([], $this->names(new SearchCriteria(categoryIds: [5], eventIds: $ids)));
+    }
+
+    /**
+     * An empty list means "no restriction", matching every other list
+     * filter here. The caller that wants "match nothing" must not call the
+     * repository at all — a Filter Bar handing over an empty allow-list
+     * would otherwise leak the entire table.
+     */
+    public function testAnEmptyEventIdListIsNoRestriction(): void
+    {
+        $this->assertSame(
+            ['Yoga in the Park', 'Yoga homework', 'Board Meeting', 'Distant Concert'],
+            $this->names(new SearchCriteria(eventIds: []))
+        );
+    }
+
+    public function testUnknownEventIdsMatchNothing(): void
+    {
+        $this->assertSame([], $this->names(new SearchCriteria(eventIds: [987654])));
+    }
 }
