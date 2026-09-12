@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace WebCalendar\Core\Tests\Unit\Application\Service;
 
 use PHPUnit\Framework\TestCase;
+use Psr\Log\AbstractLogger;
 use WebCalendar\Core\Application\Service\BookingService;
 use WebCalendar\Core\Application\Service\EventService;
 use WebCalendar\Core\Domain\Repository\EventRepositoryInterface;
@@ -203,5 +204,84 @@ final class BookingServiceTest extends TestCase
             type: EventType::EVENT,
             access: AccessLevel::PUBLIC
         );
+    }
+
+    /**
+     * A slot that runs past closing time must not be offered.  With the
+     * office hours hardcoded to 9-17 in 30-minute slots this could not
+     * happen; now that all three are caller-supplied, any window that is not
+     * an exact multiple of the slot length would overhang.
+     */
+    public function testGetAvailabilityNeverOffersASlotThatRunsPastClosingTime(): void
+    {
+        $user = new User('jdoe', 'John', 'Doe', 'john@example.com', false, true);
+        $date = new \DateTimeImmutable('2026-02-11');
+
+        $this->eventRepository->method('findByDateRange')->willReturn([]);
+
+        // 8 hours does not divide into 45-minute slots.
+        $slots = $this->bookingService->getAvailability(
+            $user,
+            $date,
+            startHour: 9,
+            endHour: 17,
+            slotMinutes: 45
+        );
+
+        $this->assertCount(10, $slots);
+
+        $closing = $date->setTime(17, 0);
+        foreach ($slots as $slot) {
+            $this->assertLessThanOrEqual(
+                $closing->getTimestamp(),
+                $slot->endDate()->getTimestamp(),
+                'slot ending ' . $slot->endDate()->format('H:i') . ' runs past closing'
+            );
+        }
+    }
+
+    /**
+     * The sanitized strings are what gets persisted; the log line must not
+     * quietly reintroduce the raw ones next to them.
+     */
+    public function testBookDoesNotLogRawUntrustedInput(): void
+    {
+        $user = new User('jdoe', 'John', 'Doe', 'john@example.com', false, true);
+        $start = new \DateTimeImmutable('2026-02-11 10:00:00');
+
+        $logger = new class extends AbstractLogger {
+            /** @var array<int, array<string, mixed>> */
+            public array $contexts = [];
+
+            /**
+             * @param mixed $level
+             * @param string|\Stringable $message
+             * @param mixed[] $context
+             */
+            public function log($level, $message, array $context = []): void
+            {
+                $this->contexts[] = $context;
+            }
+        };
+
+        $eventService = new EventService(
+            $this->eventRepository,
+            $this->createMock(UserRepositoryInterface::class)
+        );
+        $service = new BookingService($eventService, $logger);
+
+        $service->book(
+            $user,
+            'Alice<script>alert(1)</script>',
+            'alice@example.com<img src=x onerror=alert(1)>',
+            $start,
+            60
+        );
+
+        $this->assertNotEmpty($logger->contexts);
+        $serialized = json_encode($logger->contexts);
+        $this->assertIsString($serialized);
+        $this->assertStringNotContainsString('<script', $serialized);
+        $this->assertStringNotContainsString('<img', $serialized);
     }
 }

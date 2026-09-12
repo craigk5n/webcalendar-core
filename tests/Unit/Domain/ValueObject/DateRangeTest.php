@@ -103,4 +103,33 @@ final class DateRangeTest extends TestCase
         // still counts.
         $this->assertTrue($range1->overlaps($range1));
     }
+
+    /**
+     * The half-open reading makes "touching" and "containing" different
+     * questions for a zero-length range, so both are pinned here.
+     */
+    public function testZeroLengthRangeOverlapsOnlyWhenStrictlyInsideAnother(): void
+    {
+        $instant = new \DateTimeImmutable('2026-02-11 10:00:00');
+        $zero = new DateRange($instant, $instant);
+
+        // Strictly inside a longer range: that instant is busy.
+        $this->assertTrue($zero->overlaps(new DateRange(
+            new \DateTimeImmutable('2026-02-11 09:00:00'),
+            new \DateTimeImmutable('2026-02-11 11:00:00')
+        )));
+
+        // Sitting exactly on either boundary: only touching, so no overlap.
+        $this->assertFalse($zero->overlaps(new DateRange(
+            new \DateTimeImmutable('2026-02-11 10:00:00'),
+            new \DateTimeImmutable('2026-02-11 11:00:00')
+        )));
+        $this->assertFalse($zero->overlaps(new DateRange(
+            new \DateTimeImmutable('2026-02-11 09:00:00'),
+            new \DateTimeImmutable('2026-02-11 10:00:00')
+        )));
+
+        // Two zero-length ranges never overlap, not even at the same instant.
+        $this->assertFalse($zero->overlaps(new DateRange($instant, $instant)));
+    }
 }

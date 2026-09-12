@@ -332,3 +332,53 @@ preference (`User` carries none).
    leaves 14 free slots in a 9-to-5 day, not 13. Any test pinning the old
    count needs updating.
 
+---
+
+## Post-release review (v4.11.1)
+
+An independent review of the v4.11.0 diff found four defects in the fixes
+themselves. All are fixed; 490 tests pass with PHPStan level 9, Psalm and
+Psalm taint analysis clean.
+
+**Semicolon-less character references bypassed the sanitizer.** A browser
+following the HTML5 tokenizer decodes `&#60script` and `&ltscript` --
+unterminated numeric references, and the legacy named set --
+but `html_entity_decode()` returns them untouched, so they sailed through the
+decode/strip loop and were stored verbatim.
+
+The practical severity is narrower than it first looks, and worth stating
+precisely: a character reference decodes to a *character token*, not markup,
+so `&#60script&#62` inserted via `innerHTML` renders as the literal text
+`<script>`, it does not execute. The real defect is that the multi-pass loop
+exists specifically to survive one more decode downstream, and that defence
+had a hole for exactly the forms PHP declines to decode. `sanitize()` now
+supplies the missing semicolon before each pass. Ordinary prose is untouched
+(`Tom & Jerry`, `AT&T`, `a&b=1` all survive), because only sequences that
+already look like a reference are rewritten.
+
+**`book()` logged the raw strings it had just sanitized.** The sanitized
+values went to storage while the log line carried the originals, handing the
+payload to any log viewer that renders HTML. Both logged fields are now
+sanitized.
+
+**`getAvailability()` could offer a slot running past closing time.** With
+the hours hardcoded to 9-17 in 30-minute slots this was unreachable; once all
+three became parameters, any window that is not a whole number of slots long
+overhung -- `slotMinutes: 45` in a 9-17 day ended with a 16:30-17:15 slot. A
+slot that does not fit entirely inside office hours is no longer emitted.
+
+**A docblock claim was false.** `DateRange::overlaps()` said a zero-length
+range overlaps nothing. It does not overlap another range it merely touches,
+but it does overlap one it lies strictly inside. Corrected, and pinned with a
+test.
+
+### Still open, pre-existing
+
+`ReportService::generateFullReport()` takes `$userLogin`, never uses it
+(`@psalm-suppress UnusedParam`), and calls `getEventsInDateRange($range)` with
+neither a user nor an access level -- the "admin path, no access filter"
+branch. It returns every user's PRIVATE and CONFIDENTIAL entries regardless of
+who runs the report. Same defect class as finding 1, but fixing it means
+deciding what a user-scoped report should contain, so it is left for its own
+change rather than folded in here.
+

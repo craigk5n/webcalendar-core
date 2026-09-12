@@ -90,6 +90,13 @@ final class BookingService
 
         while ($current < $workEnd) {
             $next = $current->modify('+' . $slotDuration . ' minutes');
+
+            // A window that is not a whole number of slots long would
+            // otherwise offer a final slot running past closing time.
+            if ($next > $workEnd) {
+                break;
+            }
+
             $slotRange = new DateRange($current, $next);
 
             $hasConflict = false;
@@ -153,9 +160,12 @@ final class BookingService
             status: $status ?? self::DEFAULT_STATUS
         );
 
+        // The sanitized strings are what gets stored; logging the raw ones
+        // here would hand the payload straight to any log viewer that
+        // renders HTML, undoing the sanitizing two lines above.
         $this->logger->info('Booking created', [
-            'name' => $name,
-            'email' => $email,
+            'name' => $safeName,
+            'email' => $this->sanitizer->sanitize($email),
             'start' => $start->format('Y-m-d H:i'),
             'duration' => $duration,
             'user' => $user->login(),

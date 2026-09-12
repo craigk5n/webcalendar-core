@@ -48,7 +48,9 @@ final class DateRange
      * appointment is bookable.  This matches ConflictDetector and RFC 5545,
      * where DTEND is exclusive.
      *
-     * A consequence worth knowing: a zero-length range overlaps nothing.
+     * Touching and containing are different questions for a zero-length
+     * range: two ranges meeting at a single instant never overlap, but a
+     * zero-length range lying strictly inside a longer one does.
      */
     public function overlaps(DateRange $other): bool
     {
