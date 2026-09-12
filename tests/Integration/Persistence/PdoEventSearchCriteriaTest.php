@@ -7,6 +7,7 @@ namespace WebCalendar\Core\Tests\Integration\Persistence;
 use WebCalendar\Core\Domain\Entity\Event;
 use WebCalendar\Core\Domain\Entity\Venue;
 use WebCalendar\Core\Domain\ValueObject\AccessLevel;
+use WebCalendar\Core\Domain\ValueObject\EventScope;
 use WebCalendar\Core\Domain\ValueObject\DateRange;
 use WebCalendar\Core\Domain\ValueObject\EventId;
 use WebCalendar\Core\Domain\ValueObject\EventType;
@@ -93,7 +94,7 @@ final class PdoEventSearchCriteriaTest extends RepositoryTestCase
     private function names(SearchCriteria $criteria): array
     {
         $names = [];
-        foreach ($this->repository->searchByCriteria($criteria) as $event) {
+        foreach ($this->repository->searchByCriteria($criteria, EventScope::administrative()) as $event) {
             $names[] = $event->name();
         }
         return $names;

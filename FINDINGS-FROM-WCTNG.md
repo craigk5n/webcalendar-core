@@ -573,3 +573,66 @@ older consumers cannot map (`ActivityLogType::from()` would throw), so these
 are recorded as `EXTRA` with the detail in the text and the affected calendar
 in `userCal`. The entry id is 0: a grant change is not about any one event.
 A refused write records nothing, which is also tested.
+
+---
+
+## Search scoping, and the default that caused all of this
+
+`SearchService::searchByCriteria()` returned every user's PRIVATE and
+CONFIDENTIAL entries to any caller. `SearchCriteria` carries twelve fields --
+keyword, categories, venues, organizers, range, types, coordinates, radius,
+limit, offset, event ids -- and not one of them expresses who is asking, so
+the query it built contained no `cal_access` clause at all and no consumer
+could add one. It is the Filter Bar surface (Epic 25), actively developed.
+
+`search()` was a milder version: it had access parameters, but they defaulted
+to null, and null meant no filter.
+
+### The shape all five leaks shared
+
+Absent meant unrestricted. `findByDateRange()` says so in a comment --
+`// When both $user and $accessLevel are null: admin path, no access filter`
+-- and the public feed, the report and both search methods each reached the
+unfiltered query by leaving arguments out rather than by asking for it.
+
+`EventScope` inverts that default on the search path:
+
+```php
+EventScope::forUser($user)        // public entries + everything they created
+EventScope::publicOnly()          // cal_access = 'P'
+EventScope::atAccessLevel($level)
+EventScope::administrative()      // no access filter -- named on purpose
+    ->limitedToUsers(['jdoe'])    // optional: pin to one calendar
+```
+
+It is a required argument on `search()` and `searchByCriteria()`, so the
+unrestricted query cannot be reached by omission. It still exists, because
+genuine administrative work needs it -- but it has to be spelled
+`administrative()`, which is greppable when auditing what can read private
+entries.
+
+Scoping semantics match `findByDateRange()`, as chosen: a user sees public
+entries plus their own at any level.
+
+**`search()` behaviour changed.** It used to filter a user to
+`cal_create_by = :login` -- only their own entries. Under findByDateRange
+semantics it is now `cal_access = 'P' OR cal_create_by = :login`, so a
+keyword search also finds other people's public entries. That is what a
+calendar search should do and what the calendar view already did, but it is a
+widening, and any caller pinning result counts will notice.
+
+One distinction worth keeping straight: `limitedToUsers()` is not an access
+filter. An administrative scope pinned to one calendar still reads that
+calendar's private entries -- `isAdministrative()` keeps saying true, and
+there is a test for it.
+
+### Breaking changes
+
+- `EventRepositoryInterface::search()` -- `(?DateRange, ?User, ?string, ?int)`
+  became `(EventScope, ?DateRange, ?int)`; the scope is required and second.
+- `EventRepositoryInterface::searchByCriteria()` -- takes a required second
+  `EventScope`.
+- `SearchService` mirrors both.
+
+Ten integration tests pin the behaviour against the shipped schema, across a
+fixture set of two users with public, confidential and private entries each.

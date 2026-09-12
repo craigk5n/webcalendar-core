@@ -4,15 +4,21 @@ declare(strict_types=1);
 
 namespace WebCalendar\Core\Application\Service;
 
-use WebCalendar\Core\Domain\Entity\User;
 use WebCalendar\Core\Domain\Repository\EventRepositoryInterface;
 use WebCalendar\Core\Domain\ValueObject\DateRange;
 use WebCalendar\Core\Domain\ValueObject\EventCollection;
+use WebCalendar\Core\Domain\ValueObject\EventScope;
+use WebCalendar\Core\Domain\ValueObject\SearchCriteria;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 
 /**
  * Service for searching events and tasks.
+ *
+ * Both methods take a required {@see EventScope}. Search used to scope by a
+ * pair of nullable arguments, and criteria search could not be scoped at all,
+ * which meant either could return every user's PRIVATE and CONFIDENTIAL
+ * entries to whoever called it.
  */
 final class SearchService
 {
@@ -26,12 +32,21 @@ final class SearchService
     }
 
     /**
-     * Searches for events by keyword and optional filters.
+     * Searches for events by keyword, within $scope.
      */
-    public function search(string $keyword, ?DateRange $range = null, ?User $user = null): EventCollection
-    {
-        $this->logger->debug('Searching events', ['keyword' => $keyword, 'user' => $user?->login()]);
-        return $this->eventRepository->search($keyword, $range, $user);
+    public function search(
+        string $keyword,
+        EventScope $scope,
+        ?DateRange $range = null
+    ): EventCollection {
+        $this->logger->debug('Searching events', [
+            'keyword' => $keyword,
+            'user' => $scope->user()?->login(),
+            'access' => $scope->accessLevel(),
+            'administrative' => $scope->isAdministrative(),
+        ]);
+
+        return $this->eventRepository->search($keyword, $scope, $range);
     }
 
     /**
@@ -39,13 +54,17 @@ final class SearchService
      * All filtering happens at the repository so no load-all-and-filter
      * path exists.
      */
-    public function searchByCriteria(\WebCalendar\Core\Domain\ValueObject\SearchCriteria $criteria): EventCollection
+    public function searchByCriteria(SearchCriteria $criteria, EventScope $scope): EventCollection
     {
         $this->logger->debug('Searching events by criteria', [
             'keyword' => $criteria->keyword,
             'limit' => $criteria->limit,
             'offset' => $criteria->offset,
+            'user' => $scope->user()?->login(),
+            'access' => $scope->accessLevel(),
+            'administrative' => $scope->isAdministrative(),
         ]);
-        return $this->eventRepository->searchByCriteria($criteria);
+
+        return $this->eventRepository->searchByCriteria($criteria, $scope);
     }
 }

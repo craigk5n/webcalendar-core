@@ -43,11 +43,13 @@ final class EventRepositoryInterfaceTest extends TestCase
         $repository = $this->createMock(EventRepositoryInterface::class);
         $events = new \WebCalendar\Core\Domain\ValueObject\EventCollection([]);
         
+        $scope = \WebCalendar\Core\Domain\ValueObject\EventScope::administrative();
+
         $repository->expects($this->once())
             ->method('search')
-            ->with('keyword')
+            ->with('keyword', $scope)
             ->willReturn($events);
 
-        $this->assertSame($events, $repository->search('keyword'));
+        $this->assertSame($events, $repository->search('keyword', $scope));
     }
 }

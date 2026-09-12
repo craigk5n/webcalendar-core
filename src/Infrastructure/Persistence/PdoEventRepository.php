@@ -10,6 +10,7 @@ use WebCalendar\Core\Domain\Entity\User;
 use WebCalendar\Core\Domain\Repository\EventRepositoryInterface;
 use WebCalendar\Core\Domain\ValueObject\EventId;
 use WebCalendar\Core\Domain\ValueObject\DateRange;
+use WebCalendar\Core\Domain\ValueObject\EventScope;
 use WebCalendar\Core\Domain\ValueObject\EventType;
 use WebCalendar\Core\Domain\ValueObject\AccessLevel;
 use WebCalendar\Core\Domain\ValueObject\Recurrence;
@@ -56,8 +57,12 @@ final class PdoEventRepository implements EventRepositoryInterface
         return $this->mapRowToEvent($row);
     }
 
-    public function search(string $keyword, ?DateRange $range = null, ?User $user = null, ?string $accessLevel = null, ?int $limit = null): \WebCalendar\Core\Domain\ValueObject\EventCollection
-    {
+    public function search(
+        string $keyword,
+        EventScope $scope,
+        ?DateRange $range = null,
+        ?int $limit = null
+    ): \WebCalendar\Core\Domain\ValueObject\EventCollection {
         // :keyword_name and :keyword_desc are bound to the same value but kept
         // as distinct named placeholders so the query works under
         // PDO::ATTR_EMULATE_PREPARES=false (MySQL/PostgreSQL native prepares
@@ -77,15 +82,11 @@ final class PdoEventRepository implements EventRepositoryInterface
             $params['end'] = (int)$range->endDate()->format('Ymd');
         }
 
-        if ($user !== null) {
-            $sql .= ' AND cal_create_by = :login';
-            $params['login'] = $user->login();
+        [$scopeClauses, $scopeParams] = $this->scopeConditions($scope, '');
+        foreach ($scopeClauses as $clause) {
+            $sql .= ' AND ' . $clause;
         }
-
-        if ($accessLevel !== null) {
-            $sql .= ' AND cal_access = :access';
-            $params['access'] = $accessLevel;
-        }
+        $params += $scopeParams;
 
         $sql .= ' ORDER BY cal_date DESC';
 
@@ -118,10 +119,13 @@ final class PdoEventRepository implements EventRepositoryInterface
 
     public function searchByCriteria(
         \WebCalendar\Core\Domain\ValueObject\SearchCriteria $criteria,
+        EventScope $scope,
     ): \WebCalendar\Core\Domain\ValueObject\EventCollection {
         $sql = "SELECT e.* FROM {$this->tablePrefix}webcal_entry e";
-        $where = [];
-        $params = [];
+
+        // Access scoping first, so it is impossible to read this method and
+        // miss that the result set is filtered.
+        [$where, $params] = $this->scopeConditions($scope, 'e.');
 
         if ($criteria->hasDistanceFilter()) {
             $sql .= " LEFT JOIN {$this->tablePrefix}webcal_venue v ON v.venue_id = e.cal_venue_id";
@@ -730,6 +734,47 @@ final class PdoEventRepository implements EventRepositoryInterface
         [$exDate, $rDate] = $this->loadExceptions($id);
 
         return new Recurrence($rule, $exDate, $rDate);
+    }
+
+    /**
+     * Builds the access-scoping SQL for a query, mirroring the rules in
+     * findByDateRange().
+     *
+     * @param string $alias Table alias including its dot ('e.'), or '' when
+     *                      the query has no alias.
+     * @return array{0: string[], 1: array<string, mixed>}
+     */
+    private function scopeConditions(EventScope $scope, string $alias): array
+    {
+        $clauses = [];
+        $params = [];
+
+        $user = $scope->user();
+        $accessLevel = $scope->accessLevel();
+
+        if ($user !== null) {
+            // Signed-in reader: public entries, plus anything they created.
+            $clauses[] = "({$alias}cal_access = 'P' OR {$alias}cal_create_by = :scope_login)";
+            $params['scope_login'] = $user->login();
+        } elseif ($accessLevel !== null) {
+            // No identity: one access level only.
+            $clauses[] = "{$alias}cal_access = :scope_access";
+            $params['scope_access'] = $accessLevel;
+        }
+        // Otherwise the scope is administrative and adds no access filter.
+
+        $users = $scope->users();
+        if ($users !== null && $users !== []) {
+            $placeholders = [];
+            foreach (array_values($users) as $i => $login) {
+                $key = 'scope_user_' . $i;
+                $placeholders[] = ':' . $key;
+                $params[$key] = $login;
+            }
+            $clauses[] = "{$alias}cal_create_by IN (" . implode(', ', $placeholders) . ')';
+        }
+
+        return [$clauses, $params];
     }
 
     /**

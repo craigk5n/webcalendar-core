@@ -43,13 +43,17 @@ interface EventRepositoryInterface
     /**
      * Searches for events by keyword and optional filters.
      *
+     * $scope is required and has no default: an unscoped search returns
+     * every user's PRIVATE and CONFIDENTIAL entries, and that must be asked
+     * for by name ({@see EventScope::administrative()}) rather than reached
+     * by leaving an argument out.
+     *
      * @return \WebCalendar\Core\Domain\ValueObject\EventCollection
      */
     public function search(
         string $keyword,
+        \WebCalendar\Core\Domain\ValueObject\EventScope $scope,
         ?DateRange $range = null,
-        ?\WebCalendar\Core\Domain\Entity\User $user = null,
-        ?string $accessLevel = null,
         ?int $limit = null,
     ): \WebCalendar\Core\Domain\ValueObject\EventCollection;
 
@@ -58,9 +62,13 @@ interface EventRepositoryInterface
      * both apps' Filter Bars (Epic 25). All filtering happens in SQL;
      * distance is a bounding-box prefilter over the event's own
      * coordinates, falling back to its venue's.
+     *
+     * $scope carries the access filter; see {@see search()} for why it is
+     * required.
      */
     public function searchByCriteria(
         \WebCalendar\Core\Domain\ValueObject\SearchCriteria $criteria,
+        \WebCalendar\Core\Domain\ValueObject\EventScope $scope,
     ): \WebCalendar\Core\Domain\ValueObject\EventCollection;
 
     /**

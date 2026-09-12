@@ -6,6 +6,7 @@ namespace WebCalendar\Core\Infrastructure\MCP;
 
 use WebCalendar\Core\Application\Service\EventService;
 use WebCalendar\Core\Application\Service\SearchService;
+use WebCalendar\Core\Domain\ValueObject\EventScope;
 use WebCalendar\Core\Application\Service\UserService;
 use WebCalendar\Core\Domain\Entity\User;
 use WebCalendar\Core\Domain\ValueObject\DateRange;
@@ -96,7 +97,7 @@ final class McpToolHandler
     private function handleSearchEvents(array $params, User $user): array
     {
         $keyword = is_string($params['keyword'] ?? null) ? $params['keyword'] : '';
-        $results = $this->searchService->search($keyword, null, $user);
+        $results = $this->searchService->search($keyword, EventScope::forUser($user));
 
         $events = [];
         foreach ($results->all() as $event) {

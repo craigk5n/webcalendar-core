@@ -9,6 +9,7 @@ use WebCalendar\Core\Application\Service\SearchService;
 use WebCalendar\Core\Domain\Repository\EventRepositoryInterface;
 use WebCalendar\Core\Domain\Entity\User;
 use WebCalendar\Core\Domain\ValueObject\EventCollection;
+use WebCalendar\Core\Domain\ValueObject\EventScope;
 use WebCalendar\Core\Domain\ValueObject\DateRange;
 
 final class SearchServiceTest extends TestCase
@@ -29,17 +30,14 @@ final class SearchServiceTest extends TestCase
         $keyword = 'Meeting';
         $events = new EventCollection([]);
 
-        // The repository doesn't have a specific search method yet, 
-        // we might need to add one or use findByDateRange and filter.
-        // PRD 17.5 suggests an API endpoint for search.
-        // Let's assume we'll add a search method to the repository interface.
-        
+        $scope = EventScope::forUser($user);
+
         $this->eventRepository->expects($this->once())
             ->method('search')
-            ->with($keyword, null, $user)
+            ->with($keyword, $this->identicalTo($scope), null)
             ->willReturn($events);
 
-        $result = $this->searchService->search($keyword, null, $user);
+        $result = $this->searchService->search($keyword, $scope);
         
         $this->assertSame($events, $result);
     }

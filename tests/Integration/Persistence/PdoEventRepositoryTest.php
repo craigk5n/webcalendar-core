@@ -10,6 +10,7 @@ use WebCalendar\Core\Domain\ValueObject\EventId;
 use WebCalendar\Core\Domain\ValueObject\EventType;
 use WebCalendar\Core\Domain\ValueObject\AccessLevel;
 use WebCalendar\Core\Domain\ValueObject\DateRange;
+use WebCalendar\Core\Domain\ValueObject\EventScope;
 use WebCalendar\Core\Domain\ValueObject\Recurrence;
 use WebCalendar\Core\Domain\ValueObject\RecurrenceRule;
 use WebCalendar\Core\Domain\ValueObject\ExDate;
@@ -135,11 +136,11 @@ final class PdoEventRepositoryTest extends RepositoryTestCase
         $this->repository->save($event1);
         $this->repository->save($event2);
 
-        $results = $this->repository->search('Meeting');
+        $results = $this->repository->search('Meeting', EventScope::administrative());
         $this->assertCount(1, $results);
         $this->assertSame('Meeting with Bob', $results->all()[0]->name());
 
-        $results = $this->repository->search('food');
+        $results = $this->repository->search('food', EventScope::administrative());
         $this->assertCount(1, $results);
         $this->assertSame('Lunch', $results->all()[0]->name());
     }
@@ -526,7 +527,7 @@ final class PdoEventRepositoryTest extends RepositoryTestCase
         $repo->save(new Event(new EventId(0), 'b', 'Lunch', 'meeting topic in description', '', new \DateTimeImmutable('2026-02-11 12:00:00'), 60, 'admin', EventType::EVENT, AccessLevel::PUBLIC));
 
         // Must not throw the strict-placeholder error.
-        $hits = $repo->search('meeting');
+        $hits = $repo->search('meeting', EventScope::administrative());
 
         // Both events match — name on row 1, description on row 2 — proving
         // both halves of the OR are bound to the same value.
