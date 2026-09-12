@@ -19,7 +19,8 @@ final class ReportService
 {
     public function __construct(
         private readonly ReportRepositoryInterface $reportRepository,
-        private readonly EventService $eventService
+        private readonly EventService $eventService,
+        private readonly ?CalendarAccessService $calendarAccess = null
     ) {
     }
 
@@ -54,13 +55,14 @@ final class ReportService
      *
      * - their own calendar: every entry, whatever its access level;
      * - another user's, as an admin: every entry of that user's;
-     * - another user's, otherwise: public entries only.
+     * - another user's, with a CalendarAccessService wired: whatever that
+     *   user's grants allow, per entry type and access level;
+     * - another user's, without one: public entries only.
      *
-     * That last rule is deliberately conservative. Legacy grants per-calendar
-     * rights through webcal_access_user, which this library has no repository
-     * for yet, so there is no way here to tell an authorized viewer from any
-     * other user -- and under-reporting is the safe side of that to err on.
-     * When those grants land, this is the method that should consult them.
+     * That last rule is the conservative fallback for a caller that has not
+     * wired up webcal_access_user grants. It under-reports for a user who
+     * legitimately holds access to another calendar, which is the safe side
+     * to err on when there is no way to tell one from any other user.
      *
      * @param User $actor The user running the report.
      * @param string|null $targetLogin Calendar to report on; defaults to $actor.
@@ -116,12 +118,39 @@ final class ReportService
             );
         }
 
-        return $this->eventService->getEventsInDateRange(
+        if ($this->calendarAccess === null) {
+            return $this->eventService->getEventsInDateRange(
+                $range,
+                null,
+                AccessLevel::PUBLIC->value,
+                $onlyThisCalendar
+            );
+        }
+
+        // Grants are per entry type and access level, which no single WHERE
+        // clause expresses, so the calendar is read whole and then filtered.
+        // The rows never leave this method unless the grant allows them.
+        $grant = $this->calendarAccess->effectiveAccess($actor, $targetLogin);
+
+        if ($grant->view()->isNone()) {
+            return new EventCollection([]);
+        }
+
+        $events = $this->eventService->getEventsInDateRange(
             $range,
             null,
-            AccessLevel::PUBLIC->value,
+            null,
             $onlyThisCalendar
         );
+
+        $visible = [];
+        foreach ($events as $event) {
+            if ($grant->canView($event->type(), $event->access())) {
+                $visible[] = $event;
+            }
+        }
+
+        return new EventCollection($visible);
     }
 
     public function getReportById(int $id): ?Report

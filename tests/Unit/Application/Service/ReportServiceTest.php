@@ -17,6 +17,10 @@ use WebCalendar\Core\Domain\ValueObject\AccessLevel;
 use WebCalendar\Core\Domain\Repository\UserRepositoryInterface;
 use WebCalendar\Core\Domain\Entity\User;
 use WebCalendar\Core\Domain\ValueObject\DateRange;
+use WebCalendar\Core\Application\Service\CalendarAccessService;
+use WebCalendar\Core\Domain\Repository\CalendarAccessRepositoryInterface;
+use WebCalendar\Core\Domain\ValueObject\CalendarAccess;
+use WebCalendar\Core\Domain\ValueObject\CalendarPermission;
 
 final class ReportServiceTest extends TestCase
 {
@@ -206,5 +210,150 @@ final class ReportServiceTest extends TestCase
         $result = $this->reportService->generateFullReport($this->createReport(), $range, $actor);
 
         $this->assertSame("Event: Meeting\n", $result);
+    }
+
+    // ---------------------------------------------------------------------
+    // Grant-driven scoping, once a CalendarAccessService is wired
+    // ---------------------------------------------------------------------
+
+    private function eventOf(int $id, string $name, EventType $type, AccessLevel $access): Event
+    {
+        return new Event(
+            id: new EventId($id),
+            uid: "uid-$id",
+            name: $name,
+            description: '',
+            location: '',
+            start: new \DateTimeImmutable('2026-02-11 10:00:00'),
+            duration: 60,
+            createdBy: 'bsmith',
+            type: $type,
+            access: $access
+        );
+    }
+
+    /**
+     * Builds a ReportService whose access service returns one fixed grant.
+     */
+    private function serviceGranting(int $viewMask): ReportService
+    {
+        $accessRepository = $this->createMock(CalendarAccessRepositoryInterface::class);
+        $accessRepository->method('find')->willReturnCallback(
+            static fn (string $grantee, string $owner): ?CalendarAccess => $grantee === 'jdoe' && $owner === 'bsmith'
+                ? new CalendarAccess(
+                    $grantee,
+                    $owner,
+                    new CalendarPermission($viewMask),
+                    CalendarPermission::none(),
+                    CalendarPermission::none()
+                )
+                : null
+        );
+
+        $eventService = new EventService(
+            $this->eventRepository,
+            $this->createMock(UserRepositoryInterface::class)
+        );
+
+        return new ReportService(
+            $this->reportRepository,
+            $eventService,
+            new CalendarAccessService($accessRepository)
+        );
+    }
+
+    public function testAGrantFiltersByEntryTypeAndAccessLevel(): void
+    {
+        $actor = new User('jdoe', 'John', 'Doe', 'john@example.com', false, true);
+
+        $this->eventRepository->method('findByDateRange')->willReturn([
+            $this->eventOf(1, 'Public event', EventType::EVENT, AccessLevel::PUBLIC),
+            $this->eventOf(2, 'Private event', EventType::EVENT, AccessLevel::PRIVATE),
+            $this->eventOf(3, 'Public task', EventType::TASK, AccessLevel::PUBLIC),
+        ]);
+
+        // EVENT_WT: every access level, but events only.
+        $result = $this->serviceGranting(73)->generateFullReport(
+            $this->createReport(),
+            $this->createRange(),
+            $actor,
+            'bsmith'
+        );
+
+        $this->assertStringContainsString('Public event', $result);
+        $this->assertStringContainsString('Private event', $result);
+        $this->assertStringNotContainsString('Public task', $result);
+    }
+
+    /**
+     * The point of the whole exercise: a user who genuinely holds rights to
+     * another calendar now sees its private entries, where the conservative
+     * fallback would have shown them nothing but public ones.
+     */
+    public function testAFullGrantExposesPrivateEntriesTheFallbackWouldHide(): void
+    {
+        $actor = new User('jdoe', 'John', 'Doe', 'john@example.com', false, true);
+
+        $this->eventRepository->method('findByDateRange')->willReturn([
+            $this->eventOf(1, 'Confidential review', EventType::EVENT, AccessLevel::CONFIDENTIAL),
+        ]);
+
+        $result = $this->serviceGranting(CalendarPermission::ALL)->generateFullReport(
+            $this->createReport(),
+            $this->createRange(),
+            $actor,
+            'bsmith'
+        );
+
+        $this->assertStringContainsString('Confidential review', $result);
+    }
+
+    public function testNoGrantYieldsAnEmptyReportWithoutQueryingTheCalendar(): void
+    {
+        $actor = new User('jdoe', 'John', 'Doe', 'john@example.com', false, true);
+
+        // No grant matches 'carol', so the calendar must not be read at all.
+        $this->eventRepository->expects($this->never())->method('findByDateRange');
+
+        $result = $this->serviceGranting(CalendarPermission::ALL)->generateFullReport(
+            $this->createReport(),
+            $this->createRange(),
+            $actor,
+            'carol'
+        );
+
+        $this->assertSame('', $result);
+    }
+
+    public function testAnExplicitDenialAlsoSkipsTheQuery(): void
+    {
+        $actor = new User('jdoe', 'John', 'Doe', 'john@example.com', false, true);
+
+        $this->eventRepository->expects($this->never())->method('findByDateRange');
+
+        $result = $this->serviceGranting(CalendarPermission::NONE)->generateFullReport(
+            $this->createReport(),
+            $this->createRange(),
+            $actor,
+            'bsmith'
+        );
+
+        $this->assertSame('', $result);
+    }
+
+    public function testYourOwnCalendarIsUnaffectedByGrants(): void
+    {
+        $actor = new User('jdoe', 'John', 'Doe', 'john@example.com', false, true);
+
+        $this->eventRepository->expects($this->once())
+            ->method('findByDateRange')
+            ->with($this->anything(), $this->identicalTo($actor), $this->isNull(), ['jdoe'])
+            ->willReturn([]);
+
+        $this->serviceGranting(CalendarPermission::NONE)->generateFullReport(
+            $this->createReport(),
+            $this->createRange(),
+            $actor
+        );
     }
 }

@@ -100,6 +100,7 @@ abstract class RepositoryTestCase extends TestCase
             'webcal_ticket_type',
             'webcal_ticket_order',
             'webcal_attendee',
+            'webcal_access_user',
             'webcal_user_pref',
             'webcal_user'
         ];

@@ -428,3 +428,81 @@ Two repository integration tests pin the boundary this depends on: an
 unfiltered query constrained only by the users list returns just that user's
 entries, and a fully unconstrained query returns everybody's private ones.
 
+---
+
+## webcal_access_user (the gap behind the conservative rule)
+
+The conservative "public entries only" rule above existed because core had no
+way to read legacy's per-calendar grants. It can now.
+
+**`CalendarPermission`** wraps the bitmask those grants are stored in. The
+layout is inherited from installed data, so it is pinned to legacy's own
+constants rather than redesigned -- three entry types by three access levels,
+one bit per cell:
+
+```
+bit = accessLevelIndex * 3 + entryTypeIndex
+
+           event  task  journal
+ public        0     1        2
+ confidential  3     4        5
+ private       6     7        8
+```
+
+Legacy names the rows and columns (`EVENT_WT` 73, `TASK_WT` 146, `JOURNAL_WT`
+292, `PUBLIC_WT` 7, `CONF_WT` 56, `PRIVATE_WT` 448, `CAN_DOALL` 511) and tests
+a cell by intersecting one of each. That is exactly what `allows()` does.
+Repeating types share their base type's bits, as in legacy: E/M, T/N, J/O.
+
+**`CalendarAccess`** is one grant row. Its column names read backwards at a
+glance and the docblock says so: `cal_login` is the *grantee* -- "the current
+user who is attempting to look at another user's calendar" -- and
+`cal_other_user` is the *owner*.
+
+**`CalendarAccessRepositoryInterface` / `PdoCalendarAccessRepository`** store
+rows verbatim. Resolving which row applies is business logic and deliberately
+not in the repository.
+
+**`CalendarAccessService`** does that resolution, preserving legacy's four-key
+order from `access_user_calendar()`, because installations depend on it:
+
+1. `grantee -> owner` — the specific grant
+2. `grantee -> __default__` — what this user gets on any calendar
+3. `__default__ -> owner` — what anyone gets on this calendar
+4. `__default__ -> __default__` — the site-wide default
+
+**First hit wins outright; permissions are never merged across the chain.** A
+specific denial is not widened by a permissive site-wide default -- there is a
+test for exactly that. Ahead of the chain, a user always has full access to
+their own calendar and an admin to anyone's. (Legacy gates the admin case on
+`ADMIN_OVERRIDE_UAC`; core has no such switch and `PermissionService` already
+treats admin as an unconditional bypass per PRD 9.6, so this follows its
+sibling.)
+
+### What changed in ReportService
+
+`CalendarAccessService` is an optional third constructor argument. Wired, a
+non-admin reporting on another calendar now sees whatever their grants allow,
+per entry type and access level. Unwired, the conservative public-only
+fallback is unchanged, so this is not a breaking change.
+
+Grants are per type and access level, which no single `WHERE` clause
+expresses, so that branch reads the calendar and filters in PHP. Two guards
+keep that honest: a grant conveying nothing short-circuits before any query
+runs, and the rows never leave the method unless the grant allows them.
+
+### Coverage
+
+`webcal_access_user`'s primary key is `(cal_login, cal_other_user)`, so the
+integration tests follow the composite-PK rules in CLAUDE.md. Fixtures collide
+on each half of the key -- one grantee across two owners, one owner across
+three grantees -- and every method taking less than the full key is exercised
+against them. `save()` (delete-then-insert), `delete()` and `deleteAllFor()`
+each have a degenerate case (self-grant, unknown key, re-save) and a
+cross-scope isolation case.
+
+`webcal_access_user` was also missing from `RepositoryTestCase`'s cleanup
+list, which only mattered for non-SQLite backends; it is there now.
+
+Deleting a user already cascaded to this table in `PdoUserRepository`, in both
+directions; `deleteAllFor()` is the same operation available directly.
