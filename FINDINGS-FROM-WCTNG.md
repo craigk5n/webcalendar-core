@@ -506,3 +506,70 @@ list, which only mattered for non-SQLite backends; it is there now.
 
 Deleting a user already cascaded to this table in `PdoUserRepository`, in both
 directions; `deleteAllFor()` is the same operation available directly.
+
+---
+
+## Grant administration
+
+`CalendarAccessService` reads grants; `CalendarAccessAdminService` writes
+them. They are separate because the read path is on every report and should
+stay dependency-light, while the write path needs authorization, a logger and
+an audit trail.
+
+### Who may write a grant
+
+Legacy states the rule by swapping two form fields, which is easy to read
+past (`access.php`):
+
+```php
+// If user is not admin,
+// reverse values so they are granting access to their own calendar.
+if( ! $is_admin )
+  list( $puser, $pouser ) = [$pouser, $puser];
+```
+
+So: an admin may write any grant; everyone else may only write grants **over
+their own calendar**. Nobody but an admin can hand *themselves* access to
+someone else's -- that would be a one-request privilege escalation, and there
+is a test named for it.
+
+A consequence worth stating, since it falls out rather than being written
+down: a non-admin can open their own calendar to everyone
+(`__default__ -> me`), but cannot give themselves access to every calendar
+(`me -> __default__`), because the second names someone else's calendar.
+
+| Operation | Admin | Calendar owner | Anyone else |
+|---|---|---|---|
+| `grant` / `revoke` | any calendar | own calendar | no |
+| `listGrantsOnCalendar` | any | own | no |
+| `listGrantsHeldBy` | any user | only themselves | no |
+| `revokeAllFor` | yes | no | no |
+
+`listGrantsHeldBy()` is deliberately not readable by the owners of the
+calendars involved: the answer spans other people's calendars, which are not
+theirs to enumerate.
+
+`revokeAllFor()` is admin-only for the same reason -- it reaches across
+calendars in both directions, so no single owner has standing to run it.
+
+### Grants that are refused rather than stored
+
+Legacy zeroes edit and approve for `__public__` instead of refusing the
+request. Storing something other than what was asked for is worse in a
+library than saying no, so both of these throw:
+
+- a self-grant (`grantee === owner`), which can never take effect because
+  resolution short-circuits on your own calendar;
+- edit or approve access for the `__public__` pseudo-user.
+
+### Audit trail
+
+CLAUDE.md requires permission changes to reach `webcal_entry_log`, so grant,
+revoke and revoke-all each write one. The `ActivityLogService` is optional --
+unwired, administration still works.
+
+`ActivityLogType` has no permission code, and adding one would write rows
+older consumers cannot map (`ActivityLogType::from()` would throw), so these
+are recorded as `EXTRA` with the detail in the text and the affected calendar
+in `userCal`. The entry id is 0: a grant change is not about any one event.
+A refused write records nothing, which is also tested.
