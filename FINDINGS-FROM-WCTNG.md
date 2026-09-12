@@ -372,13 +372,59 @@ range overlaps nothing. It does not overlap another range it merely touches,
 but it does overlap one it lies strictly inside. Corrected, and pinned with a
 test.
 
-### Still open, pre-existing
+### ReportService (fixed separately, see below)
 
-`ReportService::generateFullReport()` takes `$userLogin`, never uses it
-(`@psalm-suppress UnusedParam`), and calls `getEventsInDateRange($range)` with
+`ReportService::generateFullReport()` took `$userLogin`, never used it
+(`@psalm-suppress UnusedParam`), and called `getEventsInDateRange($range)` with
 neither a user nor an access level -- the "admin path, no access filter"
-branch. It returns every user's PRIVATE and CONFIDENTIAL entries regardless of
-who runs the report. Same defect class as finding 1, but fixing it means
-deciding what a user-scoped report should contain, so it is left for its own
-change rather than folded in here.
+branch. It returned every user's PRIVATE and CONFIDENTIAL entries regardless of
+who ran the report. Same defect class as finding 1.
+
+---
+
+## ReportService scoping
+
+A report covers exactly one calendar. Legacy says so in the schema --
+`webcal_report.cal_user`, "user calendar to display (NULL indicates current
+user)" -- and `report.php` reads events for that single `$report_user`. The
+old code covered all of them at once, with no access filter.
+
+`generateFullReport()` now takes the actor and an optional target calendar:
+
+```php
+public function generateFullReport(
+    Report $report,
+    DateRange $range,
+    User $actor,
+    ?string $targetLogin = null
+): string
+```
+
+| Actor reporting on | Sees |
+|---|---|
+| their own calendar | every entry, whatever its access level |
+| another user's, as admin | every entry of that user's |
+| another user's, otherwise | public entries only |
+
+Every branch pins the query to one calendar, so the unfiltered
+every-user-every-access-level path is no longer reachable from a report.
+
+**The third rule is deliberately conservative.** Legacy grants per-calendar
+rights through `webcal_access_user`, and this library has no repository for
+that table yet -- it appears in `PdoUserRepository` only in the delete-cascade
+list. So core cannot currently tell an authorized viewer of someone else's
+calendar from any other user, and it under-reports rather than over-shares.
+When those grants land, `findReportableEvents()` is the one place that should
+consult them.
+
+**This is a breaking signature change**: the third parameter went from
+`?string $userLogin` to `User $actor`. Nothing outside this repository's own
+tests called it, and the parameter it replaces was documented as unimplemented,
+but a consumer passing a login string positionally will now get a TypeError --
+which is the right failure, since that call was silently reading every user's
+private entries.
+
+Two repository integration tests pin the boundary this depends on: an
+unfiltered query constrained only by the users list returns just that user's
+entries, and a fully unconstrained query returns everybody's private ones.
 

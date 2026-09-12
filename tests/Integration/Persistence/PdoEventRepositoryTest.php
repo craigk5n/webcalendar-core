@@ -715,4 +715,45 @@ final class PdoEventRepositoryTest extends RepositoryTestCase
 
         $this->assertSame(['Public standup'], $this->namesOf($events));
     }
+
+    /**
+     * The shape a report uses for an admin reading someone else's calendar:
+     * no access filter, but pinned to one creator.  The unfiltered branch is
+     * safe only because the users list constrains it -- without that list it
+     * returns every user's private entries, which is what made
+     * ReportService::generateFullReport() leak.
+     */
+    public function testNoAccessFilterStillHonoursTheUsersList(): void
+    {
+        $range = $this->seedMixedAccessFixtures();
+
+        $events = $this->repository->findByDateRange($range, null, null, ['jdoe']);
+
+        $this->assertSame(
+            ['CONFIDENTIAL: salary review', 'PRIVATE: divorce lawyer', 'Public standup'],
+            $this->namesOf($events),
+            "another user's entries must not appear in a report scoped to jdoe"
+        );
+    }
+
+    /**
+     * And the branch that has no constraint at all, pinned so its blast
+     * radius stays documented: every user, every access level.
+     */
+    public function testNoFilterAtAllReturnsEveryUsersPrivateEntries(): void
+    {
+        $range = $this->seedMixedAccessFixtures();
+
+        $events = $this->repository->findByDateRange($range);
+
+        $this->assertSame(
+            [
+                'CONFIDENTIAL: salary review',
+                'PRIVATE: divorce lawyer',
+                'Public standup',
+                'Someone else public',
+            ],
+            $this->namesOf($events)
+        );
+    }
 }
