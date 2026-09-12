@@ -11,6 +11,7 @@ use WebCalendar\Core\Domain\Exception\EventNotFoundException;
 use WebCalendar\Core\Domain\Repository\JournalRepositoryInterface;
 use WebCalendar\Core\Domain\ValueObject\EventId;
 use WebCalendar\Core\Domain\ValueObject\DateRange;
+use WebCalendar\Core\Domain\ValueObject\EventScope;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 
@@ -36,9 +37,9 @@ final class JournalService
     /**
      * @return Journal[]
      */
-    public function getJournalsInDateRange(DateRange $range, ?string $user = null): array
+    public function getJournalsInDateRange(DateRange $range, EventScope $scope): array
     {
-        return $this->journalRepository->findByDateRange($range, $user);
+        return $this->journalRepository->findByDateRange($range, $scope);
     }
 
     /**

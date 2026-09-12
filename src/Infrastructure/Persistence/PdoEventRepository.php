@@ -25,6 +25,8 @@ final class PdoEventRepository implements EventRepositoryInterface
 {
     use ChunkedInClauseTrait;
     use TransactionalTrait;
+    use AppliesEventScope;
+
     public function __construct(
         private readonly PDO $pdo,
         private readonly string $tablePrefix = '',
@@ -717,47 +719,6 @@ final class PdoEventRepository implements EventRepositoryInterface
         [$exDate, $rDate] = $this->loadExceptions($id);
 
         return new Recurrence($rule, $exDate, $rDate);
-    }
-
-    /**
-     * Builds the access-scoping SQL for a query, mirroring the rules in
-     * findByDateRange().
-     *
-     * @param string $alias Table alias including its dot ('e.'), or '' when
-     *                      the query has no alias.
-     * @return array{0: string[], 1: array<string, mixed>}
-     */
-    private function scopeConditions(EventScope $scope, string $alias): array
-    {
-        $clauses = [];
-        $params = [];
-
-        $user = $scope->user();
-        $accessLevel = $scope->accessLevel();
-
-        if ($user !== null) {
-            // Signed-in reader: public entries, plus anything they created.
-            $clauses[] = "({$alias}cal_access = 'P' OR {$alias}cal_create_by = :scope_login)";
-            $params['scope_login'] = $user->login();
-        } elseif ($accessLevel !== null) {
-            // No identity: one access level only.
-            $clauses[] = "{$alias}cal_access = :scope_access";
-            $params['scope_access'] = $accessLevel;
-        }
-        // Otherwise the scope is administrative and adds no access filter.
-
-        $users = $scope->users();
-        if ($users !== null && $users !== []) {
-            $placeholders = [];
-            foreach (array_values($users) as $i => $login) {
-                $key = 'scope_user_' . $i;
-                $placeholders[] = ':' . $key;
-                $params[$key] = $login;
-            }
-            $clauses[] = "{$alias}cal_create_by IN (" . implode(', ', $placeholders) . ')';
-        }
-
-        return [$clauses, $params];
     }
 
     /**

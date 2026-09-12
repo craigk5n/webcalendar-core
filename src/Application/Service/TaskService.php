@@ -11,6 +11,7 @@ use WebCalendar\Core\Domain\Exception\EventNotFoundException;
 use WebCalendar\Core\Domain\Repository\TaskRepositoryInterface;
 use WebCalendar\Core\Domain\ValueObject\EventId;
 use WebCalendar\Core\Domain\ValueObject\DateRange;
+use WebCalendar\Core\Domain\ValueObject\EventScope;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 
@@ -36,9 +37,9 @@ final class TaskService
     /**
      * @return Task[]
      */
-    public function getTasksInDateRange(DateRange $range, ?string $user = null): array
+    public function getTasksInDateRange(DateRange $range, EventScope $scope): array
     {
-        return $this->taskRepository->findByDateRange($range, $user);
+        return $this->taskRepository->findByDateRange($range, $scope);
     }
 
     /**

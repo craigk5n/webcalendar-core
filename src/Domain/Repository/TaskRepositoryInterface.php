@@ -7,6 +7,7 @@ namespace WebCalendar\Core\Domain\Repository;
 use WebCalendar\Core\Domain\Entity\Task;
 use WebCalendar\Core\Domain\ValueObject\EventId;
 use WebCalendar\Core\Domain\ValueObject\DateRange;
+use WebCalendar\Core\Domain\ValueObject\EventScope;
 
 /**
  * Interface for Task persistence operations.
@@ -18,7 +19,7 @@ interface TaskRepositoryInterface
     /**
      * @return Task[]
      */
-    public function findByDateRange(DateRange $range, ?string $user = null): array;
+    public function findByDateRange(DateRange $range, EventScope $scope): array;
 
     public function save(Task $task): void;
 

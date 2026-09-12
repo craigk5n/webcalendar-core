@@ -9,6 +9,7 @@ use WebCalendar\Core\Domain\Entity\Task;
 use WebCalendar\Core\Domain\Repository\TaskRepositoryInterface;
 use WebCalendar\Core\Domain\ValueObject\EventId;
 use WebCalendar\Core\Domain\ValueObject\DateRange;
+use WebCalendar\Core\Domain\ValueObject\EventScope;
 use WebCalendar\Core\Domain\ValueObject\EventType;
 use WebCalendar\Core\Domain\ValueObject\AccessLevel;
 use WebCalendar\Core\Domain\ValueObject\Recurrence;
@@ -21,6 +22,8 @@ use WebCalendar\Core\Domain\ValueObject\RDate;
  */
 final class PdoTaskRepository implements TaskRepositoryInterface
 {
+    use AppliesEventScope;
+
     use TransactionalTrait;
     public function __construct(
         private readonly PDO $pdo,
@@ -44,7 +47,7 @@ final class PdoTaskRepository implements TaskRepositoryInterface
     /**
      * @return Task[]
      */
-    public function findByDateRange(DateRange $range, ?string $user = null): array
+    public function findByDateRange(DateRange $range, EventScope $scope): array
     {
         $sql = "SELECT * FROM {$this->tablePrefix}webcal_entry
                 WHERE cal_date BETWEEN :start AND :end AND cal_type IN ('T', 'N')";
@@ -53,10 +56,14 @@ final class PdoTaskRepository implements TaskRepositoryInterface
             'end' => (int)$range->endDate()->format('Ymd')
         ];
 
-        if ($user !== null) {
-            $sql .= ' AND cal_create_by = :login';
-            $params['login'] = $user;
+        // Tasks are webcal_entry rows like events, so they carry cal_access
+        // and the same scoping rule applies. This query used to have no
+        // access filter at all.
+        [$scopeClauses, $scopeParams] = $this->scopeConditions($scope, '');
+        foreach ($scopeClauses as $clause) {
+            $sql .= ' AND ' . $clause;
         }
+        $params += $scopeParams;
 
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute($params);

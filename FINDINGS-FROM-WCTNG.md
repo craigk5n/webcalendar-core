@@ -677,11 +677,54 @@ EventScope::administrative()->limitedToUsers($onlyThisCalendar)      // grant-fi
 four arguments to one expression, and `AccessLevel` is no longer imported by
 either service — the access rule lives in the scope now, not at the call site.
 
-### Still carrying the old shape
+### Tasks, journals and the audit log (fixed, see below)
 
 `TaskRepositoryInterface::findByDateRange()` and
-`JournalRepositoryInterface::findByDateRange()` take `(DateRange, ?string
-$user = null)`, and with a null user they apply no filter at all. They have no
-access-level concept, so they are not the same defect exactly, but they share
-the dangerous default. `ActivityLogRepositoryInterface::findByDateRange()` is
-the same shape again. Worth a look; out of scope here.
+`JournalRepositoryInterface::findByDateRange()` took `(DateRange, ?string
+$user = null)` and applied no filter at all when the user was null.
+`ActivityLogRepositoryInterface::findByDateRange()` was the same shape again.
+
+---
+
+## Tasks, journals and the audit log
+
+Two different problems wearing the same shape.
+
+### Tasks and journals had the events bug, without the fix
+
+The first assumption to correct: tasks and journals are not a separate store.
+They are `webcal_entry` rows separated from events only by `cal_type` --
+`T`/`N` and `J`/`O` -- so they carry `cal_access` exactly like events do.
+Their date-range queries never mentioned it. A null user returned **every
+user's private tasks and journals**, and a non-null one filtered on
+`cal_create_by` alone.
+
+Neither path had a single test. That is why it survived a session spent
+fixing precisely this defect elsewhere.
+
+Both now take a required `EventScope`, and the access rule they use is no
+longer a copy: `scopeConditions()` moved into an `AppliesEventScope` trait
+shared by the event, task and journal repositories. Three tables' worth of
+queries, one implementation of "what may this caller see" -- duplicating it
+per repository is how tasks and journals ended up with no filter while events
+had one.
+
+`TaskService::getTasksInDateRange()` and
+`JournalService::getJournalsInDateRange()` take a scope to match.
+
+### The audit log is an authorization problem, not a scoping one
+
+`webcal_entry_log` has no `cal_access` column and its rows are not calendar
+entries, so `EventScope` does not apply. What it records is who did what,
+which makes another user's entries a disclosure in their own right --
+and `ActivityLogService::getLogs()` had no actor and no check, so a bare call
+read the whole site's audit trail for whoever made it.
+
+It now takes the actor:
+
+- an admin may read any user's entries, or all of them;
+- anyone else may read only their own, and passing null means *theirs*
+  rather than everybody's.
+
+That last rule is the one worth stating: the safe reading of a bare "show me
+the log" is "my activity", never the site's.
