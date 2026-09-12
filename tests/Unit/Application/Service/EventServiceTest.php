@@ -13,6 +13,7 @@ use WebCalendar\Core\Domain\Exception\EventNotFoundException;
 use WebCalendar\Core\Domain\Repository\EventRepositoryInterface;
 use WebCalendar\Core\Domain\Repository\UserRepositoryInterface;
 use WebCalendar\Core\Domain\ValueObject\EventId;
+use WebCalendar\Core\Domain\ValueObject\EventScope;
 use WebCalendar\Core\Domain\ValueObject\DateRange;
 use WebCalendar\Core\Domain\ValueObject\EventType;
 use WebCalendar\Core\Domain\ValueObject\AccessLevel;
@@ -63,13 +64,14 @@ final class EventServiceTest extends TestCase
 
         $user = $this->createUser('jdoe');
         $events = [];
+        $scope = EventScope::forUser($user);
 
         $this->eventRepository->expects($this->once())
             ->method('findByDateRange')
-            ->with($range, $user)
+            ->with($range, $this->identicalTo($scope))
             ->willReturn($events);
 
-        $result = $this->eventService->getEventsInDateRange($range, $user);
+        $result = $this->eventService->getEventsInDateRange($range, $scope);
         $this->assertSame($events, $result->all());
     }
 

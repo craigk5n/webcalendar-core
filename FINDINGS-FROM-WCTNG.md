@@ -636,3 +636,52 @@ there is a test for it.
 
 Ten integration tests pin the behaviour against the shipped schema, across a
 fixture set of two users with public, confidential and private entries each.
+
+---
+
+## findByDateRange migrated to EventScope
+
+The last holdout. `findByDateRange()` was where the null-means-unrestricted
+default was actually documented:
+
+```php
+// When both $user and $accessLevel are null: admin path, no access filter
+```
+
+That comment no longer exists anywhere in `src/`. The method now takes a
+required `EventScope`, the same one the search surfaces use, and the SQL is
+built by the shared `scopeConditions()` helper — so there is exactly one
+implementation of "what may this caller see" behind every event read path in
+the library.
+
+### Breaking changes
+
+- `EventRepositoryInterface::findByDateRange(DateRange, EventScope)` —
+  the `?User`, `?string`, `?array` parameters are gone.
+- `EventService::getEventsInDateRange(DateRange, EventScope)` — same.
+
+### What the call sites look like now
+
+The migration made the intent of each read legible, which was most of the
+point. `ReportService`'s four branches previously differed by which
+combination of nulls they passed; they now say what they mean:
+
+```php
+EventScope::forUser($actor)->limitedToUsers($onlyThisCalendar)        // own
+EventScope::administrative()->limitedToUsers($onlyThisCalendar)      // admin
+EventScope::publicOnly()->limitedToUsers($onlyThisCalendar)          // fallback
+EventScope::administrative()->limitedToUsers($onlyThisCalendar)      // grant-filtered
+```
+
+`FeedService::generateFreeBusy()` collapsed from a two-branch ternary over
+four arguments to one expression, and `AccessLevel` is no longer imported by
+either service — the access rule lives in the scope now, not at the call site.
+
+### Still carrying the old shape
+
+`TaskRepositoryInterface::findByDateRange()` and
+`JournalRepositoryInterface::findByDateRange()` take `(DateRange, ?string
+$user = null)`, and with a null user they apply no filter at all. They have no
+access-level concept, so they are not the same defect exactly, but they share
+the dangerous default. `ActivityLogRepositoryInterface::findByDateRange()` is
+the same shape again. Worth a look; out of scope here.

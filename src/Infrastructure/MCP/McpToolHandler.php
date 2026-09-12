@@ -58,7 +58,7 @@ final class McpToolHandler
             new \DateTimeImmutable($endStr)
         );
 
-        $events = $this->eventService->getEventsInDateRange($range, $user);
+        $events = $this->eventService->getEventsInDateRange($range, EventScope::forUser($user));
         
         $result = [];
         foreach ($events as $event) {

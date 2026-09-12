@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace WebCalendar\Core\Tests\Integration\Persistence;
 
 use WebCalendar\Core\Domain\ValueObject\DateRange;
+use WebCalendar\Core\Domain\ValueObject\EventScope;
 use WebCalendar\Core\Domain\ValueObject\EventId;
 use WebCalendar\Core\Infrastructure\Persistence\PdoCategoryRepository;
 use WebCalendar\Core\Infrastructure\Persistence\PdoEventRepository;
@@ -60,7 +61,7 @@ final class BatchInClauseChunkingTest extends RepositoryTestCase
         $events = $this->events->findByDateRange(new DateRange(
             new \DateTimeImmutable('2026-07-01'),
             new \DateTimeImmutable('2026-07-31')
-        ));
+        ), EventScope::administrative());
 
         $this->assertCount(self::MANY_IDS, $events);
 

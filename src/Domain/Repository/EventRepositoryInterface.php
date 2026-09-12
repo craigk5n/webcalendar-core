@@ -24,20 +24,20 @@ interface EventRepositoryInterface
     public function findByUid(string $uid): ?Event;
 
     /**
-     * Finds all events within a specific date range.
-     * Optionally filtered by user, access level, and/or specific user logins.
+     * Finds all events within a specific date range, within $scope.
      *
-     * @param DateRange $range
-     * @param \WebCalendar\Core\Domain\Entity\User|null $user Optional user — when set, returns public events + user's own events.
-     * @param string|null $accessLevel Optional access level filter (e.g. 'P' for public only).
-     * @param string[]|null $users Optional list of user logins to restrict results to.
+     * $scope is required and has no default. This method used to take a
+     * nullable user and access level, where passing neither meant no access
+     * filter at all — which is how a public feed and a report each ended up
+     * returning every user's PRIVATE and CONFIDENTIAL entries. The
+     * unrestricted query is now {@see EventScope::administrative()}, which
+     * has to be asked for by name.
+     *
      * @return Event[]
      */
     public function findByDateRange(
         DateRange $range,
-        ?\WebCalendar\Core\Domain\Entity\User $user = null,
-        ?string $accessLevel = null,
-        ?array $users = null,
+        \WebCalendar\Core\Domain\ValueObject\EventScope $scope,
     ): array;
 
     /**

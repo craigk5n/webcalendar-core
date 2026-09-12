@@ -97,7 +97,7 @@ final class PdoEventRepositoryTest extends RepositoryTestCase
             new \DateTimeImmutable('2026-02-12')
         );
 
-        $events = $this->repository->findByDateRange($range);
+        $events = $this->repository->findByDateRange($range, EventScope::administrative());
 
         $this->assertCount(1, $events);
         $this->assertSame('E1', $events[0]->name());
@@ -120,7 +120,7 @@ final class PdoEventRepositoryTest extends RepositoryTestCase
         $range = new DateRange(new \DateTimeImmutable('2026-02-01'), new \DateTimeImmutable('2026-02-28'));
 
         // Must not throw "Invalid RRULE string".
-        $events = $this->repository->findByDateRange($range);
+        $events = $this->repository->findByDateRange($range, EventScope::administrative());
 
         $this->assertCount(1, $events);
         $this->assertSame('HASBADRULE', $events[0]->name());
@@ -640,11 +640,11 @@ final class PdoEventRepositoryTest extends RepositoryTestCase
     }
 
     // ---------------------------------------------------------------------
-    // Public-feed access scoping regression coverage
+    // Access scoping regression coverage
     //
     // FeedService::generateRss() used to pass the calendar owner as $user,
-    // which is NOT a "public entries only" filter -- see the two tests below
-    // for what each argument shape actually returns.
+    // which is NOT a "public entries only" filter. These tests pin what each
+    // EventScope actually returns against the shipped schema.
     // ---------------------------------------------------------------------
 
     /**
@@ -686,17 +686,18 @@ final class PdoEventRepositoryTest extends RepositoryTestCase
     }
 
     /**
-     * Passing a user applies "cal_access = 'P' OR cal_create_by = :login".
-     * That is a logged-in reader's view, not a public feed's: it returns every
-     * entry the owner created, private ones included, plus other people's
-     * public entries.  Pinned so the trap stays visible.
+     * EventScope::forUser() applies "cal_access = 'P' OR cal_create_by =
+     * :login". That is a logged-in reader's view, not a public feed's: it
+     * returns every entry that user created, private ones included, plus
+     * other people's public entries. Pinned because it is the scope most
+     * likely to be reached for by mistake when a feed wants publicOnly().
      */
-    public function testPassingTheOwnerAsUserReturnsTheirPrivateEntriesToo(): void
+    public function testForUserScopeReturnsTheirPrivateEntriesToo(): void
     {
         $range = $this->seedMixedAccessFixtures();
         $owner = new User('jdoe', 'John', 'Doe', 'john@example.com', false, true);
 
-        $events = $this->repository->findByDateRange($range, $owner);
+        $events = $this->repository->findByDateRange($range, EventScope::forUser($owner));
 
         $this->assertSame(
             ['CONFIDENTIAL: salary review', 'PRIVATE: divorce lawyer', 'Public standup', 'Someone else public'],
@@ -712,23 +713,22 @@ final class PdoEventRepositoryTest extends RepositoryTestCase
     {
         $range = $this->seedMixedAccessFixtures();
 
-        $events = $this->repository->findByDateRange($range, null, 'P', ['jdoe']);
+        $events = $this->repository->findByDateRange($range, EventScope::publicOnly()->limitedToUsers(['jdoe']));
 
         $this->assertSame(['Public standup'], $this->namesOf($events));
     }
 
     /**
-     * The shape a report uses for an admin reading someone else's calendar:
-     * no access filter, but pinned to one creator.  The unfiltered branch is
-     * safe only because the users list constrains it -- without that list it
-     * returns every user's private entries, which is what made
-     * ReportService::generateFullReport() leak.
+     * The scope a report uses for an admin reading someone else's calendar:
+     * administrative(), pinned with limitedToUsers(). Pinning is not an
+     * access filter -- it constrains which calendar, not which entries --
+     * so this still returns that user's private entries, and only theirs.
      */
-    public function testNoAccessFilterStillHonoursTheUsersList(): void
+    public function testAdministrativeScopeStillHonoursTheUsersList(): void
     {
         $range = $this->seedMixedAccessFixtures();
 
-        $events = $this->repository->findByDateRange($range, null, null, ['jdoe']);
+        $events = $this->repository->findByDateRange($range, EventScope::administrative()->limitedToUsers(['jdoe']));
 
         $this->assertSame(
             ['CONFIDENTIAL: salary review', 'PRIVATE: divorce lawyer', 'Public standup'],
@@ -738,14 +738,15 @@ final class PdoEventRepositoryTest extends RepositoryTestCase
     }
 
     /**
-     * And the branch that has no constraint at all, pinned so its blast
-     * radius stays documented: every user, every access level.
+     * And administrative() with nothing pinned, so its blast radius stays
+     * documented: every user, every access level. This is the query that
+     * used to be reachable by omitting arguments; it now has to be named.
      */
-    public function testNoFilterAtAllReturnsEveryUsersPrivateEntries(): void
+    public function testUnpinnedAdministrativeScopeReturnsEveryUsersPrivateEntries(): void
     {
         $range = $this->seedMixedAccessFixtures();
 
-        $events = $this->repository->findByDateRange($range);
+        $events = $this->repository->findByDateRange($range, EventScope::administrative());
 
         $this->assertSame(
             [

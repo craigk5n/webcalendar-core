@@ -17,6 +17,7 @@ use WebCalendar\Core\Domain\ValueObject\AccessLevel;
 use WebCalendar\Core\Domain\Repository\UserRepositoryInterface;
 use WebCalendar\Core\Domain\Entity\User;
 use WebCalendar\Core\Domain\ValueObject\DateRange;
+use WebCalendar\Core\Domain\ValueObject\EventScope;
 use WebCalendar\Core\Application\Service\CalendarAccessService;
 use WebCalendar\Core\Domain\Repository\CalendarAccessRepositoryInterface;
 use WebCalendar\Core\Domain\ValueObject\CalendarAccess;
@@ -106,9 +107,11 @@ final class ReportServiceTest extends TestCase
             ->method('findByDateRange')
             ->with(
                 $this->identicalTo($range),
-                $this->identicalTo($actor),
-                $this->isNull(),
-                $this->identicalTo(['jdoe'])
+                $this->callback(
+                    static fn (EventScope $scope): bool => $scope->user()?->login() === 'jdoe'
+                        && $scope->accessLevel() === null
+                        && $scope->users() === ['jdoe']
+                )
             )
             ->willReturn([]);
 
@@ -122,7 +125,10 @@ final class ReportServiceTest extends TestCase
 
         $this->eventRepository->expects($this->once())
             ->method('findByDateRange')
-            ->with($range, $actor, null, ['jdoe'])
+            ->with($range, $this->callback(
+                static fn (EventScope $scope): bool => $scope->user()?->login() === 'jdoe'
+                    && $scope->users() === ['jdoe']
+            ))
             ->willReturn([]);
 
         // Explicitly naming your own login must behave the same as omitting it.
@@ -138,9 +144,11 @@ final class ReportServiceTest extends TestCase
             ->method('findByDateRange')
             ->with(
                 $this->identicalTo($range),
-                $this->isNull(),
-                $this->identicalTo('P'),
-                $this->identicalTo(['bsmith'])
+                $this->callback(
+                    static fn (EventScope $scope): bool => $scope->user() === null
+                        && $scope->accessLevel() === 'P'
+                        && $scope->users() === ['bsmith']
+                )
             )
             ->willReturn([]);
 
@@ -156,9 +164,10 @@ final class ReportServiceTest extends TestCase
             ->method('findByDateRange')
             ->with(
                 $this->identicalTo($range),
-                $this->isNull(),
-                $this->isNull(),
-                $this->identicalTo(['bsmith'])
+                $this->callback(
+                    static fn (EventScope $scope): bool => $scope->isAdministrative()
+                        && $scope->users() === ['bsmith']
+                )
             )
             ->willReturn([]);
 
@@ -178,9 +187,9 @@ final class ReportServiceTest extends TestCase
             ->method('findByDateRange')
             ->with(
                 $this->anything(),
-                $this->anything(),
-                $this->anything(),
-                $this->logicalNot($this->isNull())
+                $this->callback(
+                    static fn (EventScope $scope): bool => $scope->users() !== null && $scope->users() !== []
+                )
             )
             ->willReturn([]);
 
@@ -347,7 +356,10 @@ final class ReportServiceTest extends TestCase
 
         $this->eventRepository->expects($this->once())
             ->method('findByDateRange')
-            ->with($this->anything(), $this->identicalTo($actor), $this->isNull(), ['jdoe'])
+            ->with($this->anything(), $this->callback(
+                static fn (EventScope $scope): bool => $scope->user()?->login() === 'jdoe'
+                    && $scope->users() === ['jdoe']
+            ))
             ->willReturn([]);
 
         $this->serviceGranting(CalendarPermission::NONE)->generateFullReport(

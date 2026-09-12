@@ -12,6 +12,7 @@ use WebCalendar\Core\Domain\Entity\User;
 use WebCalendar\Core\Domain\Repository\EventRepositoryInterface;
 use WebCalendar\Core\Domain\ValueObject\AccessLevel;
 use WebCalendar\Core\Domain\ValueObject\DateRange;
+use WebCalendar\Core\Domain\ValueObject\EventScope;
 use WebCalendar\Core\Domain\ValueObject\EventCollection;
 use WebCalendar\Core\Domain\ValueObject\EventId;
 use WebCalendar\Core\Domain\ValueObject\EventType;
@@ -200,9 +201,11 @@ final class FeedServiceTest extends TestCase
       ->method('findByDateRange')
       ->with(
         $this->identicalTo($range),
-        $this->isNull(),
-        $this->identicalTo('P'),
-        $this->identicalTo(['jdoe'])
+        $this->callback(
+          static fn (EventScope $scope): bool => $scope->user() === null
+            && $scope->accessLevel() === 'P'
+            && $scope->users() === ['jdoe']
+        )
       )
       ->willReturn([]);
 
@@ -220,9 +223,11 @@ final class FeedServiceTest extends TestCase
       ->method('findByDateRange')
       ->with(
         $this->identicalTo($range),
-        $this->identicalTo($user),
-        $this->isNull(),
-        $this->identicalTo(['jdoe'])
+        $this->callback(
+          static fn (EventScope $scope): bool => $scope->user()?->login() === 'jdoe'
+            && $scope->accessLevel() === null
+            && $scope->users() === ['jdoe']
+        )
       )
       ->willReturn([]);
 
@@ -238,9 +243,11 @@ final class FeedServiceTest extends TestCase
       ->method('findByDateRange')
       ->with(
         $this->identicalTo($range),
-        $this->isNull(),
-        $this->identicalTo('P'),
-        $this->identicalTo(['jdoe'])
+        $this->callback(
+          static fn (EventScope $scope): bool => $scope->user() === null
+            && $scope->accessLevel() === 'P'
+            && $scope->users() === ['jdoe']
+        )
       )
       ->willReturn([]);
 

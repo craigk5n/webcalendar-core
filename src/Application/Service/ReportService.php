@@ -8,8 +8,8 @@ use WebCalendar\Core\Domain\Entity\Report;
 use WebCalendar\Core\Domain\Entity\Event;
 use WebCalendar\Core\Domain\Repository\ReportRepositoryInterface;
 use WebCalendar\Core\Domain\Entity\User;
-use WebCalendar\Core\Domain\ValueObject\AccessLevel;
 use WebCalendar\Core\Domain\ValueObject\DateRange;
+use WebCalendar\Core\Domain\ValueObject\EventScope;
 use WebCalendar\Core\Domain\ValueObject\EventCollection;
 
 /**
@@ -88,10 +88,11 @@ final class ReportService
     /**
      * Applies the access rules described on {@see generateFullReport()}.
      *
-     * Every branch pins the query to a single calendar. Calling
-     * getEventsInDateRange() with neither a user nor an access level reaches
-     * the repository's unfiltered admin path, which returns every user's
-     * PRIVATE and CONFIDENTIAL entries -- never right for a report.
+     * Every branch pins the query to a single calendar with
+     * limitedToUsers(). Note that pinning is not itself an access filter:
+     * the administrative branches below still read that calendar's private
+     * entries, which is exactly why each one is reached only after an
+     * explicit authorization check.
      */
     private function findReportableEvents(
         DateRange $range,
@@ -103,27 +104,21 @@ final class ReportService
         if ($targetLogin === $actor->login()) {
             return $this->eventService->getEventsInDateRange(
                 $range,
-                $actor,
-                null,
-                $onlyThisCalendar
+                EventScope::forUser($actor)->limitedToUsers($onlyThisCalendar)
             );
         }
 
         if ($actor->isAdmin()) {
             return $this->eventService->getEventsInDateRange(
                 $range,
-                null,
-                null,
-                $onlyThisCalendar
+                EventScope::administrative()->limitedToUsers($onlyThisCalendar)
             );
         }
 
         if ($this->calendarAccess === null) {
             return $this->eventService->getEventsInDateRange(
                 $range,
-                null,
-                AccessLevel::PUBLIC->value,
-                $onlyThisCalendar
+                EventScope::publicOnly()->limitedToUsers($onlyThisCalendar)
             );
         }
 
@@ -138,9 +133,7 @@ final class ReportService
 
         $events = $this->eventService->getEventsInDateRange(
             $range,
-            null,
-            null,
-            $onlyThisCalendar
+            EventScope::administrative()->limitedToUsers($onlyThisCalendar)
         );
 
         $visible = [];

@@ -8,6 +8,7 @@ use WebCalendar\Core\Domain\Entity\User;
 use WebCalendar\Core\Domain\Entity\Event;
 use WebCalendar\Core\Domain\ValueObject\EventId;
 use WebCalendar\Core\Domain\ValueObject\DateRange;
+use WebCalendar\Core\Domain\ValueObject\EventScope;
 use WebCalendar\Core\Domain\ValueObject\EventType;
 use WebCalendar\Core\Domain\ValueObject\AccessLevel;
 use WebCalendar\Core\Domain\ValueObject\Recurrence;
@@ -83,7 +84,7 @@ final class BookingService
 
         // Get existing events for the date
         $range = new DateRange($date->setTime(0, 0), $date->setTime(23, 59, 59));
-        $existingEvents = $this->eventService->getEventsInDateRange($range, $user);
+        $existingEvents = $this->eventService->getEventsInDateRange($range, EventScope::forUser($user));
 
         $slots = [];
         $current = $workStart;

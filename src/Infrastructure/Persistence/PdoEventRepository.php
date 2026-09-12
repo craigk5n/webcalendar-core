@@ -252,14 +252,11 @@ final class PdoEventRepository implements EventRepositoryInterface
     }
 
     /**
-     * @param string[]|null $users
      * @return Event[]
      */
     public function findByDateRange(
         DateRange $range,
-        ?User $user = null,
-        ?string $accessLevel = null,
-        ?array $users = null,
+        EventScope $scope,
     ): array {
         $startDateInt = (int)$range->startDate()->format('Ymd');
         $endDateInt = (int)$range->endDate()->format('Ymd');
@@ -287,28 +284,14 @@ final class PdoEventRepository implements EventRepositoryInterface
             'repeat_min' => $startDateInt,
         ];
 
-        // Access level filtering
-        if ($user !== null) {
-            // Logged-in non-admin: see public events + own events
-            $sql .= " AND (e.cal_access = 'P' OR e.cal_create_by = :login)";
-            $params['login'] = $user->login();
-        } elseif ($accessLevel !== null) {
-            // Anonymous visitor: only see events matching access level (typically 'P')
-            $sql .= ' AND e.cal_access = :access_level';
-            $params['access_level'] = $accessLevel;
+        // Access scoping, shared with search() and searchByCriteria(). The
+        // scope is a required argument, so there is no longer an "omit the
+        // filters and get everything" path through this method.
+        [$scopeClauses, $scopeParams] = $this->scopeConditions($scope, 'e.');
+        foreach ($scopeClauses as $clause) {
+            $sql .= ' AND ' . $clause;
         }
-        // When both $user and $accessLevel are null: admin path, no access filter
-
-        // Optional users filter (restrict to specific creators)
-        if ($users !== null && $users !== []) {
-            $placeholders = [];
-            foreach ($users as $i => $login) {
-                $key = 'user_' . $i;
-                $placeholders[] = ':' . $key;
-                $params[$key] = $login;
-            }
-            $sql .= ' AND e.cal_create_by IN (' . implode(', ', $placeholders) . ')';
-        }
+        $params += $scopeParams;
 
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute($params);

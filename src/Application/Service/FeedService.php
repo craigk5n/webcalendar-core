@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace WebCalendar\Core\Application\Service;
 
 use WebCalendar\Core\Domain\Entity\User;
-use WebCalendar\Core\Domain\ValueObject\AccessLevel;
 use WebCalendar\Core\Domain\ValueObject\DateRange;
+use WebCalendar\Core\Domain\ValueObject\EventScope;
 use Icalendar\Component\VCalendar;
 use Icalendar\Component\VFreeBusy;
 use Icalendar\Writer\Writer;
@@ -60,14 +60,11 @@ final class FeedService
         $vfb->setDtStart($range->startDate()->format('Ymd\THis\Z'));
         $vfb->setDtEnd($range->endDate()->format('Ymd\THis\Z'));
 
-        $events = $includePrivate
-            ? $this->eventService->getEventsInDateRange($range, $user, null, [$user->login()])
-            : $this->eventService->getEventsInDateRange(
-                $range,
-                null,
-                AccessLevel::PUBLIC->value,
-                [$user->login()]
-            );
+        $events = $this->eventService->getEventsInDateRange(
+            $range,
+            ($includePrivate ? EventScope::forUser($user) : EventScope::publicOnly())
+                ->limitedToUsers([$user->login()])
+        );
 
         foreach ($events as $event) {
             $period = sprintf(
@@ -98,9 +95,7 @@ final class FeedService
 
         $events = $this->eventService->getEventsInDateRange(
             $range,
-            null,
-            AccessLevel::PUBLIC->value,
-            [$user->login()]
+            EventScope::publicOnly()->limitedToUsers([$user->login()])
         );
         
         $xml = new \SimpleXMLElement('<?xml version="1.0" encoding="UTF-8" ?><rss version="2.0"></rss>');

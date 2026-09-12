@@ -12,6 +12,7 @@ use WebCalendar\Core\Domain\Repository\EventRepositoryInterface;
 use WebCalendar\Core\Domain\Repository\UserRepositoryInterface;
 use WebCalendar\Core\Domain\ValueObject\EventId;
 use WebCalendar\Core\Domain\ValueObject\DateRange;
+use WebCalendar\Core\Domain\ValueObject\EventScope;
 use WebCalendar\Core\Domain\ValueObject\EventCollection;
 use WebCalendar\Core\Domain\ValueObject\ParticipantStatus;
 use Psr\Log\LoggerInterface;
@@ -33,23 +34,23 @@ final class EventService
     }
 
     /**
-     * Finds events within a date range.
+     * Finds events within a date range, within $scope.
      *
-     * @param string[]|null $users Optional list of user logins to restrict results to.
+     * The scope is required: see {@see EventScope} for why the unrestricted
+     * query has to be named rather than reached by omission.
      */
     public function getEventsInDateRange(
         DateRange $range,
-        ?User $user = null,
-        ?string $accessLevel = null,
-        ?array $users = null,
+        EventScope $scope,
     ): EventCollection {
         $this->logger->debug('Fetching events in date range', [
             'start' => $range->startDate()->format('c'),
             'end' => $range->endDate()->format('c'),
-            'user' => $user?->login(),
-            'access' => $accessLevel
+            'user' => $scope->user()?->login(),
+            'access' => $scope->accessLevel(),
+            'administrative' => $scope->isAdministrative(),
         ]);
-        $events = $this->eventRepository->findByDateRange($range, $user, $accessLevel, $users);
+        $events = $this->eventRepository->findByDateRange($range, $scope);
         return new EventCollection($events);
     }
 
