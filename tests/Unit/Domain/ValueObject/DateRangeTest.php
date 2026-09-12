@@ -86,12 +86,21 @@ final class DateRangeTest extends TestCase
             new \DateTimeImmutable('2026-02-11 09:59:59')
         )));
         
-        // Adjacent ranges (should they overlap?) 
-        // Typically, ranges are [start, end], so if end1 == start2, they "touch".
-        // Let's decide if they overlap. If it's inclusive, yes.
-        $this->assertTrue($range1->overlaps(new DateRange(
+        // Adjacent ranges do NOT overlap.  Time intervals are half-open
+        // [start, end): a meeting that ends at 12:00 and one that starts at
+        // 12:00 do not collide, and the 12:00 slot after it is bookable.
+        // This matches ConflictDetector and RFC 5545, where DTEND is exclusive.
+        $this->assertFalse($range1->overlaps(new DateRange(
             new \DateTimeImmutable('2026-02-11 12:00:00'),
             new \DateTimeImmutable('2026-02-11 13:00:00')
         )));
+        $this->assertFalse($range1->overlaps(new DateRange(
+            new \DateTimeImmutable('2026-02-11 09:00:00'),
+            new \DateTimeImmutable('2026-02-11 10:00:00')
+        )));
+
+        // A range still overlaps itself, and touching by more than a boundary
+        // still counts.
+        $this->assertTrue($range1->overlaps($range1));
     }
 }

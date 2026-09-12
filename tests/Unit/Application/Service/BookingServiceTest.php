@@ -13,6 +13,10 @@ use WebCalendar\Core\Domain\Entity\Event;
 use WebCalendar\Core\Domain\Repository\UserRepositoryInterface;
 use WebCalendar\Core\Domain\ValueObject\DateRange;
 use WebCalendar\Core\Domain\ValueObject\EventCollection;
+use WebCalendar\Core\Domain\ValueObject\EventId;
+use WebCalendar\Core\Domain\ValueObject\EventType;
+use WebCalendar\Core\Domain\ValueObject\AccessLevel;
+use WebCalendar\Core\Application\Contract\HtmlSanitizerInterface;
 
 final class BookingServiceTest extends TestCase
 {
@@ -60,5 +64,144 @@ final class BookingServiceTest extends TestCase
             }));
 
         $this->bookingService->book($user, 'Alice', 'alice@example.com', $start, 60);
+    }
+
+    public function testGetAvailabilitySkipsOnlyTheSlotsAnAppointmentActuallyCovers(): void
+    {
+        $user = new User('jdoe', 'John', 'Doe', 'john@example.com', false, true);
+        $date = new \DateTimeImmutable('2026-02-11');
+
+        // One 09:00-10:00 appointment covers exactly two 30-minute slots.
+        // The 10:00-10:30 slot begins when the appointment ends, so it is free.
+        $this->eventRepository->expects($this->once())
+            ->method('findByDateRange')
+            ->willReturn([$this->createEventAt($date->setTime(9, 0), 60)]);
+
+        $slots = $this->bookingService->getAvailability($user, $date);
+
+        $this->assertCount(14, $slots);
+        $this->assertSame('10:00', $slots[0]->startDate()->format('H:i'));
+    }
+
+    public function testGetAvailabilityHonoursCustomOfficeHours(): void
+    {
+        $user = new User('jdoe', 'John', 'Doe', 'john@example.com', false, true);
+        $date = new \DateTimeImmutable('2026-02-11');
+
+        $this->eventRepository->method('findByDateRange')->willReturn([]);
+
+        $slots = $this->bookingService->getAvailability(
+            $user,
+            $date,
+            startHour: 8,
+            endHour: 10,
+            slotMinutes: 60
+        );
+
+        $this->assertCount(2, $slots);
+        $this->assertSame('08:00', $slots[0]->startDate()->format('H:i'));
+        $this->assertSame('09:00', $slots[1]->startDate()->format('H:i'));
+    }
+
+    public function testGetAvailabilityRejectsNonsensicalOfficeHours(): void
+    {
+        $user = new User('jdoe', 'John', 'Doe', 'john@example.com', false, true);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->bookingService->getAvailability(
+            $user,
+            new \DateTimeImmutable('2026-02-11'),
+            startHour: 17,
+            endHour: 9
+        );
+    }
+
+    public function testBookAcceptsTheCallersOwnPendingStatus(): void
+    {
+        $user = new User('jdoe', 'John', 'Doe', 'john@example.com', false, true);
+        $start = new \DateTimeImmutable('2026-02-11 10:00:00');
+
+        // "Pending approval" is the consuming application's vocabulary, not
+        // this library's.  Core must not hard-code one project's spelling.
+        $this->eventRepository->expects($this->once())
+            ->method('save')
+            ->with($this->callback(
+                static fn (Event $event): bool => $event->status() === 'needs_approval'
+            ));
+
+        $this->bookingService->book(
+            $user,
+            'Alice',
+            'alice@example.com',
+            $start,
+            60,
+            status: 'needs_approval'
+        );
+    }
+
+    public function testBookSanitizesTheNameAndDescriptionItBuilds(): void
+    {
+        $user = new User('jdoe', 'John', 'Doe', 'john@example.com', false, true);
+        $start = new \DateTimeImmutable('2026-02-11 10:00:00');
+
+        // Both strings arrive from an anonymous booking form in the consumer.
+        $this->eventRepository->expects($this->once())
+            ->method('save')
+            ->with($this->callback(static function (Event $event): bool {
+                self::assertStringNotContainsString('<script>', $event->name());
+                self::assertStringNotContainsString('<script>', $event->description());
+                self::assertStringNotContainsString('<img', $event->description());
+                return true;
+            }));
+
+        $this->bookingService->book(
+            $user,
+            'Alice<script>alert(1)</script>',
+            'alice@example.com<img src=x onerror=alert(1)>',
+            $start,
+            60
+        );
+    }
+
+    public function testBookUsesAnInjectedSanitizerWhenGivenOne(): void
+    {
+        $user = new User('jdoe', 'John', 'Doe', 'john@example.com', false, true);
+        $start = new \DateTimeImmutable('2026-02-11 10:00:00');
+
+        $sanitizer = new class implements HtmlSanitizerInterface {
+            public function sanitize(string $html): string
+            {
+                return '[clean]';
+            }
+        };
+
+        $eventService = new EventService($this->eventRepository, $this->createMock(UserRepositoryInterface::class));
+        $service = new BookingService($eventService, sanitizer: $sanitizer);
+
+        $this->eventRepository->expects($this->once())
+            ->method('save')
+            ->with($this->callback(static function (Event $event): bool {
+                self::assertSame('Booking: [clean]', $event->name());
+                self::assertSame('[clean]', $event->description());
+                return true;
+            }));
+
+        $service->book($user, 'Alice', 'alice@example.com', $start, 60);
+    }
+
+    private function createEventAt(\DateTimeImmutable $start, int $duration): Event
+    {
+        return new Event(
+            id: new EventId(1),
+            uid: 'uid-1',
+            name: 'Existing appointment',
+            description: '',
+            location: '',
+            start: $start,
+            duration: $duration,
+            createdBy: 'jdoe',
+            type: EventType::EVENT,
+            access: AccessLevel::PUBLIC
+        );
     }
 }

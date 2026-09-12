@@ -183,4 +183,67 @@ final class FeedServiceTest extends TestCase
 
     $this->assertStringContainsString('https://example.com/calendar', $result);
   }
+
+  /**
+   * Regression: a public feed must not widen its query to everything the
+   * owner created.  Passing $user makes the repository apply
+   * "cal_access = 'P' OR cal_create_by = :login", which matches the owner's
+   * PRIVATE and CONFIDENTIAL entries too -- and drags in other people's
+   * public events while it is at it.
+   */
+  public function testRssFeedAsksOnlyForTheOwnersPublicEvents(): void
+  {
+    $user = $this->createUser();
+    $range = $this->createRange();
+
+    $this->eventRepository->expects($this->once())
+      ->method('findByDateRange')
+      ->with(
+        $this->identicalTo($range),
+        $this->isNull(),
+        $this->identicalTo('P'),
+        $this->identicalTo(['jdoe'])
+      )
+      ->willReturn([]);
+
+    $this->feedService->generateRss($user, $range);
+  }
+
+  public function testFreeBusyScopesToTheOwnerAndIncludesPrivateTimeByDefault(): void
+  {
+    $user = $this->createUser();
+    $range = $this->createRange();
+
+    // VFREEBUSY publishes busy periods without detail, so the owner's private
+    // entries belong in it -- but other users' public events never do.
+    $this->eventRepository->expects($this->once())
+      ->method('findByDateRange')
+      ->with(
+        $this->identicalTo($range),
+        $this->identicalTo($user),
+        $this->isNull(),
+        $this->identicalTo(['jdoe'])
+      )
+      ->willReturn([]);
+
+    $this->feedService->generateFreeBusy($user, $range);
+  }
+
+  public function testFreeBusyCanExcludePrivateTime(): void
+  {
+    $user = $this->createUser();
+    $range = $this->createRange();
+
+    $this->eventRepository->expects($this->once())
+      ->method('findByDateRange')
+      ->with(
+        $this->identicalTo($range),
+        $this->isNull(),
+        $this->identicalTo('P'),
+        $this->identicalTo(['jdoe'])
+      )
+      ->willReturn([]);
+
+    $this->feedService->generateFreeBusy($user, $range, includePrivate: false);
+  }
 }

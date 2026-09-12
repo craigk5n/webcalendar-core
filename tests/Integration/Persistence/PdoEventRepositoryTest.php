@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace WebCalendar\Core\Tests\Integration\Persistence;
 
 use WebCalendar\Core\Domain\Entity\Event;
+use WebCalendar\Core\Domain\Entity\User;
 use WebCalendar\Core\Domain\ValueObject\EventId;
 use WebCalendar\Core\Domain\ValueObject\EventType;
 use WebCalendar\Core\Domain\ValueObject\AccessLevel;
@@ -635,5 +636,83 @@ final class PdoEventRepositoryTest extends RepositoryTestCase
         $this->assertNotNull($cleared);
         $this->assertNull($cleared->conferenceUrl());
         $this->assertNull($cleared->conferenceLabel());
+    }
+
+    // ---------------------------------------------------------------------
+    // Public-feed access scoping regression coverage
+    //
+    // FeedService::generateRss() used to pass the calendar owner as $user,
+    // which is NOT a "public entries only" filter -- see the two tests below
+    // for what each argument shape actually returns.
+    // ---------------------------------------------------------------------
+
+    /**
+     * Seeds one owner with public/private/confidential entries plus a second
+     * user's public entry, all inside the asserted window.
+     */
+    private function seedMixedAccessFixtures(): DateRange
+    {
+        $date = new \DateTimeImmutable('2026-02-11 10:00:00');
+
+        $this->repository->save(
+            new Event(new EventId(0), 'pub', 'Public standup', '', '', $date, 60, 'jdoe', EventType::EVENT, AccessLevel::PUBLIC)
+        );
+        $this->repository->save(
+            new Event(new EventId(0), 'priv', 'PRIVATE: divorce lawyer', '', '', $date, 60, 'jdoe', EventType::EVENT, AccessLevel::PRIVATE)
+        );
+        $this->repository->save(
+            new Event(new EventId(0), 'conf', 'CONFIDENTIAL: salary review', '', '', $date, 60, 'jdoe', EventType::EVENT, AccessLevel::CONFIDENTIAL)
+        );
+        $this->repository->save(
+            new Event(new EventId(0), 'other', 'Someone else public', '', '', $date, 60, 'bsmith', EventType::EVENT, AccessLevel::PUBLIC)
+        );
+
+        return new DateRange(
+            new \DateTimeImmutable('2026-02-01'),
+            new \DateTimeImmutable('2026-02-28')
+        );
+    }
+
+    /**
+     * @param array<int, Event> $events
+     * @return string[]
+     */
+    private function namesOf(array $events): array
+    {
+        $names = array_map(static fn (Event $e): string => $e->name(), $events);
+        sort($names);
+        return $names;
+    }
+
+    /**
+     * Passing a user applies "cal_access = 'P' OR cal_create_by = :login".
+     * That is a logged-in reader's view, not a public feed's: it returns every
+     * entry the owner created, private ones included, plus other people's
+     * public entries.  Pinned so the trap stays visible.
+     */
+    public function testPassingTheOwnerAsUserReturnsTheirPrivateEntriesToo(): void
+    {
+        $range = $this->seedMixedAccessFixtures();
+        $owner = new User('jdoe', 'John', 'Doe', 'john@example.com', false, true);
+
+        $events = $this->repository->findByDateRange($range, $owner);
+
+        $this->assertSame(
+            ['CONFIDENTIAL: salary review', 'PRIVATE: divorce lawyer', 'Public standup', 'Someone else public'],
+            $this->namesOf($events)
+        );
+    }
+
+    /**
+     * The argument shape a public feed must use: no user, an explicit access
+     * level, and the owner pinned as the only creator.
+     */
+    public function testPublicAccessLevelScopedToOneOwnerReturnsOnlyTheirPublicEntries(): void
+    {
+        $range = $this->seedMixedAccessFixtures();
+
+        $events = $this->repository->findByDateRange($range, null, 'P', ['jdoe']);
+
+        $this->assertSame(['Public standup'], $this->namesOf($events));
     }
 }

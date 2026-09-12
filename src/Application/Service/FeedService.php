@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace WebCalendar\Core\Application\Service;
 
 use WebCalendar\Core\Domain\Entity\User;
+use WebCalendar\Core\Domain\ValueObject\AccessLevel;
 use WebCalendar\Core\Domain\ValueObject\DateRange;
 use Icalendar\Component\VCalendar;
 use Icalendar\Component\VFreeBusy;
@@ -29,10 +30,25 @@ final class FeedService
 
     /**
      * Generates an RFC 5545 VFREEBUSY feed.
+     *
+     * Scoped to $user's own entries.  Other people's public events are not
+     * this user's busy time and never belonged in their feed.
+     *
+     * VFREEBUSY publishes periods without any detail, so the owner's private
+     * entries are included by default -- a free/busy feed that hid them would
+     * report the owner as free and invite double-booking.  Deployments that
+     * would rather publish nothing about private time pass
+     * $includePrivate = false, at that cost.
      */
-    public function generateFreeBusy(User $user, DateRange $range): string
-    {
-        $this->logger->debug('Generating FreeBusy feed', ['user' => $user->login()]);
+    public function generateFreeBusy(
+        User $user,
+        DateRange $range,
+        bool $includePrivate = true
+    ): string {
+        $this->logger->debug('Generating FreeBusy feed', [
+            'user' => $user->login(),
+            'includePrivate' => $includePrivate,
+        ]);
 
         $vcalendar = new VCalendar();
         $vcalendar->setProductId('-//WebCalendar//NONSGML v4.0//EN');
@@ -44,7 +60,14 @@ final class FeedService
         $vfb->setDtStart($range->startDate()->format('Ymd\THis\Z'));
         $vfb->setDtEnd($range->endDate()->format('Ymd\THis\Z'));
 
-        $events = $this->eventService->getEventsInDateRange($range, $user);
+        $events = $includePrivate
+            ? $this->eventService->getEventsInDateRange($range, $user, null, [$user->login()])
+            : $this->eventService->getEventsInDateRange(
+                $range,
+                null,
+                AccessLevel::PUBLIC->value,
+                [$user->login()]
+            );
 
         foreach ($events as $event) {
             $period = sprintf(
@@ -63,12 +86,22 @@ final class FeedService
 
     /**
      * Generates an RSS 2.0 feed of upcoming events.
+     *
+     * Public entries only.  An RSS item carries the event's name and
+     * description, so this feed must never see anything the owner marked
+     * private or confidential: passing the owner as $user would widen the
+     * query to "public OR created by me", which is everything they own.
      */
     public function generateRss(User $user, DateRange $range): string
     {
         $this->logger->debug('Generating RSS feed', ['user' => $user->login()]);
 
-        $events = $this->eventService->getEventsInDateRange($range, $user);
+        $events = $this->eventService->getEventsInDateRange(
+            $range,
+            null,
+            AccessLevel::PUBLIC->value,
+            [$user->login()]
+        );
         
         $xml = new \SimpleXMLElement('<?xml version="1.0" encoding="UTF-8" ?><rss version="2.0"></rss>');
         $channel = $xml->addChild('channel');
