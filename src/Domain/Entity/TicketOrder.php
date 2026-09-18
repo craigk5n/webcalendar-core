@@ -98,11 +98,13 @@ final class TicketOrder
     }
 
     /**
+     * A free order may be cancelled from PAID; see isFreeCancellation().
+     *
      * @throws \DomainException On an illegal status transition.
      */
     public function withStatus(OrderStatus $next, ?string $externalRef = null): self
     {
-        if (!$this->status->canTransitionTo($next)) {
+        if (!$this->status->canTransitionTo($next) && !$this->isFreeCancellation($next)) {
             throw new \DomainException(sprintf(
                 'Order %d cannot go from %s to %s.',
                 $this->id,
@@ -124,6 +126,25 @@ final class TicketOrder
             $externalRef ?? $this->externalRef,
             $this->createdAt,
         );
+    }
+
+    /**
+     * Whether this is a free order giving its seat back.
+     *
+     * OrderStatus permits PAID -> REFUNDED and not PAID -> CANCELLED,
+     * because money that has moved has to move back rather than simply be
+     * forgotten. Nothing moved for a free order: TicketService::purchase()
+     * creates an RSVP directly as PAID, so PAID is its *first* state and
+     * CANCELLED is the only way a guest can ever release the seat. Without
+     * this exception an RSVP would hold capacity for life, and a
+     * "cancel my RSVP" link could not exist. Paid orders keep the strict
+     * rule and still have to be refunded.
+     */
+    private function isFreeCancellation(OrderStatus $next): bool
+    {
+        return $this->amountMinor === 0
+            && $this->status === OrderStatus::PAID
+            && $next === OrderStatus::CANCELLED;
     }
 
     /**

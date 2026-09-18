@@ -110,6 +110,43 @@ final class TicketingEntitiesTest extends TestCase
         $paid->withStatus(OrderStatus::CANCELLED);
     }
 
+    public function testFreeOrderCanBeCancelledFromPaid(): void
+    {
+        // An RSVP is created directly as PAID, so PAID is its first state
+        // and CANCELLED is the only way the guest gives the seat back.
+        $rsvp = new TicketOrder(
+            id: 1,
+            ticketTypeId: 2,
+            eventId: 3,
+            email: 'guest@example.com',
+            name: 'Guest',
+            quantity: 1,
+            amountMinor: 0,
+            currency: 'USD',
+            status: OrderStatus::PAID,
+        );
+
+        $this->assertSame(OrderStatus::CANCELLED, $rsvp->withStatus(OrderStatus::CANCELLED)->status());
+    }
+
+    public function testFreeOrderStillCannotBeResurrected(): void
+    {
+        $cancelled = new TicketOrder(
+            id: 1,
+            ticketTypeId: 2,
+            eventId: 3,
+            email: 'guest@example.com',
+            name: 'Guest',
+            quantity: 1,
+            amountMinor: 0,
+            currency: 'USD',
+            status: OrderStatus::CANCELLED,
+        );
+
+        $this->expectException(\DomainException::class);
+        $cancelled->withStatus(OrderStatus::PAID);
+    }
+
     public function testRefundedOrderIsTerminal(): void
     {
         $this->expectException(\DomainException::class);

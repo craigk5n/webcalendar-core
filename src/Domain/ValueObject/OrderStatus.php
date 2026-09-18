@@ -8,6 +8,11 @@ namespace WebCalendar\Core\Domain\ValueObject;
  * Ticket order lifecycle (Epic 28). Legal transitions:
  * PENDING → PAID | CANCELLED, PAID → REFUNDED. RSVP (free) orders are
  * created directly as PAID.
+ *
+ * One exception lives on the entity rather than here, because it depends on
+ * the order's amount and not just its status: a free order may go
+ * PAID → CANCELLED, since PAID is its first state and cancelling is the only
+ * way an RSVP can release its seat. See TicketOrder::isFreeCancellation().
  */
 enum OrderStatus: string
 {
