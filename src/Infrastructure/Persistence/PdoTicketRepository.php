@@ -15,9 +15,11 @@ use WebCalendar\Core\Domain\ValueObject\OrderStatus;
  * PDO implementation of the ticketing domain (Epic 28):
  * webcal_ticket_type / webcal_ticket_order / webcal_attendee.
  *
- * Capacity enforcement lives here: createOrderIfCapacityAllows() counts
- * the held quantity and inserts inside one transaction, so two
- * concurrent buyers cannot both take the last seats.
+ * Capacity enforcement lives here: createOrderIfCapacityAllows() locks the
+ * ticket type row, counts the held quantity and inserts, all inside one
+ * transaction, so two concurrent buyers cannot both take the last seats.
+ * The lock is load-bearing rather than belt-and-braces -- see
+ * lockTicketType() for what races without it.
  */
 final class PdoTicketRepository implements TicketRepositoryInterface
 {
@@ -160,6 +162,8 @@ final class PdoTicketRepository implements TicketRepositoryInterface
     {
         $persisted = null;
         $this->executeInTransaction(function () use ($order, $capacity, &$persisted): void {
+            $this->lockTicketType($order->ticketTypeId());
+
             if ($capacity !== null && $this->heldQuantity($order->ticketTypeId()) + $order->quantity() > $capacity) {
                 return;
             }
@@ -279,6 +283,39 @@ final class PdoTicketRepository implements TicketRepositoryInterface
             'external_ref' => $order->externalRef(),
             'created' => $order->createdAt(),
         ];
+    }
+
+    /**
+     * Take a row lock on the ticket type for the rest of the transaction.
+     *
+     * Two things inside createOrderIfCapacityAllows() race without it, and
+     * the surrounding transaction alone does not stop either. heldQuantity()
+     * is a plain SELECT, so under REPEATABLE READ two concurrent orders read
+     * the same snapshot and both conclude there is room; and nextId() is
+     * MAX(order_id) + 1, so they also compute the same primary key. The
+     * observable failure is therefore a duplicate-key error on a public
+     * endpoint rather than a clean "sold out" -- and on an isolation level
+     * that re-reads, a genuine oversell.
+     *
+     * SQLite has no SELECT ... FOR UPDATE and needs none: it serialises
+     * write transactions across the whole database. Skipping the clause
+     * there keeps the in-memory suite working. A missing ticket type locks
+     * nothing, which is harmless -- the capacity check still runs, and
+     * TicketService::purchase() has already rejected an unknown type.
+     */
+    private function lockTicketType(int $ticketTypeId): void
+    {
+        $driver = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
+        if (!is_string($driver) || !in_array($driver, ['mysql', 'pgsql'], true)) {
+            return;
+        }
+
+        $stmt = $this->pdo->prepare(
+            "SELECT ticket_type_id FROM {$this->tablePrefix}webcal_ticket_type
+              WHERE ticket_type_id = :id FOR UPDATE"
+        );
+        $stmt->execute(['id' => $ticketTypeId]);
+        $stmt->fetchAll();
     }
 
     private function nextId(string $table, string $column): int
