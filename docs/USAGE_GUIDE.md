@@ -115,6 +115,27 @@ $event = new Event(
 $eventService->createEvent($event);
 ```
 
+### 4.3 Removing One Occurrence
+
+To drop a single occurrence, add its date to the series' EXDATEs and save the series. Exceptions are stored by day (`cal_date` is `YYYYMMDD`), so only the date matters; `RecurrenceService` pins each one to the series start time when it expands. Adding a day that is already excluded is harmless.
+
+```php
+use WebCalendar\Core\Domain\ValueObject\ExDate;
+use WebCalendar\Core\Domain\ValueObject\Recurrence;
+
+$recurrence = $series->recurrence();
+$updated = $series->with(recurrence: new Recurrence(
+    $recurrence->rule(),
+    new ExDate([...$recurrence->exDate()->dates(), new DateTimeImmutable('2026-03-04')]),
+    $recurrence->rDate(),
+));
+$eventService->updateEvent($updated, $actor);
+```
+
+To change one occurrence, create the replacement as a separate single event first and exclude the original only once that save succeeds, so a failed save loses nothing.
+
+On iCal import, RECURRENCE-ID overrides are handled the same way: the day is excluded from the series and a moved occurrence is stored as its own event under `ImportService::localUid()` (`uid/recurrence-id`). Use `localUid()` whenever you match stored events back to a feed, or moved occurrences look like events the feed no longer has.
+
 ---
 
 ## 5. Model Context Protocol (AI Integration)
