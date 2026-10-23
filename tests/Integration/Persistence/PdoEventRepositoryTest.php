@@ -758,4 +758,46 @@ final class PdoEventRepositoryTest extends RepositoryTestCase
             $this->namesOf($events)
         );
     }
+
+    /**
+     * (cal_id, cal_date) is the exceptions table's primary key, so two
+     * exceptions on one day used to fail the whole save: deleting an
+     * occurrence that was already deleted, or a feed listing a cancellation
+     * twice. One row per day, and an exclusion wins over an addition.
+     */
+    public function testExceptionsOnTheSameDayAreStoredOnce(): void
+    {
+        $event = new Event(
+            id: new EventId(0),
+            uid: 'rec-dupe',
+            name: 'Recurring Event',
+            description: '',
+            location: '',
+            start: new \DateTimeImmutable('2026-02-11 10:00:00'),
+            duration: 60,
+            createdBy: 'admin',
+            type: EventType::EVENT,
+            access: AccessLevel::PUBLIC,
+            recurrence: new Recurrence(
+                rule: new RecurrenceRule('FREQ=DAILY;COUNT=5'),
+                exDate: new ExDate([
+                    new \DateTimeImmutable('2026-02-12 10:00:00'),
+                    new \DateTimeImmutable('2026-02-12 15:46:51'),
+                ]),
+                rDate: new \WebCalendar\Core\Domain\ValueObject\RDate([
+                    new \DateTimeImmutable('2026-02-12 10:00:00'),
+                    new \DateTimeImmutable('2026-02-20 10:00:00'),
+                ]),
+            )
+        );
+
+        $this->repository->save($event);
+
+        $found = $this->repository->findByUid('rec-dupe');
+        $this->assertNotNull($found);
+        $exDays = array_map(fn ($d) => $d->format('Y-m-d'), $found->recurrence()->exDate()->dates());
+        $rDays = array_map(fn ($d) => $d->format('Y-m-d'), $found->recurrence()->rDate()->dates());
+        $this->assertSame(['2026-02-12'], $exDays);
+        $this->assertSame(['2026-02-20'], $rDays);
+    }
 }

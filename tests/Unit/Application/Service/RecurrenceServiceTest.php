@@ -88,4 +88,78 @@ final class RecurrenceServiceTest extends TestCase
         $this->assertEquals($start, $occurrences[0]->getStart());
         $this->assertEquals($start->modify('+2 days'), $occurrences[1]->getStart());
     }
+
+    /**
+     * EXDATEs and RDATEs are stored by day (webcal_entry_repeats_not.cal_date
+     * is YYYYMMDD), and the repository rebuilds them with
+     * createFromFormat('Ymd'), which fills in the clock time of the request.
+     * Matched as exact datetimes they never excluded anything, so a skipped
+     * or separately edited occurrence stayed on the calendar.
+     */
+    public function testExDateMatchesByDayWhateverItsTimeOfDay(): void
+    {
+        $start = new \DateTimeImmutable('2026-02-11 10:00:00');
+        $event = new Event(
+            id: new EventId(1),
+            uid: 'uid-1',
+            name: 'Daily Meeting',
+            description: '',
+            location: '',
+            start: $start,
+            duration: 30,
+            createdBy: 'admin',
+            type: EventType::REPEATING_EVENT,
+            access: AccessLevel::PUBLIC,
+            recurrence: new Recurrence(
+                rule: new RecurrenceRule('FREQ=DAILY;COUNT=3'),
+                exDate: new \WebCalendar\Core\Domain\ValueObject\ExDate([
+                    new \DateTimeImmutable('2026-02-12 15:46:51'),
+                ])
+            )
+        );
+
+        $range = new DateRange(
+            new \DateTimeImmutable('2026-02-11 00:00:00'),
+            new \DateTimeImmutable('2026-02-28 23:59:59')
+        );
+
+        $occurrences = $this->recurrenceService->expand($event, $range);
+
+        $this->assertCount(2, $occurrences);
+        $this->assertEquals($start, $occurrences[0]->getStart());
+        $this->assertEquals($start->modify('+2 days'), $occurrences[1]->getStart());
+    }
+
+    public function testRDateTakesTheSeriesStartTime(): void
+    {
+        $start = new \DateTimeImmutable('2026-02-11 10:00:00');
+        $event = new Event(
+            id: new EventId(1),
+            uid: 'uid-1',
+            name: 'Weekly Meeting',
+            description: '',
+            location: '',
+            start: $start,
+            duration: 30,
+            createdBy: 'admin',
+            type: EventType::REPEATING_EVENT,
+            access: AccessLevel::PUBLIC,
+            recurrence: new Recurrence(
+                rule: new RecurrenceRule('FREQ=WEEKLY;COUNT=1'),
+                rDate: new \WebCalendar\Core\Domain\ValueObject\RDate([
+                    new \DateTimeImmutable('2026-02-13 15:46:51'),
+                ])
+            )
+        );
+
+        $range = new DateRange(
+            new \DateTimeImmutable('2026-02-11 00:00:00'),
+            new \DateTimeImmutable('2026-02-28 23:59:59')
+        );
+
+        $occurrences = $this->recurrenceService->expand($event, $range);
+
+        $this->assertCount(2, $occurrences);
+        $this->assertEquals(new \DateTimeImmutable('2026-02-13 10:00:00'), $occurrences[1]->getStart());
+    }
 }

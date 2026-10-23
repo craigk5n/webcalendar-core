@@ -11,6 +11,8 @@ use WebCalendar\Core\Domain\Entity\User;
 use WebCalendar\Core\Domain\Repository\CategoryRepositoryInterface;
 use WebCalendar\Core\Domain\Repository\EventRepositoryInterface;
 use WebCalendar\Core\Domain\ValueObject\EventId;
+use WebCalendar\Core\Domain\ValueObject\ExDate;
+use WebCalendar\Core\Domain\ValueObject\Recurrence;
 use WebCalendar\Core\Infrastructure\ICal\EventMapper;
 use Icalendar\Parser\Parser;
 use Icalendar\Component\VEvent;
@@ -97,72 +99,98 @@ final class ImportService
         $updated = 0;
         $warnings = [];
 
+        // Series first, then the overrides of their occurrences: an override
+        // has to find its series, which may come later in the file.
+        $series = [];
+        $overrides = [];
         foreach ($components as $component) {
             if ($component instanceof VEvent) {
-                try {
-                    $event = $this->attachOrganizer(
-                        $component,
-                        $this->eventMapper->fromVEvent($component, $user->login())
-                    );
+                if ($component->getProperty('RECURRENCE-ID') === null) {
+                    $series[] = $component;
+                } else {
+                    $overrides[] = $component;
+                }
+            }
+        }
 
-                    // Update detection: check if an event with the same UID already exists
-                    $existingEvent = $this->eventRepository->findByUid($event->uid());
-
-                    if ($existingEvent !== null) {
-                        if (!$updateExisting) {
-                            $this->logger->debug('Skipping existing event', ['uid' => $event->uid()]);
-                            $skipped++;
-                            continue;
+        foreach (array_merge($series, $overrides) as $component) {
+            try {
+                if ($component->getProperty('RECURRENCE-ID') !== null) {
+                    $this->excludeOverriddenOccurrence($component);
+                    if ($this->isCancelled($component)) {
+                        // An earlier sync may have stored this occurrence
+                        // as moved; cancelled now, that copy goes too.
+                        $stale = $this->eventRepository->findByUid(self::localUid($component));
+                        if ($stale !== null) {
+                            $this->eventRepository->delete($stale->id());
                         }
+                        continue;
+                    }
+                }
 
-                        // Re-point the mapped event at the existing row so save()
-                        // overwrites it rather than inserting a duplicate.
-                        $saved = $event->withId($existingEvent->id());
-                        $this->eventRepository->save($saved);
-                        $this->logger->debug('Updated existing event', [
-                            'uid' => $event->uid(),
-                            'id' => $existingEvent->id()->value(),
-                        ]);
+                $event = $this->attachOrganizer(
+                    $component,
+                    $this->eventMapper->fromVEvent($component, $user->login())
+                );
+                $event = $event->with(uid: self::localUid($component));
 
-                        // Re-sync categories on update too. Without this a
-                        // CATEGORIES change made upstream never propagates once
-                        // the event exists, since every later sync takes this
-                        // branch. $saved carries the real row id.
-                        if ($this->categoryRepository !== null) {
-                            $this->importCategories($component, $saved, $user);
-                        }
+                // Update detection: check if an event with the same UID already exists
+                $existingEvent = $this->eventRepository->findByUid($event->uid());
 
-                        $updated++;
+                if ($existingEvent !== null) {
+                    if (!$updateExisting) {
+                        $this->logger->debug('Skipping existing event', ['uid' => $event->uid()]);
+                        $skipped++;
                         continue;
                     }
 
-                    $this->eventRepository->create($event);
-                    $imported++;
-
-                    // Handle categories if present in the component and repo is available.
-                    if ($this->categoryRepository !== null) {
-                        // create() has a void contract and Event is immutable, so
-                        // the mapped $event still carries EventId(0). Re-read the
-                        // row by UID to obtain its generated id before assigning
-                        // categories, otherwise they attach to cal_id 0.
-                        $persisted = $event->uid() !== ''
-                            ? $this->eventRepository->findByUid($event->uid())
-                            : null;
-                        if ($persisted !== null) {
-                            $this->importCategories($component, $persisted, $user);
-                        }
-                    }
-                } catch (\Exception $e) {
-                    $uid = $component->getProperty('UID')?->getValue()->getRawValue() ?? 'unknown';
-                    $this->logger->warning('Failed to import VEVENT', [
-                        'error' => $e->getMessage(),
-                        'uid' => $uid,
+                    // Re-point the mapped event at the existing row so save()
+                    // overwrites it rather than inserting a duplicate.
+                    $saved = $event->withId($existingEvent->id());
+                    $this->eventRepository->save($saved);
+                    $this->logger->debug('Updated existing event', [
+                        'uid' => $event->uid(),
+                        'id' => $existingEvent->id()->value(),
                     ]);
-                    $warnings[] = [
-                        'line' => 0,
-                        'message' => sprintf('Failed to import event %s: %s', $uid, $e->getMessage()),
-                    ];
+
+                    // Re-sync categories on update too. Without this a
+                    // CATEGORIES change made upstream never propagates once
+                    // the event exists, since every later sync takes this
+                    // branch. $saved carries the real row id.
+                    if ($this->categoryRepository !== null) {
+                        $this->importCategories($component, $saved, $user);
+                    }
+
+                    $updated++;
+                    continue;
                 }
+
+                $this->eventRepository->create($event);
+                $imported++;
+
+                // Handle categories if present in the component and repo is available.
+                if ($this->categoryRepository !== null) {
+                    // create() has a void contract and Event is immutable, so
+                    // the mapped $event still carries EventId(0). Re-read the
+                    // row by UID to obtain its generated id before assigning
+                    // categories, otherwise they attach to cal_id 0.
+                    $persisted = $event->uid() !== ''
+                        ? $this->eventRepository->findByUid($event->uid())
+                        : null;
+                    if ($persisted !== null) {
+                        $this->importCategories($component, $persisted, $user);
+                    }
+                }
+            } catch (\Exception $e) {
+                $uid = $component->getProperty('UID')?->getValue()->getRawValue() ?? 'unknown';
+                $this->logger->warning('Failed to import VEVENT', [
+                    'error' => $e->getMessage(),
+                    'uid' => $uid,
+                ]);
+                $warnings[] = [
+                    'line' => 0,
+                    'message' => sprintf('Failed to import event %s: %s', $uid, $e->getMessage()),
+                ];
             }
         }
 
@@ -174,6 +202,68 @@ final class ImportService
         ]);
 
         return new ImportResult($imported, $skipped, $warnings, $updated);
+    }
+
+    /**
+     * The UID an imported VEVENT is stored under.
+     *
+     * A series keeps its own UID. An override of one occurrence shares the
+     * series' UID in the file (RFC 5545 §3.8.4.4), and is stored as an event
+     * of its own, so it gets the UID and RECURRENCE-ID together — stable
+     * across syncs, and distinct from the series it would otherwise
+     * overwrite. Anything that compares a feed's UIDs with stored ones (a
+     * remote calendar sync deciding what was deleted upstream) must use this.
+     */
+    public static function localUid(VEvent $vevent): string
+    {
+        $uid = trim($vevent->getUid() ?? '');
+        $recurrenceId = $vevent->getProperty('RECURRENCE-ID');
+        if ($recurrenceId === null || $uid === '') {
+            return $uid;
+        }
+
+        return $uid . '/' . trim($recurrenceId->getValue()->getRawValue());
+    }
+
+    /**
+     * Take the occurrence an override replaces out of its series, so the
+     * calendar shows the override instead of both. A no-op when the series
+     * is not stored (a date-filtered feed can carry the override alone) or
+     * already excludes that day.
+     */
+    private function excludeOverriddenOccurrence(VEvent $override): void
+    {
+        $occurrence = $this->eventMapper->extractRecurrenceId($override);
+        $uid = trim($override->getUid() ?? '');
+        if ($occurrence === null || $uid === '') {
+            return;
+        }
+
+        $series = $this->eventRepository->findByUid($uid);
+        if ($series === null || !$series->recurrence()->isRepeating()) {
+            return;
+        }
+
+        $recurrence = $series->recurrence();
+        $day = $occurrence->format('Y-m-d');
+        foreach ($recurrence->exDate()->dates() as $excluded) {
+            if ($excluded->format('Y-m-d') === $day) {
+                return;
+            }
+        }
+
+        $this->eventRepository->save($series->with(recurrence: new Recurrence(
+            $recurrence->rule(),
+            new ExDate([...$recurrence->exDate()->dates(), $occurrence]),
+            $recurrence->rDate(),
+        )));
+    }
+
+    /** A cancelled occurrence only removes; it has no event of its own. */
+    private function isCancelled(VEvent $vevent): bool
+    {
+        $status = $vevent->getProperty('STATUS');
+        return $status !== null && strtoupper(trim($status->getValue()->getRawValue())) === 'CANCELLED';
     }
 
     /**

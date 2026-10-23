@@ -951,13 +951,22 @@ final class PdoEventRepository implements EventRepositoryInterface
     private function saveExceptions(int $id, Recurrence $recurrence): void
     {
         $stmt = $this->pdo->prepare("INSERT INTO {$this->tablePrefix}webcal_entry_repeats_not (cal_id, cal_date, cal_exdate) VALUES (:id, :date, :exdate)");
-        
+
+        // One row per day: (cal_id, cal_date) is the primary key, and the
+        // same day can legitimately arrive twice — an occurrence deleted
+        // again, or a feed listing a cancellation both as an EXDATE and as
+        // a cancelled override. An exclusion beats an addition on the same
+        // day, so RDATEs go in first and EXDATEs overwrite them.
+        $days = [];
+        foreach ($recurrence->rDate()->dates() as $date) {
+            $days[(int)$date->format('Ymd')] = 0;
+        }
         foreach ($recurrence->exDate()->dates() as $date) {
-            $stmt->execute(['id' => $id, 'date' => (int)$date->format('Ymd'), 'exdate' => 1]);
+            $days[(int)$date->format('Ymd')] = 1;
         }
 
-        foreach ($recurrence->rDate()->dates() as $date) {
-            $stmt->execute(['id' => $id, 'date' => (int)$date->format('Ymd'), 'exdate' => 0]);
+        foreach ($days as $day => $isExDate) {
+            $stmt->execute(['id' => $id, 'date' => $day, 'exdate' => $isExDate]);
         }
     }
 

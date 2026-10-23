@@ -8,6 +8,8 @@ use WebCalendar\Core\Domain\Entity\Event;
 use WebCalendar\Core\Domain\ValueObject\EventId;
 use WebCalendar\Core\Domain\ValueObject\EventType;
 use WebCalendar\Core\Domain\ValueObject\AccessLevel;
+use WebCalendar\Core\Domain\ValueObject\ExDate;
+use WebCalendar\Core\Domain\ValueObject\RDate;
 use WebCalendar\Core\Domain\ValueObject\Recurrence;
 use WebCalendar\Core\Domain\ValueObject\RecurrenceRule;
 use Icalendar\Component\VEvent;
@@ -16,6 +18,7 @@ use Icalendar\Parser\ValueParser\DateTimeParser;
 use Icalendar\Parser\ValueParser\DurationParser;
 use Icalendar\Property\GenericProperty;
 use Icalendar\Property\PropertyInterface;
+use Icalendar\Value\GenericValue;
 
 /**
  * Mapper for translating between Domain Event entities and iCalendar VEvent components.
@@ -96,11 +99,12 @@ final class EventMapper
             }
         }
 
-        $recurrence = new Recurrence();
         $rruleStr = $vevent->getRrule();
-        if ($rruleStr !== null) {
-            $recurrence = new Recurrence(rule: new RecurrenceRule($rruleStr));
-        }
+        $recurrence = new Recurrence(
+            rule: $rruleStr !== null ? new RecurrenceRule($rruleStr) : null,
+            exDate: new ExDate($this->readDateList($vevent, 'EXDATE')),
+            rDate: new RDate($this->readDateList($vevent, 'RDATE')),
+        );
 
         // Map CLASS property to AccessLevel (RFC 5545 default is PUBLIC)
         $classProp = $vevent->getProperty('CLASS');
@@ -193,10 +197,14 @@ final class EventMapper
             $vevent->setDuration(sprintf('PT%dM', $event->duration()));
         }
 
+        // A RECUR value, not the TEXT that VEvent::setRrule() writes: TEXT
+        // escapes the rule's semicolons, and no reader accepts the result.
         $rule = $event->recurrence()->rule();
         if ($rule !== null) {
-            $vevent->setRrule($rule->toString());
+            $vevent->addProperty(new GenericProperty('RRULE', new GenericValue($rule->toString(), 'RECUR')));
         }
+        $this->writeDateList($vevent, 'EXDATE', $event->recurrence()->exDate()->dates(), $event);
+        $this->writeDateList($vevent, 'RDATE', $event->recurrence()->rDate()->dates(), $event);
 
         // Map AccessLevel to CLASS property
         $classValue = match ($event->access()) {
@@ -439,6 +447,78 @@ final class EventMapper
         // Normalize whitespace: collapse multiple blank lines
         $text = (string) preg_replace('/\n{3,}/', "\n\n", $text);
         return trim($text);
+    }
+
+    /**
+     * The occurrence a VEVENT overrides, from its RECURRENCE-ID, on the
+     * calendar's wall clock — or null when it is not an override.
+     */
+    public function extractRecurrenceId(VEvent $vevent): ?\DateTimeImmutable
+    {
+        $prop = $vevent->getProperty('RECURRENCE-ID');
+        if ($prop === null) {
+            return null;
+        }
+
+        return $this->parseDateValue($prop->getValue()->getRawValue(), $prop);
+    }
+
+    /**
+     * Every date in every EXDATE or RDATE property (each may hold a
+     * comma-separated list), on the calendar's wall clock.
+     *
+     * Storage keeps the day only, so an absolute time is rebased first: an
+     * exclusion written in UTC must land on the same local day as the
+     * occurrence it removes, which is rebased the same way from DTSTART.
+     *
+     * @return \DateTimeImmutable[]
+     */
+    private function readDateList(VEvent $vevent, string $name): array
+    {
+        $dates = [];
+        foreach ($vevent->getAllProperties($name) as $prop) {
+            foreach (explode(',', $prop->getValue()->getRawValue()) as $raw) {
+                $raw = trim($raw);
+                if ($raw === '') {
+                    continue;
+                }
+                $dates[] = $this->parseDateValue($raw, $prop);
+            }
+        }
+        return $dates;
+    }
+
+    private function parseDateValue(string $raw, PropertyInterface $prop): \DateTimeImmutable
+    {
+        if ($prop->getParameter('VALUE') === 'DATE' || strlen($raw) === 8) {
+            return $this->dateParser->parse($raw);
+        }
+
+        $value = $this->dateTimeParser->parse($raw, $this->tzidParams($prop));
+        return $this->rebaseToTarget($value, $raw, $prop);
+    }
+
+    /**
+     * Emit one EXDATE or RDATE property per date.
+     *
+     * The store keeps only the day, so each date takes the series' own start
+     * time — what the occurrence it names actually starts at. An all-day
+     * series uses VALUE=DATE to match its DTSTART.
+     *
+     * @param \DateTimeImmutable[] $dates
+     */
+    private function writeDateList(VEvent $vevent, string $name, array $dates, Event $event): void
+    {
+        foreach ($dates as $date) {
+            $value = $event->isAllDay()
+                ? $date->format('Ymd')
+                : $date->format('Ymd') . 'T' . $event->start()->format('His');
+            $prop = GenericProperty::create($name, $value);
+            if ($event->isAllDay()) {
+                $prop->setParameter('VALUE', 'DATE');
+            }
+            $vevent->addProperty($prop);
+        }
     }
 
     /**

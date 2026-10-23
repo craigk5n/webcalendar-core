@@ -12,6 +12,10 @@ use WebCalendar\Core\Domain\ValueObject\EventType;
 use WebCalendar\Core\Domain\ValueObject\AccessLevel;
 use Icalendar\Component\VEvent;
 use Icalendar\Property\GenericProperty;
+use WebCalendar\Core\Domain\ValueObject\ExDate;
+use WebCalendar\Core\Domain\ValueObject\RDate;
+use WebCalendar\Core\Domain\ValueObject\Recurrence;
+use WebCalendar\Core\Domain\ValueObject\RecurrenceRule;
 
 final class EventMapperTest extends TestCase
 {
@@ -620,5 +624,212 @@ final class EventMapperTest extends TestCase
 
         $this->assertSame('https://meet.example.com/abc', $event->conferenceUrl());
         $this->assertSame('Google Meet', $event->conferenceLabel());
+    }
+
+    // ── EXDATE / RDATE ──────────────────────────────────────────────
+    //
+    // A deleted or separately edited occurrence of a series is an EXDATE.
+    // Neither direction used to carry them: an export showed every skipped
+    // occurrence to subscribers, and an import brought them back.
+
+    /**
+     * @param \DateTimeImmutable[] $exDates
+     * @param \DateTimeImmutable[] $rDates
+     */
+    private function series(
+        string $start = '2026-03-10 10:00:00',
+        array $exDates = [],
+        array $rDates = [],
+        bool $allDay = false,
+    ): Event {
+        return new Event(
+            id: new EventId(5),
+            uid: 'series-uid',
+            name: 'Monthly',
+            description: '',
+            location: '',
+            start: new \DateTimeImmutable($start),
+            duration: $allDay ? 1440 : 60,
+            createdBy: 'admin',
+            type: EventType::REPEATING_EVENT,
+            access: AccessLevel::PUBLIC,
+            recurrence: new Recurrence(
+                rule: new RecurrenceRule('FREQ=MONTHLY;COUNT=6'),
+                exDate: new ExDate($exDates),
+                rDate: new RDate($rDates),
+            ),
+            allDay: $allDay,
+        );
+    }
+
+    /** @return string[] Raw values of every property with this name. */
+    private function rawValues(VEvent $vevent, string $name): array
+    {
+        return array_map(
+            fn ($p) => $p->getValue()->getRawValue(),
+            $vevent->getAllProperties($name)
+        );
+    }
+
+    public function testToVEventEmitsExDateAtTheSeriesStartTime(): void
+    {
+        // Stored by day, reloaded with whatever clock time the request ran at.
+        $vevent = $this->mapper->toVEvent($this->series(exDates: [
+            new \DateTimeImmutable('2026-05-10 15:46:51'),
+            new \DateTimeImmutable('2026-07-10 00:00:00'),
+        ]));
+
+        $this->assertSame(['20260510T100000', '20260710T100000'], $this->rawValues($vevent, 'EXDATE'));
+    }
+
+    public function testToVEventEmitsDateValuedExDateForAllDaySeries(): void
+    {
+        $vevent = $this->mapper->toVEvent($this->series(
+            start: '2026-03-10 00:00:00',
+            exDates: [new \DateTimeImmutable('2026-05-10 15:46:51')],
+            allDay: true,
+        ));
+
+        $props = $vevent->getAllProperties('EXDATE');
+        $this->assertCount(1, $props);
+        $this->assertSame('20260510', $props[0]->getValue()->getRawValue());
+        $this->assertSame('DATE', $props[0]->getParameter('VALUE'));
+    }
+
+    public function testToVEventEmitsRDate(): void
+    {
+        $vevent = $this->mapper->toVEvent($this->series(rDates: [
+            new \DateTimeImmutable('2026-03-20 08:00:00'),
+        ]));
+
+        $this->assertSame(['20260320T100000'], $this->rawValues($vevent, 'RDATE'));
+    }
+
+    public function testToVEventWithoutExceptionsEmitsNoExDate(): void
+    {
+        $vevent = $this->mapper->toVEvent($this->series());
+
+        $this->assertSame([], $vevent->getAllProperties('EXDATE'));
+        $this->assertSame([], $vevent->getAllProperties('RDATE'));
+    }
+
+    private function seriesVEvent(string $dtStart = '20260310T100000'): VEvent
+    {
+        $vevent = new VEvent();
+        $vevent->setUid('series-uid');
+        $vevent->setSummary('Monthly');
+        $vevent->setDtStart($dtStart);
+        $vevent->setDuration('PT1H');
+        $vevent->setRrule('FREQ=MONTHLY;COUNT=6');
+        return $vevent;
+    }
+
+    /** @return string[] */
+    private function exDays(Event $event): array
+    {
+        return array_map(fn ($d) => $d->format('Y-m-d'), $event->recurrence()->exDate()->dates());
+    }
+
+    public function testFromVEventReadsRepeatedAndCommaSeparatedExDates(): void
+    {
+        $vevent = $this->seriesVEvent();
+        $vevent->addExdate('20260410T100000,20260510T100000');
+        $vevent->addExdate('20260710T100000');
+
+        $event = $this->mapper->fromVEvent($vevent, 'admin');
+
+        $this->assertSame(['2026-04-10', '2026-05-10', '2026-07-10'], $this->exDays($event));
+    }
+
+    public function testFromVEventReadsDateValuedExDate(): void
+    {
+        $vevent = $this->seriesVEvent();
+        $prop = GenericProperty::create('EXDATE', '20260410');
+        $prop->setParameter('VALUE', 'DATE');
+        $vevent->addProperty($prop);
+
+        $event = $this->mapper->fromVEvent($vevent, 'admin');
+
+        $this->assertSame(['2026-04-10'], $this->exDays($event));
+    }
+
+    public function testFromVEventReadsRDate(): void
+    {
+        $vevent = $this->seriesVEvent();
+        $vevent->addRdate('20260320T100000');
+
+        $event = $this->mapper->fromVEvent($vevent, 'admin');
+
+        $days = array_map(fn ($d) => $d->format('Y-m-d'), $event->recurrence()->rDate()->dates());
+        $this->assertSame(['2026-03-20'], $days);
+    }
+
+    public function testFromVEventRebasesUtcExDateOntoTheCalendarDay(): void
+    {
+        // 02:00 UTC on 11 April is 22:00 on 10 April in New York: the
+        // occurrence (DTSTART rebased the same way) is on the 10th, and so
+        // must the exclusion be, or it removes nothing.
+        $mapper = new EventMapper(new \DateTimeZone('America/New_York'));
+        $vevent = $this->seriesVEvent('20260311T020000Z');
+        $vevent->addExdate('20260411T020000Z');
+
+        $event = $mapper->fromVEvent($vevent, 'admin');
+
+        $this->assertSame('2026-03-10 22:00:00', $event->start()->format('Y-m-d H:i:s'));
+        $this->assertSame(['2026-04-10'], $this->exDays($event));
+    }
+
+    public function testFromVEventHonoursExDateTzid(): void
+    {
+        $mapper = new EventMapper(new \DateTimeZone('America/New_York'));
+        $vevent = $this->seriesVEvent();
+        $vevent->getProperty('DTSTART')?->setParameter('TZID', 'Asia/Tokyo');
+        $prop = GenericProperty::create('EXDATE', '20260410T080000');
+        $prop->setParameter('TZID', 'Asia/Tokyo');
+        $vevent->addProperty($prop);
+
+        $event = $mapper->fromVEvent($vevent, 'admin');
+
+        // 08:00 Tokyo = 19:00 the previous evening in New York.
+        $this->assertSame(['2026-04-09'], $this->exDays($event));
+    }
+
+    public function testExDatesSurviveAnExportImportRoundTrip(): void
+    {
+        $original = $this->series(exDates: [new \DateTimeImmutable('2026-05-10 10:00:00')]);
+        $calendar = new \Icalendar\Component\VCalendar();
+        $calendar->setProductId('-//test//EN');
+        $calendar->addComponent($this->mapper->toVEvent($original));
+        $ics = (new \Icalendar\Writer\Writer())->write($calendar);
+
+        $parsed = (new \Icalendar\Parser\Parser(\Icalendar\Parser\Parser::LENIENT))->parse($ics);
+        $vevents = array_values(array_filter($parsed->getComponents(), fn ($c) => $c instanceof VEvent));
+        $event = $this->mapper->fromVEvent($vevents[0], 'admin');
+
+        $this->assertSame(['2026-05-10'], $this->exDays($event));
+    }
+
+    public function testRecurrenceIdIsReadAndRebased(): void
+    {
+        $mapper = new EventMapper(new \DateTimeZone('America/New_York'));
+        $vevent = $this->seriesVEvent();
+        $vevent->addProperty(GenericProperty::create('RECURRENCE-ID', '20260411T020000Z'));
+
+        $this->assertSame('2026-04-10 22:00:00', $mapper->extractRecurrenceId($vevent)?->format('Y-m-d H:i:s'));
+        $this->assertNull($mapper->extractRecurrenceId($this->seriesVEvent()));
+    }
+
+    public function testWrittenRruleKeepsItsSemicolons(): void
+    {
+        // RRULE is a RECUR value, not TEXT. Written as TEXT its separators
+        // were escaped (FREQ=MONTHLY\;COUNT=6), which no reader accepts: an
+        // exported series came back, here or in another calendar, as a
+        // single event.
+        $calendar = new \Icalendar\Component\VCalendar();
+        $calendar->setProductId('-//test//EN');
+        $calendar->addComponent($this->mapper->toVEvent($this->series()));
+        $ics = (new \Icalendar\Writer\Writer())->write($calendar);
+
+        $this->assertMatchesRegularExpression('/^RRULE:FREQ=MONTHLY;COUNT=6\r?$/m', $ics);
     }
 }

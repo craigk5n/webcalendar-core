@@ -45,12 +45,18 @@ final class RecurrenceService
             $vevent->setRrule($recurrence->rule()->toString());
         }
 
+        // EXDATEs and RDATEs are stored by day (cal_date is YYYYMMDD), and
+        // the repository rebuilds them with whatever clock time the request
+        // ran at. Pin each one to the series' start time, or an EXDATE never
+        // matches the occurrence it was written to remove.
+        $startTime = $event->start()->format('His');
+
         foreach ($recurrence->exDate()->dates() as $date) {
-            $vevent->addExdate($date->format('Ymd\THis'));
+            $vevent->addExdate($date->format('Ymd') . 'T' . $startTime);
         }
 
         foreach ($recurrence->rDate()->dates() as $date) {
-            $vevent->addRdate($date->format('Ymd\THis'));
+            $vevent->addRdate($date->format('Ymd') . 'T' . $startTime);
         }
 
         $occurrences = [];

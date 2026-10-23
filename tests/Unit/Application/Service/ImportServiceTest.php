@@ -434,4 +434,21 @@ ICS;
         $this->assertSame(['outdoors'], $this->lookedUpTagNames);
         $this->assertSame([], $this->createdTagNames, 'findTagByName already resolved it');
     }
+
+    public function testLocalUidOfASeriesIsItsUid(): void
+    {
+        $vevent = new \Icalendar\Component\VEvent();
+        $vevent->setUid('abc@example.com');
+
+        $this->assertSame('abc@example.com', ImportService::localUid($vevent));
+    }
+
+    public function testLocalUidOfAnOverrideCombinesUidAndRecurrenceId(): void
+    {
+        $vevent = new \Icalendar\Component\VEvent();
+        $vevent->setUid('abc@example.com');
+        $vevent->addProperty(\Icalendar\Property\GenericProperty::create('RECURRENCE-ID', '20260405T190000Z'));
+
+        $this->assertSame('abc@example.com/20260405T190000Z', ImportService::localUid($vevent));
+    }
 }
