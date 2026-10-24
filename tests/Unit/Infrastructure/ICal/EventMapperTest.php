@@ -49,6 +49,39 @@ final class EventMapperTest extends TestCase
         $this->assertSame(AccessLevel::PUBLIC, $event->access());
     }
 
+    /**
+     * SUMMARY and LOCATION are plain text, and every other way an event gets a
+     * title strips tags (the WordPress plugin's REST input runs
+     * sanitize_text_field). Stored verbatim from a feed, a title of
+     * </title><script> reached pages that print titles unescaped.
+     */
+    public function testFromVEventStripsMarkupFromTheTitleAndLocation(): void
+    {
+        $vevent = new VEvent();
+        $vevent->setUid('test-uid');
+        $vevent->setSummary('</title><script>alert(1)</script>Tom & Jerry');
+        $vevent->setLocation('<img src=x onerror=alert(1)>Room 4');
+        $vevent->setDtStart('20260211T100000');
+        $vevent->setDuration('PT1H');
+
+        $event = $this->mapper->fromVEvent($vevent, 'creator-login');
+
+        $this->assertStringNotContainsString('<', $event->name());
+        $this->assertStringContainsString('Tom & Jerry', $event->name());
+        $this->assertSame('Room 4', $event->location());
+    }
+
+    public function testATitleThatIsOnlyMarkupFallsBackToUntitled(): void
+    {
+        $vevent = new VEvent();
+        $vevent->setUid('test-uid');
+        $vevent->setSummary('<b></b>');
+        $vevent->setDtStart('20260211T100000');
+        $vevent->setDuration('PT1H');
+
+        $this->assertSame('Untitled Event', $this->mapper->fromVEvent($vevent, 'creator-login')->name());
+    }
+
     // ── TZID handling on import (regression: issue #1) ────────────
     //
     // DTSTART;TZID=Europe/London:20260604T190000 must be parsed in
