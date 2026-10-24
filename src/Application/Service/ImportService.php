@@ -116,11 +116,11 @@ final class ImportService
         foreach (array_merge($series, $overrides) as $component) {
             try {
                 if ($component->getProperty('RECURRENCE-ID') !== null) {
-                    $this->excludeOverriddenOccurrence($component);
+                    $this->excludeOverriddenOccurrence($component, $user);
                     if ($this->isCancelled($component)) {
                         // An earlier sync may have stored this occurrence
                         // as moved; cancelled now, that copy goes too.
-                        $stale = $this->eventRepository->findByUid(self::localUid($component));
+                        $stale = $this->findOwnedByUid(self::localUid($component), $user);
                         if ($stale !== null) {
                             $this->eventRepository->delete($stale->id());
                         }
@@ -136,6 +136,21 @@ final class ImportService
 
                 // Update detection: check if an event with the same UID already exists
                 $existingEvent = $this->eventRepository->findByUid($event->uid());
+
+                // cal_uid is unique site-wide, so a match can belong to anyone.
+                // It is the importer's to update only if the importer owns it;
+                // otherwise this is a collision, reported and left alone.
+                if ($existingEvent !== null && $existingEvent->createdBy() !== $user->login()) {
+                    $this->logger->warning('Skipping event whose UID belongs to another calendar', [
+                        'uid' => $event->uid(),
+                    ]);
+                    $warnings[] = [
+                        'line' => 0,
+                        'message' => sprintf('Skipped event %s: its UID belongs to another calendar.', $event->uid()),
+                    ];
+                    $skipped++;
+                    continue;
+                }
 
                 if ($existingEvent !== null) {
                     if (!$updateExisting) {
@@ -231,7 +246,7 @@ final class ImportService
      * is not stored (a date-filtered feed can carry the override alone) or
      * already excludes that day.
      */
-    private function excludeOverriddenOccurrence(VEvent $override): void
+    private function excludeOverriddenOccurrence(VEvent $override, User $user): void
     {
         $occurrence = $this->eventMapper->extractRecurrenceId($override);
         $uid = trim($override->getUid() ?? '');
@@ -239,7 +254,7 @@ final class ImportService
             return;
         }
 
-        $series = $this->eventRepository->findByUid($uid);
+        $series = $this->findOwnedByUid($uid, $user);
         if ($series === null || !$series->recurrence()->isRepeating()) {
             return;
         }
@@ -257,6 +272,19 @@ final class ImportService
             new ExDate([...$recurrence->exDate()->dates(), $occurrence]),
             $recurrence->rDate(),
         )));
+    }
+
+    /**
+     * The event stored under a UID, if the importer owns it.
+     *
+     * The UID lookup is site-wide. An override in a feed or file must not be
+     * able to EXDATE or delete another user's event just by naming its UID.
+     */
+    private function findOwnedByUid(string $uid, User $user): ?Event
+    {
+        $event = $this->eventRepository->findByUid($uid);
+
+        return $event !== null && $event->createdBy() === $user->login() ? $event : null;
     }
 
     /** A cancelled occurrence only removes; it has no event of its own. */
