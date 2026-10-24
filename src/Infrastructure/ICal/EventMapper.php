@@ -45,14 +45,32 @@ final class EventMapper
     }
 
     /**
+     * SUMMARY and LOCATION as plain text.
+     *
+     * Both are text in RFC 5545, and every other way an event gets a title
+     * strips tags, so a feed's markup is dropped here rather than trusted to
+     * be escaped at every place a title is printed. Script and style bodies
+     * go with their tags, as in WordPress's wp_strip_all_tags().
+     */
+    private static function plainText(string $value): string
+    {
+        $value = (string) preg_replace('@<(script|style)[^>]*?>.*?</\\1>@si', '', $value);
+
+        return trim(strip_tags($value));
+    }
+
+    /**
      * Maps a VEvent component to a Domain Event entity.
      */
     public function fromVEvent(VEvent $vevent, string $createdBy): Event
     {
         $uid = $vevent->getUid() ?? '';
-        $name = $vevent->getSummary() ?? 'Untitled Event';
+        $name = self::plainText($vevent->getSummary() ?? '');
+        if ($name === '') {
+            $name = 'Untitled Event';
+        }
         $description = $this->extractDescription($vevent);
-        $location = $vevent->getLocation() ?? '';
+        $location = self::plainText($vevent->getLocation() ?? '');
 
         // Detect all-day event: DTSTART with VALUE=DATE (no time component)
         $dtStartProp = $vevent->getProperty('DTSTART');
@@ -171,7 +189,7 @@ final class EventMapper
         // RFC 5545 ORGANIZER values must be cal-addresses (mailto:); an
         // organizer without an email cannot be expressed and is omitted.
         if ($organizer !== null && $organizer->email() !== null) {
-            $property = \Icalendar\Property\GenericProperty::create(
+            $property = GenericProperty::create(
                 'ORGANIZER',
                 'mailto:' . $organizer->email()
             );
@@ -300,7 +318,7 @@ final class EventMapper
         }
 
         $vevent->addProperty(
-            \Icalendar\Property\GenericProperty::create(
+            GenericProperty::create(
                 self::TAGS_PROPERTY,
                 implode(',', array_map(
                     // The writer round-trips this value verbatim rather than
