@@ -145,7 +145,7 @@ RFC 5545 import/export is handled via [`craigk5n/php-icalendar-core`](https://gi
 - **Export:** domain entity &rarr; `EventMapper::toVEvent()` &rarr; `Writer::write()` &rarr; ICS string
 - **Recurrence:** RFC 5545-correct expansion via `RecurrenceService`
 - **Recurrence exceptions:** EXDATE/RDATE round-trip through import and export. RECURRENCE-ID overrides (moved or cancelled occurrences) exclude that day from the series; a moved one is stored as its own event under `ImportService::localUid()` (`uid/recurrence-id`), the identifier to use when matching imported events back to a feed.
-- **RRULE output:** written as a RECUR value. `VEvent::setRrule()` in php-icalendar-core 1.2.0 writes TEXT, which escapes the semicolons, so do not use it for export.
+- **Requires php-icalendar-core 1.2.1+.** 1.2.0's `setRrule()` wrote RRULE as escaped TEXT, and its parser dropped an `EXDATE`/`RDATE` that listed several dates.
 
 ## Contributing
 

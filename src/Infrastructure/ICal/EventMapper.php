@@ -18,7 +18,6 @@ use Icalendar\Parser\ValueParser\DateTimeParser;
 use Icalendar\Parser\ValueParser\DurationParser;
 use Icalendar\Property\GenericProperty;
 use Icalendar\Property\PropertyInterface;
-use Icalendar\Value\GenericValue;
 
 /**
  * Mapper for translating between Domain Event entities and iCalendar VEvent components.
@@ -197,11 +196,11 @@ final class EventMapper
             $vevent->setDuration(sprintf('PT%dM', $event->duration()));
         }
 
-        // A RECUR value, not the TEXT that VEvent::setRrule() writes: TEXT
-        // escapes the rule's semicolons, and no reader accepts the result.
+        // setRrule() writes RECUR since php-icalendar-core 1.2.1; 1.2.0 wrote
+        // TEXT, escaping the rule's semicolons into a rule no reader accepts.
         $rule = $event->recurrence()->rule();
         if ($rule !== null) {
-            $vevent->addProperty(new GenericProperty('RRULE', new GenericValue($rule->toString(), 'RECUR')));
+            $vevent->setRrule($rule->toString());
         }
         $this->writeDateList($vevent, 'EXDATE', $event->recurrence()->exDate()->dates(), $event);
         $this->writeDateList($vevent, 'RDATE', $event->recurrence()->rDate()->dates(), $event);

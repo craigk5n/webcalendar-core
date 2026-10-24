@@ -119,6 +119,22 @@ ICS;
         ], $this->shown());
     }
 
+    public function testCommaSeparatedExDateListHidesEveryListedOccurrence(): void
+    {
+        // RFC 5545 §3.8.5.1 allows several dates in one EXDATE. php-icalendar-core
+        // before 1.2.1 could not parse that and dropped the property, so every
+        // listed occurrence came back. Parsed from text: building the VEVENT in
+        // code skips the parser and hides the failure.
+        $master = str_replace('RRULE:', "EXDATE:20260405T190000,20260605T190000\r\nRRULE:", self::MASTER);
+
+        $this->importService->importIcal($this->ics($master), $this->user);
+
+        $this->assertSame([
+            'Book club @ 2026-03-05 19:00',
+            'Book club @ 2026-05-05 19:00',
+        ], $this->shown());
+    }
+
     public function testMovedOccurrenceReplacesTheOriginalAndKeepsTheSeries(): void
     {
         $result = $this->importService->importIcal($this->ics(self::MASTER, self::MOVED_APRIL), $this->user);
