@@ -451,4 +451,101 @@ ICS;
 
         $this->assertSame('abc@example.com/20260405T190000Z', ImportService::localUid($vevent));
     }
+
+    // ---------------------------------------------------------------
+    // A UID match is only authority over rows the importer owns.
+    //
+    // The lookup is site-wide (cal_uid is a global key), and nothing used to
+    // compare the matched row's owner with the import's: a remote feed or an
+    // uploaded file carrying another user's UID overwrote that event and
+    // re-owned it, a cancelled override deleted it, and any override
+    // EXDATEd it.
+    // ---------------------------------------------------------------
+
+    private function aliceSeries(int $id, string $uid): Event
+    {
+        return new Event(
+            id: new EventId($id),
+            uid: $uid,
+            name: 'Alice private series',
+            description: '',
+            location: '',
+            start: new \DateTimeImmutable('2026-04-01 19:00:00'),
+            duration: 60,
+            createdBy: 'alice',
+            type: EventType::REPEATING_EVENT,
+            access: AccessLevel::PRIVATE,
+            recurrence: new \WebCalendar\Core\Domain\ValueObject\Recurrence(new \WebCalendar\Core\Domain\ValueObject\RecurrenceRule('FREQ=WEEKLY')),
+        );
+    }
+
+    public function testAnUpdateNeverTouchesAnotherOwnersEventWithTheSameUid(): void
+    {
+        $feed = new User('feedcal', 'Feed', 'Cal', 'feed@example.com', false, true);
+        $this->eventRepository->method('findByUid')->willReturn($this->aliceSeries(42, 'uid-1'));
+
+        $this->eventRepository->expects($this->never())->method('save');
+        $this->eventRepository->expects($this->never())->method('create');
+
+        $result = $this->importService->importIcal(self::ICS_ONE_EVENT, $feed, true);
+
+        $this->assertSame(0, $result->updatedCount);
+        $this->assertSame(1, $result->skippedCount);
+        $this->assertNotEmpty($result->warnings, 'the collision is reported, not silent');
+    }
+
+    public function testACancelledOverrideCannotDeleteOrExdateAnotherOwnersSeries(): void
+    {
+        $ics = <<<ICS
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Attacker//EN
+BEGIN:VEVENT
+UID:alice-series
+RECURRENCE-ID:20260408T190000Z
+DTSTART:20260408T190000Z
+DURATION:PT1H
+SUMMARY:x
+STATUS:CANCELLED
+END:VEVENT
+END:VCALENDAR
+ICS;
+        $feed = new User('feedcal', 'Feed', 'Cal', 'feed@example.com', false, true);
+        $this->eventRepository->method('findByUid')->willReturnCallback(
+            fn (string $uid) => str_contains($uid, '/')
+                ? new Event(id: new EventId(43), uid: $uid, name: 'Alice moved occurrence', description: '', location: '', start: new \DateTimeImmutable('2026-04-08 20:00:00'), duration: 60, createdBy: 'alice', type: EventType::EVENT, access: AccessLevel::PRIVATE)
+                : $this->aliceSeries(42, $uid)
+        );
+
+        $this->eventRepository->expects($this->never())->method('delete');
+        $this->eventRepository->expects($this->never())->method('save');
+
+        $this->importService->importIcal($ics, $feed, true);
+    }
+
+    public function testAnOwnersOwnCancelledOverrideStillExcludesTheOccurrence(): void
+    {
+        $ics = <<<ICS
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Feed//EN
+BEGIN:VEVENT
+UID:alice-series
+RECURRENCE-ID:20260408T190000Z
+DTSTART:20260408T190000Z
+DURATION:PT1H
+SUMMARY:x
+STATUS:CANCELLED
+END:VEVENT
+END:VCALENDAR
+ICS;
+        $alice = new User('alice', 'Alice', 'A', 'alice@example.com', false, true);
+        $this->eventRepository->method('findByUid')->willReturnCallback(
+            fn (string $uid) => str_contains($uid, '/') ? null : $this->aliceSeries(42, $uid)
+        );
+
+        $this->eventRepository->expects($this->once())->method('save');
+
+        $this->importService->importIcal($ics, $alice, true);
+    }
 }
