@@ -64,6 +64,7 @@ final class PdoTaskRepository implements TaskRepositoryInterface
             $sql .= ' AND ' . $clause;
         }
         $params += $scopeParams;
+        $sql .= ' ORDER BY cal_date, cal_time, cal_id';
 
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute($params);

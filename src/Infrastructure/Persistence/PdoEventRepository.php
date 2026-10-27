@@ -295,6 +295,10 @@ final class PdoEventRepository implements EventRepositoryInterface
         }
         $params += $scopeParams;
 
+        // Without this the server picks the order: MariaDB 10.4 returned
+        // insertion order, so callers that list the range got it unsorted.
+        $sql .= ' ORDER BY e.cal_date, e.cal_time, e.cal_id';
+
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute($params);
 
