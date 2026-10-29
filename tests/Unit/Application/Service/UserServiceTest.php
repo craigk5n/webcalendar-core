@@ -79,12 +79,76 @@ final class UserServiceTest extends TestCase
     public function testUserCanUpdateSelf(): void
     {
         $user = $this->createUser('jdoe');
-        
+        $this->userRepository->method('findByLogin')->with('jdoe')->willReturn($user);
+
         $this->userRepository->expects($this->once())
             ->method('save')
             ->with($user);
 
         $this->userService->updateUser($user, $user);
+    }
+
+    public function testUserCanUpdateOwnProfileFields(): void
+    {
+        $stored = $this->createUser('jdoe');
+        $renamed = new User('jdoe', 'New', 'Name', 'new@example.com', false, true);
+        $this->userRepository->method('findByLogin')->with('jdoe')->willReturn($stored);
+
+        $this->userRepository->expects($this->once())
+            ->method('save')
+            ->with($renamed);
+
+        $this->userService->updateUser($renamed, $stored);
+    }
+
+    public function testNonAdminCannotGrantThemselvesAdmin(): void
+    {
+        $stored = $this->createUser('bob');
+        $escalated = $this->createUser('bob', isAdmin: true);
+        $this->userRepository->method('findByLogin')->with('bob')->willReturn($stored);
+
+        $this->userRepository->expects($this->never())->method('save');
+
+        $this->expectException(AuthorizationException::class);
+        $this->userService->updateUser($escalated, $stored);
+    }
+
+    public function testDisabledUserCannotReEnableThemselves(): void
+    {
+        $stored = new User('carol', 'First', 'Last', 'carol@example.com', false, false);
+        $reEnabled = new User('carol', 'First', 'Last', 'carol@example.com', false, true);
+        $this->userRepository->method('findByLogin')->with('carol')->willReturn($stored);
+
+        $this->userRepository->expects($this->never())->method('save');
+
+        $this->expectException(AuthorizationException::class);
+        $this->userService->updateUser($reEnabled, $stored);
+    }
+
+    public function testNonAdminSelfUpdateRequiresExistingUser(): void
+    {
+        $user = $this->createUser('ghost');
+        $this->userRepository->method('findByLogin')->with('ghost')->willReturn(null);
+
+        $this->userRepository->expects($this->never())->method('save');
+
+        $this->expectException(AuthorizationException::class);
+        $this->userService->updateUser($user, $user);
+    }
+
+    public function testAdminCanGrantAdminToAnotherUser(): void
+    {
+        $admin = $this->createUser('admin', isAdmin: true);
+        $promoted = $this->createUser('target', isAdmin: true);
+        $this->userRepository->method('findByLogin')
+            ->with('target')
+            ->willReturn($this->createUser('target'));
+
+        $this->userRepository->expects($this->once())
+            ->method('save')
+            ->with($promoted);
+
+        $this->userService->updateUser($promoted, $admin);
     }
 
     public function testUserCannotUpdateOthers(): void
