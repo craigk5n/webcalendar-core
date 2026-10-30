@@ -35,9 +35,18 @@ interface UserRepositoryInterface
     public function save(User $user): void;
 
     /**
-     * Deletes a user by their login.
+     * Deletes a user by their login, along with the data they own.
+     *
+     * Entries the user created are deleted when nobody else attends them.
+     * Entries other users also attend are reassigned to $successor so the
+     * attendees keep them; with no successor they are deleted too. Nothing
+     * may stay owned by the bare login, or a later account created with the
+     * same login would inherit it.
+     *
+     * @throws \DomainException if an entry to be deleted has PENDING or PAID
+     *         ticket orders; nothing is deleted in that case.
      */
-    public function delete(string $login): void;
+    public function delete(string $login, ?string $successor = null): void;
 
     /**
      * Returns all preferences for a user.

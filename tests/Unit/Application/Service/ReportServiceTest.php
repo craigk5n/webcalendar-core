@@ -71,6 +71,80 @@ final class ReportServiceTest extends TestCase
     }
 
     // ---------------------------------------------------------------------
+    public function testEventValuesAreHtmlEscapedByDefault(): void
+    {
+        $report = new Report(id: 1, owner: 'admin', name: 'R', type: 'daily', templates: [
+            'E' => '<li title="${name}">${name} @ ${location}: ${description}</li>'
+        ]);
+        $event = $this->eventWith(
+            '"><script>alert(1)</script>',
+            '<img src=x onerror=alert(2)>',
+            '<b onmouseover=alert(3)>Rm</b>'
+        );
+
+        $result = $this->reportService->generateEventReport($report, $event);
+
+        $this->assertStringNotContainsString('<script', $result);
+        $this->assertStringNotContainsString('<img', $result);
+        $this->assertStringNotContainsString('<b ', $result);
+        $this->assertStringContainsString(
+            'title="&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;"',
+            $result
+        );
+        $this->assertStringStartsWith('<li title=', $result);
+    }
+
+    public function testFallbackWithoutTemplateEscapesName(): void
+    {
+        $report = new Report(id: 1, owner: 'admin', name: 'R', type: 'daily', templates: []);
+
+        $result = $this->reportService->generateEventReport(
+            $report,
+            $this->eventWith('<b>x</b>', '', '')
+        );
+
+        $this->assertSame('&lt;b&gt;x&lt;/b&gt;', $result);
+    }
+
+    public function testCustomEncoderReceivesFieldName(): void
+    {
+        $userRepository = $this->createMock(UserRepositoryInterface::class);
+        $service = new ReportService(
+            $this->reportRepository,
+            new EventService($this->eventRepository, $userRepository),
+            null,
+            static fn (string $value, string $field): string => $field === 'description'
+                ? $value
+                : strtoupper($value)
+        );
+        $report = new Report(id: 1, owner: 'admin', name: 'R', type: 'daily', templates: [
+            'E' => '${name}|${description}'
+        ]);
+
+        $result = $service->generateEventReport(
+            $report,
+            $this->eventWith('meeting', '<p>rich</p>', '')
+        );
+
+        $this->assertSame('MEETING|<p>rich</p>', $result);
+    }
+
+    private function eventWith(string $name, string $description, string $location): Event
+    {
+        return new Event(
+            id: new EventId(5),
+            uid: 'uid-5',
+            name: $name,
+            description: $description,
+            location: $location,
+            start: new \DateTimeImmutable('2026-02-11 10:00:00'),
+            duration: 60,
+            createdBy: 'bsmith',
+            type: EventType::EVENT,
+            access: AccessLevel::PUBLIC
+        );
+    }
+
     // User scoping for generateFullReport()
     //
     // The $userLogin parameter used to be accepted and ignored, and the query

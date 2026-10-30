@@ -31,8 +31,51 @@ final class DatabaseAuthServiceTest extends TestCase
             ->method('getPasswordHash')
             ->with($username)
             ->willReturn($hashedPassword);
+        $this->userRepository->method('findByLogin')
+            ->with($username)
+            ->willReturn($this->user($username, enabled: true));
 
         $this->assertTrue($this->authService->authenticate($username, $password));
+    }
+
+    public function testAuthenticateRejectsDisabledAccount(): void
+    {
+        $this->userRepository->method('getPasswordHash')
+            ->willReturn(password_hash('secret123', PASSWORD_DEFAULT));
+        $this->userRepository->method('findByLogin')
+            ->with('jdoe')
+            ->willReturn($this->user('jdoe', enabled: false));
+
+        $this->assertFalse($this->authService->authenticate('jdoe', 'secret123'));
+    }
+
+    public function testVerifyHashAcceptsEnabledAccount(): void
+    {
+        $hash = password_hash('secret123', PASSWORD_DEFAULT);
+        $this->userRepository->method('getPasswordHash')->willReturn($hash);
+        $this->userRepository->method('findByLogin')
+            ->willReturn($this->user('jdoe', enabled: true));
+
+        $this->assertTrue($this->authService->verifyHash('jdoe', $hash));
+    }
+
+    public function testVerifyHashRejectsDisabledAccount(): void
+    {
+        $hash = password_hash('secret123', PASSWORD_DEFAULT);
+        $this->userRepository->method('getPasswordHash')->willReturn($hash);
+        $this->userRepository->method('findByLogin')
+            ->willReturn($this->user('jdoe', enabled: false));
+
+        $this->assertFalse($this->authService->verifyHash('jdoe', $hash));
+    }
+
+    public function testAuthenticateRejectsHashWithoutUserRow(): void
+    {
+        $this->userRepository->method('getPasswordHash')
+            ->willReturn(password_hash('secret123', PASSWORD_DEFAULT));
+        $this->userRepository->method('findByLogin')->willReturn(null);
+
+        $this->assertFalse($this->authService->authenticate('jdoe', 'secret123'));
     }
 
     public function testAuthenticateReturnsFalseWithInvalidPassword(): void
@@ -59,5 +102,10 @@ final class DatabaseAuthServiceTest extends TestCase
             ->willReturn(null);
 
         $this->assertFalse($this->authService->authenticate($username, 'any-password'));
+    }
+
+    private function user(string $login, bool $enabled): User
+    {
+        return new User($login, 'First', 'Last', $login . '@example.com', false, $enabled);
     }
 }

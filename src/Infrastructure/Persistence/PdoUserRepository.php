@@ -14,6 +14,8 @@ use WebCalendar\Core\Domain\ValueObject\UserPreference;
  */
 final class PdoUserRepository implements UserRepositoryInterface
 {
+    use DeletesEntryRowsTrait;
+
     public function __construct(
         private readonly PDO $pdo,
         private readonly string $tablePrefix = '',
@@ -101,7 +103,7 @@ final class PdoUserRepository implements UserRepositoryInterface
         $this->pdo->prepare($sql)->execute($data);
     }
 
-    public function delete(string $login): void
+    public function delete(string $login, ?string $successor = null): void
     {
         $this->pdo->beginTransaction();
 
@@ -124,12 +126,21 @@ final class PdoUserRepository implements UserRepositoryInterface
                 'webcal_entry_log' => ['cal_login'],
             ];
 
+            // Templates are keyed by report id, so remove them while the
+            // user's webcal_report rows still identify which ones are theirs.
+            $this->pdo->prepare(
+                "DELETE FROM {$this->tablePrefix}webcal_report_template WHERE cal_report_id IN
+                    (SELECT cal_report_id FROM {$this->tablePrefix}webcal_report WHERE cal_login = :login)"
+            )->execute(['login' => $login]);
+
             foreach ($tables as $table => $columns) {
                 foreach ($columns as $column) {
                     $sql = "DELETE FROM {$this->tablePrefix}{$table} WHERE {$column} = :login";
                     $this->pdo->prepare($sql)->execute(['login' => $login]);
                 }
             }
+
+            $this->deleteOwnedData($login, $successor);
 
             $stmt = $this->pdo->prepare("DELETE FROM {$this->tablePrefix}webcal_user WHERE cal_login = :login");
             $stmt->execute(['login' => $login]);
@@ -139,6 +150,56 @@ final class PdoUserRepository implements UserRepositoryInterface
             $this->pdo->rollBack();
             throw $e;
         }
+    }
+
+    /**
+     * Removes data owned by the login (not just rows naming it). Ownership
+     * is a bare login string, so anything left behind would be inherited by
+     * a later account created with the same login.
+     */
+    private function deleteOwnedData(string $login, ?string $successor): void
+    {
+        $p = $this->tablePrefix;
+        $params = ['login' => $login];
+
+        // Runs after the user's own webcal_entry_user rows are gone, so any
+        // participant still listed on an entry is someone else.
+        $stmt = $this->pdo->prepare(
+            "SELECT e.cal_id,
+                    (SELECT COUNT(*) FROM {$p}webcal_entry_user u WHERE u.cal_id = e.cal_id) AS others
+               FROM {$p}webcal_entry e
+              WHERE e.cal_create_by = :login"
+        );
+        $stmt->execute($params);
+        $reassign = $this->pdo->prepare(
+            "UPDATE {$p}webcal_entry SET cal_create_by = :successor WHERE cal_id = :id"
+        );
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $calId = (int) $row['cal_id'];
+            if ($successor !== null && (int) $row['others'] > 0) {
+                $reassign->execute(['successor' => $successor, 'id' => $calId]);
+            } else {
+                $this->deleteEntryRows($calId);
+            }
+        }
+
+        $this->pdo->prepare("DELETE FROM {$p}webcal_entry_categories WHERE cat_owner = :login")
+            ->execute($params);
+        $this->pdo->prepare("DELETE FROM {$p}webcal_categories WHERE cat_owner = :login")
+            ->execute($params);
+
+        $this->pdo->prepare(
+            "DELETE FROM {$p}webcal_view_user WHERE cal_view_id IN
+                (SELECT cal_view_id FROM {$p}webcal_view WHERE cal_owner = :login)"
+        )->execute($params);
+        $this->pdo->prepare("DELETE FROM {$p}webcal_view WHERE cal_owner = :login")
+            ->execute($params);
+
+        // Session tokens store the login as their data; CSRF tokens store a
+        // session id and are left alone.
+        $this->pdo->prepare(
+            "DELETE FROM {$p}webcal_tokens WHERE cal_type = 'session' AND cal_data = :login"
+        )->execute($params);
     }
 
     /**

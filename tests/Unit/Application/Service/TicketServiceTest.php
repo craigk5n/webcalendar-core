@@ -261,6 +261,7 @@ final class TicketServiceTest extends TestCase
 
     public function testCheckInStampsAndPersists(): void
     {
+        $this->orders[9] = $this->orderWithStatus(9, OrderStatus::PAID);
         $token = str_pad('t1', 32, 'x');
         $this->tickets->method('findAttendeeByToken')->willReturnCallback(
             function (string $wanted) use ($token): ?Attendee {
@@ -287,5 +288,86 @@ final class TicketServiceTest extends TestCase
 
         $this->expectException(\DomainException::class);
         $this->service()->checkIn(str_pad('nope', 32, 'x'));
+    }
+
+    public function testCheckInRejectsTokenOfCancelledRsvp(): void
+    {
+        $this->wireType(new TicketType(7, 100, 'RSVP', 0, 'USD', 2));
+        $result = $this->service()->purchase(7, 'guest@example.com', 'Guest', 2);
+        $this->service()->cancelOrder($result->order->id());
+        $this->wireAttendeeLookup();
+
+        $this->expectException(\DomainException::class);
+        $this->service()->checkIn($result->attendees[0]->checkInToken());
+    }
+
+    public function testCancelAndRebookCannotYieldMoreAdmissionsThanCapacity(): void
+    {
+        $this->wireType(new TicketType(7, 100, 'RSVP', 0, 'USD', 2));
+        $tokens = [];
+        for ($round = 0; $round < 3; $round++) {
+            $result = $this->service()->purchase(7, 'guest@example.com', 'Guest', 2);
+            foreach ($result->attendees as $attendee) {
+                $tokens[] = $attendee->checkInToken();
+            }
+            if ($round < 2) {
+                $this->service()->cancelOrder($result->order->id());
+            }
+        }
+        $this->wireAttendeeLookup();
+
+        $admitted = 0;
+        foreach ($tokens as $token) {
+            try {
+                $this->service()->checkIn($token);
+                $admitted++;
+            } catch (\DomainException) {
+                // Token from a cancelled order.
+            }
+        }
+
+        $this->assertSame(2, $admitted, 'only the live order admits');
+    }
+
+    public function testCheckInRejectsTokenOfRefundedOrder(): void
+    {
+        $this->orders[9] = $this->orderWithStatus(9, OrderStatus::REFUNDED);
+        $token = str_pad('r1', 32, 'x');
+        $this->tickets->method('findAttendeeByToken')
+            ->willReturn(new Attendee(1, 9, 100, 'Guest', $token));
+        $this->tickets->expects($this->never())->method('saveAttendee');
+
+        $this->expectException(\DomainException::class);
+        $this->service()->checkIn($token);
+    }
+
+    public function testCheckInRejectsTokenOfPendingOrder(): void
+    {
+        $this->orders[9] = $this->orderWithStatus(9, OrderStatus::PENDING);
+        $token = str_pad('p1', 32, 'x');
+        $this->tickets->method('findAttendeeByToken')
+            ->willReturn(new Attendee(1, 9, 100, 'Guest', $token));
+
+        $this->expectException(\DomainException::class);
+        $this->service()->checkIn($token);
+    }
+
+    private function orderWithStatus(int $id, OrderStatus $status): TicketOrder
+    {
+        return new TicketOrder($id, 7, 100, 'buyer@example.com', 'Buyer', 1, 0, 'USD', $status);
+    }
+
+    private function wireAttendeeLookup(): void
+    {
+        $this->tickets->method('findAttendeeByToken')->willReturnCallback(
+            function (string $token): ?Attendee {
+                foreach ($this->attendees as $attendee) {
+                    if ($attendee->checkInToken() === $token) {
+                        return $attendee;
+                    }
+                }
+                return null;
+            }
+        );
     }
 }

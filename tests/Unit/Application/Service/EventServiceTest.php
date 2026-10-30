@@ -367,6 +367,80 @@ final class EventServiceTest extends TestCase
         $this->eventService->rejectEvent(new EventId(123), 'victim', $actor);
     }
 
+    public function testUserCannotSetAnotherParticipantsStatus(): void
+    {
+        $mallory = $this->createUser('mallory');
+
+        $this->eventRepository->method('findById')->willReturn($this->createEvent(1, 'alice'));
+        $this->eventRepository->method('getParticipantsWithStatus')
+            ->willReturn(['alice' => 'A', 'bob' => 'W']);
+        $this->eventRepository->expects($this->never())->method('updateParticipantStatus');
+
+        $this->expectException(AuthorizationException::class);
+        $this->eventService->setParticipantStatus(
+            new EventId(1),
+            'bob',
+            ParticipantStatus::ACCEPTED,
+            $mallory
+        );
+    }
+
+    public function testEventOwnerCannotSetAnotherParticipantsStatus(): void
+    {
+        $alice = $this->createUser('alice');
+
+        $this->eventRepository->method('findById')->willReturn($this->createEvent(1, 'alice'));
+        $this->eventRepository->method('getParticipantsWithStatus')
+            ->willReturn(['alice' => 'A', 'bob' => 'W']);
+        $this->eventRepository->expects($this->never())->method('updateParticipantStatus');
+
+        $this->expectException(AuthorizationException::class);
+        $this->eventService->setParticipantStatus(
+            new EventId(1),
+            'bob',
+            ParticipantStatus::ACCEPTED,
+            $alice
+        );
+    }
+
+    public function testParticipantCanSetOwnStatus(): void
+    {
+        $bob = $this->createUser('bob');
+
+        $this->eventRepository->method('findById')->willReturn($this->createEvent(1, 'alice'));
+        $this->eventRepository->method('getParticipantsWithStatus')
+            ->willReturn(['alice' => 'A', 'bob' => 'W']);
+        $this->eventRepository->expects($this->once())
+            ->method('updateParticipantStatus')
+            ->with(new EventId(1), 'bob', 'A');
+
+        $this->eventService->setParticipantStatus(
+            new EventId(1),
+            'bob',
+            ParticipantStatus::ACCEPTED,
+            $bob
+        );
+    }
+
+    public function testAdminCanSetAnyParticipantsStatus(): void
+    {
+        $admin = $this->createUser('admin', true);
+
+        $this->eventRepository->method('findById')->willReturn($this->createEvent(1, 'alice'));
+        $this->eventRepository->method('getParticipantsWithStatus')
+            ->willReturn(['alice' => 'A', 'bob' => 'W']);
+        $this->eventRepository->expects($this->once())
+            ->method('updateParticipantStatus')
+            ->with(new EventId(1), 'bob', 'R');
+
+        $this->eventService->setParticipantStatus(
+            new EventId(1),
+            'bob',
+            ParticipantStatus::REJECTED,
+            $admin
+        );
+    }
+
     public function testSetParticipantStatusThrowsIfEventNotFound(): void
     {
         $actor = $this->createUser('jdoe');

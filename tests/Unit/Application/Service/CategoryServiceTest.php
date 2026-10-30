@@ -89,6 +89,84 @@ final class CategoryServiceTest extends TestCase
     $this->categoryService->assignToEvent($eventId, 'jdoe', [1], $admin);
   }
 
+  public function testOwnerCanCreateOwnCategory(): void
+  {
+    $category = new Category(9, 'jdoe', 'New Cat', '#00FF00');
+    $this->categoryRepository->method('findByCompositeKey')->willReturn(null);
+
+    $this->categoryRepository->expects($this->once())
+      ->method('save')
+      ->with($category);
+
+    $this->categoryService->createCategory($category, $this->createUser('jdoe'));
+  }
+
+  public function testNonOwnerCannotCreateCategoryForAnotherUser(): void
+  {
+    $this->categoryRepository->method('findByCompositeKey')->willReturn(null);
+    $this->categoryRepository->expects($this->never())->method('save');
+
+    $this->expectException(AuthorizationException::class);
+    $this->categoryService->createCategory(
+      new Category(9, 'bob', 'Planted', null),
+      $this->createUser('alice')
+    );
+  }
+
+  public function testNonAdminCannotCreateGlobalCategory(): void
+  {
+    $this->categoryRepository->method('findByCompositeKey')->willReturn(null);
+    $this->categoryRepository->expects($this->never())->method('save');
+
+    $this->expectException(AuthorizationException::class);
+    $this->categoryService->createCategory(
+      new Category(9, null, 'Global', null),
+      $this->createUser('alice')
+    );
+  }
+
+  public function testCreateCategoryRefusesToOverwriteExistingRow(): void
+  {
+    // Composite-key collision: (5, 'jdoe') already exists.
+    $existing = new Category(5, 'jdoe', 'Existing', '#111111');
+    $this->categoryRepository->method('findByCompositeKey')
+      ->with(5, 'jdoe')
+      ->willReturn($existing);
+    $this->categoryRepository->expects($this->never())->method('save');
+
+    $this->expectException(\DomainException::class);
+    $this->categoryService->createCategory(
+      new Category(5, 'jdoe', 'Renamed', '#FF0000'),
+      $this->createUser('jdoe')
+    );
+  }
+
+  public function testAdminCannotOverwriteGlobalCategoryViaCreate(): void
+  {
+    $this->categoryRepository->method('findByCompositeKey')
+      ->with(6, '')
+      ->willReturn(new Category(6, null, 'Holidays', null));
+    $this->categoryRepository->expects($this->never())->method('save');
+
+    $this->expectException(\DomainException::class);
+    $this->categoryService->createCategory(
+      new Category(6, null, 'Renamed', null),
+      $this->createUser('admin', true)
+    );
+  }
+
+  public function testAdminCanCreateGlobalCategory(): void
+  {
+    $category = new Category(9, null, 'Global', null);
+    $this->categoryRepository->method('findByCompositeKey')->willReturn(null);
+
+    $this->categoryRepository->expects($this->once())
+      ->method('save')
+      ->with($category);
+
+    $this->categoryService->createCategory($category, $this->createUser('admin', true));
+  }
+
   public function testOwnerCanUpdateOwnCategory(): void
   {
     $category = new Category(1, 'jdoe', 'My Cat', '#FF0000');

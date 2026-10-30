@@ -203,13 +203,28 @@ final class TicketService
      * Scan one admission token. Double scans throw (the fraud case
      * check-in exists to catch) and do not re-stamp.
      *
-     * @throws \DomainException On an unknown token or a repeat scan.
+     * A token admits only while its order is PAID. Cancelling or refunding
+     * an order releases its seats back to capacity, so its tokens must stop
+     * admitting too.
+     *
+     * @throws \DomainException On an unknown token, a token whose order is
+     *         not PAID, or a repeat scan.
      */
     public function checkIn(string $token): Attendee
     {
         $attendee = $this->tickets->findAttendeeByToken($token);
         if ($attendee === null) {
             throw new \DomainException('Unknown check-in token.');
+        }
+
+        $order = $this->tickets->findOrder($attendee->orderId());
+        if ($order === null || $order->status() !== OrderStatus::PAID) {
+            $this->logger->warning('Check-in refused: order is not paid', [
+                'attendee' => $attendee->id(),
+                'order' => $attendee->orderId(),
+                'status' => $order?->status()->value,
+            ]);
+            throw new \DomainException('Ticket is not valid: its order is not paid.');
         }
 
         $scanned = $attendee->checkIn(($this->clock)());

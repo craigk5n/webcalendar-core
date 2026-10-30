@@ -101,6 +101,8 @@ final class UserService
      *
      * @throws AuthorizationException if actor is not an admin
      * @throws SelfOperationException if actor tries to delete their own account
+     * @throws \DomainException if an entry to be deleted still has PENDING or
+     *         PAID ticket orders
      */
     public function deleteUser(string $login, User $actor): void
     {
@@ -111,7 +113,8 @@ final class UserService
         }
 
         $this->logger->info('User deleted', ['login' => $login, 'actor' => $actor->login()]);
-        $this->userRepository->delete($login);
+        // Entries the user shares with others are handed to the deleting admin.
+        $this->userRepository->delete($login, $actor->login());
     }
 
     /**

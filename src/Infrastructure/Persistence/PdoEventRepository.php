@@ -25,6 +25,7 @@ final class PdoEventRepository implements EventRepositoryInterface
 {
     use ChunkedInClauseTrait;
     use TransactionalTrait;
+    use DeletesEntryRowsTrait;
     use AppliesEventScope;
 
     public function __construct(
@@ -428,15 +429,7 @@ final class PdoEventRepository implements EventRepositoryInterface
         $idValue = $id->value();
         
         $this->executeInTransaction(function () use ($idValue): void {
-            // Delete from all related tables
-            $this->pdo->prepare("DELETE FROM {$this->tablePrefix}webcal_entry_user WHERE cal_id = :id")
-                ->execute(['id' => $idValue]);
-            $this->pdo->prepare("DELETE FROM {$this->tablePrefix}webcal_entry_repeats WHERE cal_id = :id")
-                ->execute(['id' => $idValue]);
-            $this->pdo->prepare("DELETE FROM {$this->tablePrefix}webcal_entry_repeats_not WHERE cal_id = :id")
-                ->execute(['id' => $idValue]);
-            $this->pdo->prepare("DELETE FROM {$this->tablePrefix}webcal_entry WHERE cal_id = :id")
-                ->execute(['id' => $idValue]);
+            $this->deleteEntryRows($idValue);
         });
     }
 
