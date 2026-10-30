@@ -375,7 +375,7 @@ The core library provides services that return structured event data for calenda
 
 | Column | Type | iCal Property | Rationale |
 |--------|------|---------------|-----------|
-| `cal_uid` | VARCHAR(255) | UID | **Required.** Globally unique identifier for iCal interop. Currently UID is only in `webcal_import_data.cal_external_id` tied to import batches — not usable for export/sync. |
+| `cal_uid` | VARCHAR(255) | UID | **Required.** RFC 5545 UID for iCal interop. Unique per creator, not per site: two users importing the same feed each keep their own copy under the feed's UID. Currently UID is only in `webcal_import_data.cal_external_id` tied to import batches — not usable for export/sync. |
 | `cal_sequence` | INT DEFAULT 0 | SEQUENCE | Change counter for multi-client sync. Incremented on each update. |
 | `cal_transp` | VARCHAR(11) DEFAULT 'OPAQUE' | TRANSP | `OPAQUE` (blocks free/busy) or `TRANSPARENT` (does not block). Required for correct free/busy calculation. |
 | `cal_status` | VARCHAR(20) DEFAULT NULL | STATUS | Event-level status: `TENTATIVE`, `CONFIRMED`, `CANCELLED` (events); `NEEDS-ACTION`, `IN-PROCESS`, `COMPLETED`, `CANCELLED` (tasks); `DRAFT`, `FINAL`, `CANCELLED` (journals). Distinct from per-participant `cal_status` in `webcal_entry_user`. |

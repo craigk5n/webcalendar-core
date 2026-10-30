@@ -49,7 +49,7 @@ ICS;
         $user = new User('jdoe', 'John', 'Doe', 'john@example.com', false, true);
 
         $this->eventRepository->expects($this->once())
-            ->method('findByUid')
+            ->method('findByUidAndCreator')
             ->with('uid-1')
             ->willReturn(null);
 
@@ -92,7 +92,7 @@ ICS;
     {
         $user = new User('jdoe', 'John', 'Doe', 'john@example.com', false, true);
 
-        $this->eventRepository->method('findByUid')
+        $this->eventRepository->method('findByUidAndCreator')
             ->with('uid-1')
             ->willReturn($this->existingEvent(42, 'uid-1'));
 
@@ -110,7 +110,7 @@ ICS;
     {
         $user = new User('jdoe', 'John', 'Doe', 'john@example.com', false, true);
 
-        $this->eventRepository->method('findByUid')
+        $this->eventRepository->method('findByUidAndCreator')
             ->with('uid-1')
             ->willReturn($this->existingEvent(42, 'uid-1'));
 
@@ -141,7 +141,7 @@ ICS;
     {
         $user = new User('jdoe', 'John', 'Doe', 'john@example.com', false, true);
 
-        $this->eventRepository->method('findByUid')->willReturn(null);
+        $this->eventRepository->method('findByUidAndCreator')->willReturn(null);
         $this->eventRepository->expects($this->once())->method('create');
 
         $result = $this->importService->importIcal(self::ICS_ONE_EVENT, $user, true);
@@ -250,7 +250,7 @@ ICS;
         $user = new User('jdoe', 'John', 'Doe', 'john@example.com', false, true);
 
         $persisted = $this->existingEvent(7, 'uid-1');
-        $this->eventRepository->method('findByUid')
+        $this->eventRepository->method('findByUidAndCreator')
             ->willReturnOnConsecutiveCalls(null, $persisted);
 
         $service->importIcal(self::icsWithCategories('Work,Personal'), $user);
@@ -271,7 +271,7 @@ ICS;
         $user = new User('jdoe', 'John', 'Doe', 'john@example.com', false, true);
 
         $persisted = $this->existingEvent(7, 'uid-1');
-        $this->eventRepository->method('findByUid')
+        $this->eventRepository->method('findByUidAndCreator')
             ->willReturnOnConsecutiveCalls(null, $persisted);
 
         // Single-quoted: '\\,' is the two bytes \ and , — real ICS escaping.
@@ -295,7 +295,7 @@ ICS;
         $user = new User('jdoe', 'John', 'Doe', 'john@example.com', false, true);
 
         $persisted = $this->existingEvent(99, 'uid-1');
-        $this->eventRepository->method('findByUid')
+        $this->eventRepository->method('findByUidAndCreator')
             ->willReturnOnConsecutiveCalls(null, $persisted);
         $this->eventRepository->expects($this->once())->method('create');
 
@@ -312,7 +312,7 @@ ICS;
         $service = $this->serviceWithCategories();
         $user = new User('jdoe', 'John', 'Doe', 'john@example.com', false, true);
 
-        $this->eventRepository->method('findByUid')
+        $this->eventRepository->method('findByUidAndCreator')
             ->willReturn($this->existingEvent(42, 'uid-1'));
         $this->eventRepository->expects($this->once())->method('save');
 
@@ -331,7 +331,7 @@ ICS;
         $service = $this->serviceWithCategories();
         $user = new User('jdoe', 'John', 'Doe', 'john@example.com', false, true);
 
-        $this->eventRepository->method('findByUid')
+        $this->eventRepository->method('findByUidAndCreator')
             ->willReturn($this->existingEvent(42, 'uid-1'));
 
         $service->importIcal(self::icsWithCategories('Work'), $user, false);
@@ -368,7 +368,7 @@ ICS;
         $user = new User('jdoe', 'John', 'Doe', 'john@example.com', false, true);
 
         $persisted = $this->existingEvent(7, 'uid-1');
-        $this->eventRepository->method('findByUid')
+        $this->eventRepository->method('findByUidAndCreator')
             ->willReturnOnConsecutiveCalls(null, $persisted);
 
         $service->importIcal(self::icsWithLabels($categories, $tags), $user);
@@ -481,17 +481,29 @@ ICS;
 
     public function testAnUpdateNeverTouchesAnotherOwnersEventWithTheSameUid(): void
     {
+        // Even a repository that wrongly hands back alice's event for this
+        // importer must not get it updated: the service checks the owner.
         $feed = new User('feedcal', 'Feed', 'Cal', 'feed@example.com', false, true);
-        $this->eventRepository->method('findByUid')->willReturn($this->aliceSeries(42, 'uid-1'));
+        $this->eventRepository->method('findByUidAndCreator')->willReturn($this->aliceSeries(42, 'uid-1'));
 
         $this->eventRepository->expects($this->never())->method('save');
-        $this->eventRepository->expects($this->never())->method('create');
+        $this->eventRepository->expects($this->once())->method('create')
+            ->with($this->callback(fn (Event $e): bool => $e->createdBy() === 'feedcal'));
 
         $result = $this->importService->importIcal(self::ICS_ONE_EVENT, $feed, true);
 
         $this->assertSame(0, $result->updatedCount);
-        $this->assertSame(1, $result->skippedCount);
-        $this->assertNotEmpty($result->warnings, 'the collision is reported, not silent');
+        $this->assertSame(1, $result->importedCount, 'the importer gets its own copy');
+    }
+
+    public function testUpdateDetectionLooksUpTheImportersOwnCopy(): void
+    {
+        $feed = new User('feedcal', 'Feed', 'Cal', 'feed@example.com', false, true);
+        $this->eventRepository->expects($this->atLeastOnce())->method('findByUidAndCreator')
+            ->with($this->anything(), 'feedcal')
+            ->willReturn(null);
+
+        $this->importService->importIcal(self::ICS_ONE_EVENT, $feed, true);
     }
 
     public function testACancelledOverrideCannotDeleteOrExdateAnotherOwnersSeries(): void
@@ -511,7 +523,7 @@ END:VEVENT
 END:VCALENDAR
 ICS;
         $feed = new User('feedcal', 'Feed', 'Cal', 'feed@example.com', false, true);
-        $this->eventRepository->method('findByUid')->willReturnCallback(
+        $this->eventRepository->method('findByUidAndCreator')->willReturnCallback(
             fn (string $uid) => str_contains($uid, '/')
                 ? new Event(id: new EventId(43), uid: $uid, name: 'Alice moved occurrence', description: '', location: '', start: new \DateTimeImmutable('2026-04-08 20:00:00'), duration: 60, createdBy: 'alice', type: EventType::EVENT, access: AccessLevel::PRIVATE)
                 : $this->aliceSeries(42, $uid)
@@ -540,7 +552,7 @@ END:VEVENT
 END:VCALENDAR
 ICS;
         $alice = new User('alice', 'Alice', 'A', 'alice@example.com', false, true);
-        $this->eventRepository->method('findByUid')->willReturnCallback(
+        $this->eventRepository->method('findByUidAndCreator')->willReturnCallback(
             fn (string $uid) => str_contains($uid, '/') ? null : $this->aliceSeries(42, $uid)
         );
 

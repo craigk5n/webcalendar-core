@@ -24,6 +24,15 @@ interface EventRepositoryInterface
     public function findByUid(string $uid): ?Event;
 
     /**
+     * Finds the event a given user created under a UID.
+     *
+     * cal_uid is not unique: two users who import the same feed each hold
+     * their own copy of its events. Anything acting for one user, such as
+     * an import deciding whether to update, must look up that user's copy.
+     */
+    public function findByUidAndCreator(string $uid, string $login): ?Event;
+
+    /**
      * Finds all events within a specific date range, within $scope.
      *
      * $scope is required and has no default. This method used to take a

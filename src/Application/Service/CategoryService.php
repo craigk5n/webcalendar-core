@@ -8,7 +8,9 @@ use WebCalendar\Core\Domain\Entity\Category;
 use WebCalendar\Core\Domain\Entity\User;
 use WebCalendar\Core\Domain\Exception\AuthorizationException;
 use WebCalendar\Core\Domain\Repository\CategoryRepositoryInterface;
+use WebCalendar\Core\Domain\Repository\EventRepositoryInterface;
 use WebCalendar\Core\Domain\ValueObject\EventId;
+use WebCalendar\Core\Domain\ValueObject\ParticipantStatus;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 
@@ -21,6 +23,7 @@ final class CategoryService
 
     public function __construct(
         private readonly CategoryRepositoryInterface $categoryRepository,
+        private readonly EventRepositoryInterface $eventRepository,
         ?LoggerInterface $logger = null
     ) {
         $this->logger = $logger ?? new NullLogger();
@@ -151,18 +154,63 @@ final class CategoryService
 
     /**
      * Assigns multiple categories to an event for a specific user.
-     * 
+     *
+     * A non-admin assigns only as themself, only on an event they created
+     * or participate in, and only categories that are global or their own.
+     *
      * @param int[] $categoryIds
+     * @throws AuthorizationException if the actor may not make this assignment
      */
     public function assignToEvent(EventId $eventId, string $userLogin, array $categoryIds, User $actor): void
     {
-        // User can only assign categories to their own events, or admin can assign to any
-        if (!$actor->isAdmin() && $actor->login() !== $userLogin) {
-            throw AuthorizationException::notOwner('assign categories', $eventId->value(), $actor->login());
+        if (!$actor->isAdmin()) {
+            if ($actor->login() !== $userLogin) {
+                throw AuthorizationException::notOwner('assign categories', $eventId->value(), $actor->login());
+            }
+            $this->assertOnEvent($eventId, $userLogin);
+            foreach ($categoryIds as $categoryId) {
+                $this->assertCanUseCategory($categoryId, $userLogin);
+            }
         }
-        
+
         $this->logger->debug('Categories assigned to event', ['event_id' => $eventId->value(), 'categories' => $categoryIds]);
         $this->categoryRepository->assignToEvent($eventId, $userLogin, $categoryIds);
+    }
+
+    /**
+     * Asserts that the login created the event or is a participant on it
+     * who has not rejected or deleted it.
+     */
+    private function assertOnEvent(EventId $eventId, string $login): void
+    {
+        $event = $this->eventRepository->findById($eventId);
+        if ($event !== null && $event->createdBy() === $login) {
+            return;
+        }
+        $status = $event !== null
+            ? $this->eventRepository->getParticipantsWithStatus($eventId)[$login] ?? null
+            : null;
+        $declined = [ParticipantStatus::REJECTED->value, ParticipantStatus::DELETED->value];
+        if ($status !== null && !in_array($status, $declined, true)) {
+            return;
+        }
+
+        throw AuthorizationException::notOwner('assign categories', $eventId->value(), $login);
+    }
+
+    /**
+     * Asserts that the category is global or owned by the login.
+     */
+    private function assertCanUseCategory(int $categoryId, string $login): void
+    {
+        if ($this->categoryRepository->findByCompositeKey($categoryId, '') !== null) {
+            return;
+        }
+        if ($this->categoryRepository->findByCompositeKey($categoryId, $login) !== null) {
+            return;
+        }
+
+        throw AuthorizationException::notOwner('assign category', $categoryId, $login);
     }
 
     /**

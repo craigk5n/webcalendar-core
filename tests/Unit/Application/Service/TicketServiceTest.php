@@ -62,6 +62,15 @@ final class TicketServiceTest extends TestCase
                 $this->orders[$order->id()] = $order;
             }
         );
+        $this->tickets->method('transitionOrderStatus')->willReturnCallback(
+            function (int $id, OrderStatus $from, OrderStatus $to): bool {
+                if (!array_key_exists($id, $this->orders) || $this->orders[$id]->status() !== $from) {
+                    return false;
+                }
+                $this->orders[$id] = $this->orders[$id]->withStatus($to);
+                return true;
+            }
+        );
         $this->tickets->method('findOrder')->willReturnCallback(
             fn (int $id): ?TicketOrder => array_key_exists($id, $this->orders) ? $this->orders[$id] : null
         );
@@ -187,6 +196,39 @@ final class TicketServiceTest extends TestCase
         $this->assertSame(OrderStatus::PAID, $result->order->status());
         $this->assertCount(2, $result->attendees);
         $this->assertSame(OrderStatus::PAID, $this->orders[$result->order->id()]->status(), 'persisted');
+    }
+
+    public function testOverlappingConfirmationsMintOnlyOnce(): void
+    {
+        // A duplicate webhook arrives while the first confirmation is still
+        // waiting on the provider: both have passed the PENDING check.
+        $this->wireType(new TicketType(7, 2, 'GA', 2500, 'USD', 2));
+        $this->payments->method('createPayment')->willReturn(new PaymentSession('pi-1', 'https://pay.example.com/pi-1'));
+        $service = $this->service($this->payments);
+        $pending = $service->purchase(7, 'buyer@example.com', 'Buyer', 2);
+        $orderId = $pending->order->id();
+
+        $inner = null;
+        $nested = false;
+        $this->payments->method('isPaid')->willReturnCallback(
+            function () use (&$nested, &$inner, $service, $orderId): bool {
+                if (!$nested) {
+                    $nested = true;
+                    $inner = $service->confirmPayment($orderId);
+                }
+                return true;
+            }
+        );
+
+        try {
+            $service->confirmPayment($orderId);
+            $this->fail('the losing confirmation must not mint');
+        } catch (\DomainException $e) {
+            $this->assertStringContainsString('not awaiting payment', $e->getMessage());
+        }
+
+        $this->assertNotNull($inner);
+        $this->assertCount(2, $this->attendees, 'exactly quantity admissions');
     }
 
     public function testConfirmPaymentRejectsWhenProviderSaysUnpaid(): void

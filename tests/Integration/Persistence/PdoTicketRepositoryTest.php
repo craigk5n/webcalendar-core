@@ -98,6 +98,31 @@ final class PdoTicketRepositoryTest extends RepositoryTestCase
         );
     }
 
+    public function testStatusTransitionIsACompareAndSet(): void
+    {
+        $type = $this->repository->saveTicketType(new TicketType(0, 100, 'GA', 1000));
+        $order = $this->repository->createOrderIfCapacityAllows($this->order($type->id(), 1), null);
+        $other = $this->repository->createOrderIfCapacityAllows($this->order($type->id(), 1), null);
+        $this->assertNotNull($order);
+        $this->assertNotNull($other);
+
+        $this->assertTrue($this->repository->transitionOrderStatus($order->id(), OrderStatus::PENDING, OrderStatus::PAID));
+        $this->assertFalse(
+            $this->repository->transitionOrderStatus($order->id(), OrderStatus::PENDING, OrderStatus::PAID),
+            'the second of two overlapping transitions loses'
+        );
+        $this->assertFalse($this->repository->transitionOrderStatus(987654, OrderStatus::PENDING, OrderStatus::PAID));
+
+        $this->assertSame(OrderStatus::PAID, $this->repository->findOrder($order->id())?->status());
+        $this->assertSame(OrderStatus::PENDING, $this->repository->findOrder($other->id())?->status(), 'other orders untouched');
+    }
+
+    public function testStatusTransitionRejectsANoOpMove(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->repository->transitionOrderStatus(1, OrderStatus::PAID, OrderStatus::PAID);
+    }
+
     public function testUnlimitedCapacityNeverRefuses(): void
     {
         $type = $this->repository->saveTicketType(new TicketType(0, 100, 'RSVP'));

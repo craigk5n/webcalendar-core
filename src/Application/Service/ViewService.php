@@ -40,10 +40,47 @@ final class ViewService
 
     /**
      * Creates a new view.
+     *
+     * A non-admin may only create a personal view of their own; global views
+     * are admin-only. Create never overwrites: an existing id must be changed
+     * through updateView(), which checks the stored owner.
+     *
+     * @throws AuthorizationException if actor may not own the new view
+     * @throws \DomainException if a view with this id already exists
      */
     public function createView(View $view, User $actor): void
     {
+        $this->assertCanOwn($view, $actor, 'create view');
+
+        if ($this->viewRepository->findById($view->id()) !== null) {
+            throw new \DomainException(sprintf('View with ID %d already exists.', $view->id()));
+        }
+
         $this->logger->info('View created', ['id' => $view->id(), 'actor' => $actor->login()]);
+        $this->viewRepository->save($view);
+    }
+
+    /**
+     * Updates an existing view.
+     *
+     * The stored view decides who may change it; the new values must also
+     * be ones the actor could create, so a non-admin cannot hand the view
+     * to someone else or make it global.
+     *
+     * @throws \DomainException if the view does not exist.
+     * @throws AuthorizationException if actor is not the owner or admin
+     */
+    public function updateView(View $view, User $actor): void
+    {
+        $existing = $this->viewRepository->findById($view->id());
+        if ($existing === null) {
+            throw new \DomainException(sprintf('View with ID %d not found.', $view->id()));
+        }
+
+        $this->assertCanModify($existing, $actor, 'update view');
+        $this->assertCanOwn($view, $actor, 'update view');
+
+        $this->logger->info('View updated', ['id' => $view->id(), 'actor' => $actor->login()]);
         $this->viewRepository->save($view);
     }
 
@@ -91,6 +128,24 @@ final class ViewService
         $this->assertCanModify($view, $actor, 'modify view users');
         $this->logger->info('View users updated', ['view_id' => $viewId, 'users' => $logins, 'actor' => $actor->login()]);
         $this->viewRepository->setUsers($viewId, $logins);
+    }
+
+    /**
+     * Asserts that the actor may give a view these owner and global values.
+     */
+    private function assertCanOwn(View $view, User $actor, string $action): void
+    {
+        if ($actor->isAdmin()) {
+            return;
+        }
+
+        if ($view->isGlobal()) {
+            throw AuthorizationException::adminRequired($action . ' (global)');
+        }
+
+        if ($view->owner() !== $actor->login()) {
+            throw AuthorizationException::notOwner($action, $view->id(), $actor->login());
+        }
     }
 
     /**

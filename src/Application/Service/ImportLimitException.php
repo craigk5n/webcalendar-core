@@ -26,4 +26,14 @@ final class ImportLimitException extends \RuntimeException
       $maxEvents
     ));
   }
+
+  public static function tooManyCategories(int $count, int $max, string $scope): self
+  {
+    return new self(sprintf(
+      'Import has %d category names %s, maximum allowed is %d',
+      $count,
+      $scope,
+      $max
+    ));
+  }
 }
