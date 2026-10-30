@@ -103,8 +103,16 @@ final class DatabaseAuthService implements AuthServiceInterface
     }
 
     /**
-     * Returns the stored password hash only for an existing, enabled account.
-     * Disabled accounts (cal_enabled = 'N') cannot authenticate.
+     * Returns the stored password hash only for an existing, enabled account
+     * whose login is the one supplied. Disabled accounts (cal_enabled = 'N')
+     * cannot authenticate.
+     *
+     * The lookup runs under the column's collation. MySQL's defaults
+     * (utf8mb4_unicode_ci, utf8mb4_0900_ai_ci) ignore accents and, for
+     * PAD SPACE collations, trailing spaces, so 'àlice' or 'alice ' would
+     * find alice's row while getting a rate-limit bucket of its own. The
+     * matched login must equal the supplied one under the same folding the
+     * bucket key uses (ASCII case only).
      */
     private function getActiveAccountHash(string $username): ?string
     {
@@ -116,6 +124,13 @@ final class DatabaseAuthService implements AuthServiceInterface
         $user = $this->userRepository->findByLogin($username);
         if ($user === null || !$user->isEnabled()) {
             $this->logger->warning('Login refused for disabled or missing account', [
+                'username' => $username
+            ]);
+            return null;
+        }
+
+        if (strtolower($user->login()) !== strtolower($username)) {
+            $this->logger->warning('Login refused: supplied login only matches by collation', [
                 'username' => $username
             ]);
             return null;

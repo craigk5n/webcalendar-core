@@ -28,7 +28,7 @@ final class CategoryServiceTest extends TestCase
   {
     $this->categoryRepository = $this->createMock(CategoryRepositoryInterface::class);
     $this->eventRepository = $this->createMock(EventRepositoryInterface::class);
-    $this->categoryService = new CategoryService($this->categoryRepository, $this->eventRepository);
+    $this->categoryService = new CategoryService($this->categoryRepository, eventRepository: $this->eventRepository);
   }
 
   private function eventBy(int $id, string $creator): Event
@@ -126,6 +126,15 @@ final class CategoryServiceTest extends TestCase
 
     $this->expectException(AuthorizationException::class);
     $this->categoryService->assignToEvent(new EventId(7), 'jdoe', [1], $this->createUser('jdoe'));
+  }
+
+  public function testWithoutAnEventRepositoryANonAdminCannotAssign(): void
+  {
+    $service = new CategoryService($this->categoryRepository);
+    $this->categoryRepository->expects($this->never())->method('assignToEvent');
+
+    $this->expectException(\LogicException::class);
+    $service->assignToEvent(new EventId(7), 'jdoe', [1], $this->createUser('jdoe'));
   }
 
   public function testNonParticipantCannotAssignToOthersEvent(): void

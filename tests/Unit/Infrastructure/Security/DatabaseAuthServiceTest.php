@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace WebCalendar\Core\Tests\Unit\Infrastructure\Security;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use WebCalendar\Core\Application\Contract\RateLimiterInterface;
 use WebCalendar\Core\Domain\Repository\UserRepositoryInterface;
@@ -77,6 +78,40 @@ final class DatabaseAuthServiceTest extends TestCase
         $this->userRepository->method('findByLogin')->willReturn(null);
 
         $this->assertFalse($this->authService->authenticate('jdoe', 'secret123'));
+    }
+
+    /** @return array<string, array{string}> */
+    public static function collationVariants(): array
+    {
+        return [
+            'accent' => ['àlice'],
+            'trailing space' => ['alice '],
+            'dotted capital I' => ['ALİCE'],
+        ];
+    }
+
+    /**
+     * MySQL's default collations match these to alice's row, but each would
+     * get a rate-limit bucket of its own.
+     */
+    #[DataProvider('collationVariants')]
+    public function testLoginThatMatchesOnlyByCollationIsRefused(string $variant): void
+    {
+        $hash = password_hash('secret123', PASSWORD_DEFAULT, ['cost' => 4]);
+        $this->userRepository->method('getPasswordHash')->willReturn($hash);
+        $this->userRepository->method('findByLogin')->willReturn($this->user('alice', enabled: true));
+
+        $this->assertFalse($this->authService->authenticate($variant, 'secret123'));
+        $this->assertFalse($this->authService->verifyHash($variant, $hash));
+    }
+
+    public function testAsciiCaseDifferenceStillLogsIn(): void
+    {
+        $this->userRepository->method('getPasswordHash')
+            ->willReturn(password_hash('secret123', PASSWORD_DEFAULT, ['cost' => 4]));
+        $this->userRepository->method('findByLogin')->willReturn($this->user('alice', enabled: true));
+
+        $this->assertTrue($this->authService->authenticate('Alice', 'secret123'));
     }
 
     public function testAuthenticateReturnsFalseWithInvalidPassword(): void

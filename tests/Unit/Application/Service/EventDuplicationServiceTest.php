@@ -147,6 +147,11 @@ final class EventDuplicationServiceTest extends TestCase
                 return $uid === 'copy-uid' ? $stored : null;
             }
         );
+        $this->events->method('findByUidAndCreator')->willReturnCallback(
+            static function (string $uid) use (&$stored): ?Event {
+                return $uid === 'copy-uid' ? $stored : null;
+            }
+        );
     }
 
     public function testDuplicateCopiesTheWholeSeriesUnderANewIdentity(): void
@@ -173,10 +178,11 @@ final class EventDuplicationServiceTest extends TestCase
         $capturedSave = null;
         $this->wireSaveThenFind($capturedSave);
 
+        // copier did not create the original, so nobody's answer carries over.
         $this->events->method('getParticipantsWithStatus')->with(new EventId(10))
             ->willReturn(['teacher' => 'A', 'student' => 'W']);
         $this->events->expects($this->once())->method('saveParticipantsWithStatus')
-            ->with(new EventId(99), ['teacher' => 'A', 'student' => 'W']);
+            ->with(new EventId(99), ['teacher' => 'W', 'student' => 'W']);
 
         $this->categories->method('getForEvent')->willReturn([
             new Category(4, null, 'Classes', '#00f'),
@@ -205,6 +211,35 @@ final class EventDuplicationServiceTest extends TestCase
             ));
 
         $this->service->duplicate(new EventId(10), 'copy-uid', $this->actor());
+    }
+
+    public function testANonOwnersCopyKeepsOnlyTheirOwnStatus(): void
+    {
+        $this->events->method('findById')->willReturn($this->original());
+        $capturedSave = null;
+        $this->wireSaveThenFind($capturedSave);
+
+        $this->events->method('getParticipantsWithStatus')
+            ->willReturn(['teacher' => 'A', 'copier' => 'A', 'student' => 'R']);
+        $this->events->expects($this->once())->method('saveParticipantsWithStatus')
+            ->with(new EventId(99), ['teacher' => 'W', 'copier' => 'A', 'student' => 'W']);
+
+        $this->service->duplicate(new EventId(10), 'copy-uid', $this->actor());
+    }
+
+    public function testTheOwnersCopyKeepsEveryStatus(): void
+    {
+        $this->events->method('findById')->willReturn($this->original());
+        $capturedSave = null;
+        $this->wireSaveThenFind($capturedSave);
+
+        $this->events->method('getParticipantsWithStatus')
+            ->willReturn(['teacher' => 'A', 'student' => 'R']);
+        $this->events->expects($this->once())->method('saveParticipantsWithStatus')
+            ->with(new EventId(99), ['teacher' => 'A', 'student' => 'R']);
+
+        $teacher = new User('teacher', 'T', 'T', 'teacher@example.com', false, true);
+        $this->service->duplicate(new EventId(10), 'copy-uid', $teacher);
     }
 
     public function testDuplicateWithNewNameOverridesTheTitle(): void
