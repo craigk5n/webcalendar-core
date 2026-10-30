@@ -15,6 +15,7 @@ use WebCalendar\Core\Domain\Repository\ReminderRepositoryInterface;
 use WebCalendar\Core\Domain\Repository\SiteExtraRepositoryInterface;
 use WebCalendar\Core\Domain\ValueObject\ActivityLogType;
 use WebCalendar\Core\Domain\ValueObject\EventId;
+use WebCalendar\Core\Domain\ValueObject\ParticipantStatus;
 
 /**
  * Duplicates an event — single or whole recurring series — under a new
@@ -47,7 +48,10 @@ final class EventDuplicationService
     /**
      * @param EventId $source  Event (or series) to duplicate.
      * @param string  $newUid  Uid for the copy; must not exist yet.
-     * @param User    $actor   Becomes the copy's owner.
+     * @param User    $actor   Becomes the copy's owner. Read access to the
+     *                         source is the host's to check before calling.
+     *                         If the actor did not create the source, the
+     *                         other participants are copied as waiting.
      * @param ?string $newName Title for the copy; null keeps the original's.
      * @return Event The persisted copy, carrying its new id.
      * @throws \DomainException When the source does not exist.
@@ -76,7 +80,7 @@ final class EventDuplicationService
         );
 
         $this->eventRepository->save($copy);
-        $saved = $this->eventRepository->findByUid($newUid);
+        $saved = $this->eventRepository->findByUidAndCreator($newUid, $actor->login());
         if ($saved === null) {
             throw new \RuntimeException(sprintf('Event "%s" was not found after saving.', $newUid));
         }
@@ -103,6 +107,16 @@ final class EventDuplicationService
     private function copySidecars(Event $original, EventId $newId, User $actor): void
     {
         $participants = $this->eventRepository->getParticipantsWithStatus($original->id());
+        // Statuses are answers to the original's owner. When someone else
+        // copies the event, the people on it have agreed to nothing the new
+        // owner arranged, so everyone but the actor starts out waiting.
+        if ($original->createdBy() !== $actor->login()) {
+            foreach (array_keys($participants) as $login) {
+                if ($login !== $actor->login()) {
+                    $participants[$login] = ParticipantStatus::WAITING->value;
+                }
+            }
+        }
         if ($participants !== []) {
             $this->eventRepository->saveParticipantsWithStatus($newId, $participants);
         }

@@ -23,8 +23,10 @@ final class CategoryService
 
     public function __construct(
         private readonly CategoryRepositoryInterface $categoryRepository,
-        private readonly EventRepositoryInterface $eventRepository,
-        ?LoggerInterface $logger = null
+        ?LoggerInterface $logger = null,
+        // Appended so positional callers keep working. Without it a
+        // non-admin cannot assign categories: see assertOnEvent().
+        private readonly ?EventRepositoryInterface $eventRepository = null,
     ) {
         $this->logger = $logger ?? new NullLogger();
     }
@@ -183,6 +185,13 @@ final class CategoryService
      */
     private function assertOnEvent(EventId $eventId, string $login): void
     {
+        if ($this->eventRepository === null) {
+            // Fail closed: without the event there is nothing to check.
+            throw new \LogicException(
+                'CategoryService needs an EventRepositoryInterface to let non-admins assign categories.'
+            );
+        }
+
         $event = $this->eventRepository->findById($eventId);
         if ($event !== null && $event->createdBy() === $login) {
             return;
