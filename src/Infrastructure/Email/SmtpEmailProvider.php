@@ -20,6 +20,12 @@ final class SmtpEmailProvider implements EmailProviderInterface
         private readonly string $fromName = '',
         private readonly ?string $replyTo = null,
     ) {
+        if (preg_match('/[\r\n]/', $fromAddress) === 1) {
+            throw EmailException::configurationError('From address must not contain line breaks.');
+        }
+        if ($replyTo !== null) {
+            $this->validateReplyTo($replyTo);
+        }
     }
 
     public function send(EmailMessage $message): void
@@ -55,6 +61,17 @@ final class SmtpEmailProvider implements EmailProviderInterface
         }
     }
 
+    /**
+     * Reply-To goes into the header block verbatim, so it must be a single
+     * address: a CR or LF in it would start new headers (a Bcc, say).
+     */
+    private function validateReplyTo(string $replyTo): void
+    {
+        if (filter_var($replyTo, FILTER_VALIDATE_EMAIL) === false) {
+            throw EmailException::configurationError('Reply-To must be a single valid email address.');
+        }
+    }
+
     private function buildHeaders(EmailMessage $message, string $boundary): string
     {
         $headers = [];
@@ -69,6 +86,7 @@ final class SmtpEmailProvider implements EmailProviderInterface
         // Reply-To
         $replyTo = $message->replyTo ?? $this->replyTo;
         if ($replyTo !== null) {
+            $this->validateReplyTo($replyTo);
             $headers[] = 'Reply-To: ' . $replyTo;
         }
 

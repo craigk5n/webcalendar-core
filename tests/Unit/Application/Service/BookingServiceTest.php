@@ -51,6 +51,46 @@ final class BookingServiceTest extends TestCase
         $this->assertCount(16, $slots);
     }
 
+    public function testGetAvailabilityIgnoresOtherUsersEntriesItIsNotOn(): void
+    {
+        // forUser() would also return every other user's PUBLIC entries,
+        // so one booking on someone else's calendar would block this one.
+        $user = new User('jdoe', 'John', 'Doe', 'john@example.com', false, true);
+        $date = new \DateTimeImmutable('2026-02-11');
+        $other = $this->createEventAt($date->setTime(9, 0), 480, 'alice', 7);
+
+        $this->eventRepository->method('findByDateRange')->willReturn([$other]);
+        $this->eventRepository->method('getParticipantsBatch')->willReturn([7 => ['alice']]);
+
+        $this->assertCount(16, $this->bookingService->getAvailability($user, $date));
+    }
+
+    public function testGetAvailabilityIsBlockedByAnEventTheUserAttends(): void
+    {
+        $user = new User('jdoe', 'John', 'Doe', 'john@example.com', false, true);
+        $date = new \DateTimeImmutable('2026-02-11');
+        $meeting = $this->createEventAt($date->setTime(9, 0), 60, 'alice', 7);
+
+        $this->eventRepository->method('findByDateRange')->willReturn([$meeting]);
+        $this->eventRepository->method('getParticipantsBatch')->willReturn([7 => ['alice', 'jdoe']]);
+        $this->eventRepository->method('getParticipantsWithStatus')->willReturn(['alice' => 'A', 'jdoe' => 'W']);
+
+        $this->assertCount(14, $this->bookingService->getAvailability($user, $date));
+    }
+
+    public function testGetAvailabilityIgnoresAnEventTheUserRejected(): void
+    {
+        $user = new User('jdoe', 'John', 'Doe', 'john@example.com', false, true);
+        $date = new \DateTimeImmutable('2026-02-11');
+        $meeting = $this->createEventAt($date->setTime(9, 0), 60, 'alice', 7);
+
+        $this->eventRepository->method('findByDateRange')->willReturn([$meeting]);
+        $this->eventRepository->method('getParticipantsBatch')->willReturn([7 => ['alice', 'jdoe']]);
+        $this->eventRepository->method('getParticipantsWithStatus')->willReturn(['alice' => 'A', 'jdoe' => 'R']);
+
+        $this->assertCount(16, $this->bookingService->getAvailability($user, $date));
+    }
+
     public function testBookCreatesPendingEvent(): void
     {
         $user = new User('jdoe', 'John', 'Doe', 'john@example.com', false, true);
@@ -190,17 +230,21 @@ final class BookingServiceTest extends TestCase
         $service->book($user, 'Alice', 'alice@example.com', $start, 60);
     }
 
-    private function createEventAt(\DateTimeImmutable $start, int $duration): Event
-    {
+    private function createEventAt(
+        \DateTimeImmutable $start,
+        int $duration,
+        string $creator = 'jdoe',
+        int $id = 1
+    ): Event {
         return new Event(
-            id: new EventId(1),
+            id: new EventId($id),
             uid: 'uid-1',
             name: 'Existing appointment',
             description: '',
             location: '',
             start: $start,
             duration: $duration,
-            createdBy: 'jdoe',
+            createdBy: $creator,
             type: EventType::EVENT,
             access: AccessLevel::PUBLIC
         );

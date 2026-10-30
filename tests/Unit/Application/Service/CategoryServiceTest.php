@@ -9,19 +9,55 @@ use WebCalendar\Core\Application\Service\CategoryService;
 use WebCalendar\Core\Domain\Entity\Category;
 use WebCalendar\Core\Domain\Entity\User;
 use WebCalendar\Core\Domain\Exception\AuthorizationException;
+use WebCalendar\Core\Domain\Entity\Event;
 use WebCalendar\Core\Domain\Repository\CategoryRepositoryInterface;
+use WebCalendar\Core\Domain\Repository\EventRepositoryInterface;
+use WebCalendar\Core\Domain\ValueObject\AccessLevel;
+use WebCalendar\Core\Domain\ValueObject\EventType;
 use WebCalendar\Core\Domain\ValueObject\EventId;
 
 final class CategoryServiceTest extends TestCase
 {
   /** @var CategoryRepositoryInterface&\PHPUnit\Framework\MockObject\MockObject */
   private $categoryRepository;
+  /** @var EventRepositoryInterface&\PHPUnit\Framework\MockObject\MockObject */
+  private $eventRepository;
   private CategoryService $categoryService;
 
   protected function setUp(): void
   {
     $this->categoryRepository = $this->createMock(CategoryRepositoryInterface::class);
-    $this->categoryService = new CategoryService($this->categoryRepository);
+    $this->eventRepository = $this->createMock(EventRepositoryInterface::class);
+    $this->categoryService = new CategoryService($this->categoryRepository, $this->eventRepository);
+  }
+
+  private function eventBy(int $id, string $creator): Event
+  {
+    return new Event(
+      id: new EventId($id),
+      uid: 'uid-' . $id,
+      name: 'Event ' . $id,
+      description: '',
+      location: '',
+      start: new \DateTimeImmutable('2030-01-01 10:00'),
+      duration: 60,
+      createdBy: $creator,
+      type: EventType::EVENT,
+      access: AccessLevel::PUBLIC,
+    );
+  }
+
+  /** Category 1 is global, 2 belongs to jdoe, 5 belongs to alice. */
+  private function seedCategories(): void
+  {
+    $this->categoryRepository->method('findByCompositeKey')->willReturnCallback(
+      fn (int $id, string $owner): ?Category => match ([$id, $owner]) {
+        [1, ''] => new Category(1, null, 'Global', null),
+        [2, 'jdoe'] => new Category(2, 'jdoe', 'Mine', null),
+        [5, 'alice'] => new Category(5, 'alice', 'Hers', null),
+        default => null,
+      }
+    );
   }
 
   private function createUser(string $login, bool $isAdmin = false): User
@@ -57,12 +93,73 @@ final class CategoryServiceTest extends TestCase
     $login = 'jdoe';
     $catIds = [1, 2];
     $user = $this->createUser($login);
+    $this->seedCategories();
+    $this->eventRepository->method('findById')->willReturn($this->eventBy(123, $login));
 
     $this->categoryRepository->expects($this->once())
       ->method('assignToEvent')
       ->with($eventId, $login, $catIds);
 
     $this->categoryService->assignToEvent($eventId, $login, $catIds, $user);
+  }
+
+  public function testParticipantCanAssignToEventTheyAreOn(): void
+  {
+    $this->seedCategories();
+    $this->eventRepository->method('findById')->willReturn($this->eventBy(7, 'alice'));
+    $this->eventRepository->method('getParticipantsWithStatus')
+      ->willReturn(['alice' => 'A', 'jdoe' => 'W']);
+
+    $this->categoryRepository->expects($this->once())->method('assignToEvent');
+
+    $this->categoryService->assignToEvent(new EventId(7), 'jdoe', [1], $this->createUser('jdoe'));
+  }
+
+  public function testParticipantWhoRejectedCannotAssign(): void
+  {
+    $this->seedCategories();
+    $this->eventRepository->method('findById')->willReturn($this->eventBy(7, 'alice'));
+    $this->eventRepository->method('getParticipantsWithStatus')
+      ->willReturn(['alice' => 'A', 'jdoe' => 'R']);
+
+    $this->categoryRepository->expects($this->never())->method('assignToEvent');
+
+    $this->expectException(AuthorizationException::class);
+    $this->categoryService->assignToEvent(new EventId(7), 'jdoe', [1], $this->createUser('jdoe'));
+  }
+
+  public function testNonParticipantCannotAssignToOthersEvent(): void
+  {
+    $this->seedCategories();
+    $this->eventRepository->method('findById')->willReturn($this->eventBy(7, 'alice'));
+    $this->eventRepository->method('getParticipantsWithStatus')->willReturn(['alice' => 'A']);
+
+    $this->categoryRepository->expects($this->never())->method('assignToEvent');
+
+    $this->expectException(AuthorizationException::class);
+    $this->categoryService->assignToEvent(new EventId(7), 'jdoe', [1], $this->createUser('jdoe'));
+  }
+
+  public function testCannotAssignToMissingEvent(): void
+  {
+    $this->seedCategories();
+    $this->eventRepository->method('findById')->willReturn(null);
+
+    $this->categoryRepository->expects($this->never())->method('assignToEvent');
+
+    $this->expectException(AuthorizationException::class);
+    $this->categoryService->assignToEvent(new EventId(99), 'jdoe', [1], $this->createUser('jdoe'));
+  }
+
+  public function testCannotAssignAnotherUsersPersonalCategory(): void
+  {
+    $this->seedCategories();
+    $this->eventRepository->method('findById')->willReturn($this->eventBy(8, 'jdoe'));
+
+    $this->categoryRepository->expects($this->never())->method('assignToEvent');
+
+    $this->expectException(AuthorizationException::class);
+    $this->categoryService->assignToEvent(new EventId(8), 'jdoe', [1, 5], $this->createUser('jdoe'));
   }
 
   public function testNonOwnerCannotAssignToOthersEvent(): void

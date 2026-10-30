@@ -200,6 +200,23 @@ final class PdoTicketRepository implements TicketRepositoryInterface
         )->execute($data);
     }
 
+    public function transitionOrderStatus(int $orderId, OrderStatus $from, OrderStatus $to): bool
+    {
+        // An unchanged value counts as zero affected rows on MySQL, which
+        // would read as a lost race.
+        if ($from === $to) {
+            throw new \InvalidArgumentException('An order status transition needs two different statuses.');
+        }
+
+        $stmt = $this->pdo->prepare(
+            "UPDATE {$this->tablePrefix}webcal_ticket_order SET order_status = :to
+             WHERE order_id = :id AND order_status = :from"
+        );
+        $stmt->execute(['to' => $to->value, 'id' => $orderId, 'from' => $from->value]);
+
+        return $stmt->rowCount() === 1;
+    }
+
     public function saveAttendee(Attendee $attendee): Attendee
     {
         $persisted = $attendee;

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace WebCalendar\Core\Tests\Integration\Persistence;
 
 use WebCalendar\Core\Domain\Entity\Event;
+use WebCalendar\Core\Domain\Entity\User;
 use WebCalendar\Core\Domain\Entity\Venue;
 use WebCalendar\Core\Domain\ValueObject\AccessLevel;
 use WebCalendar\Core\Domain\ValueObject\EventScope;
@@ -238,5 +239,38 @@ final class PdoEventSearchCriteriaTest extends RepositoryTestCase
     public function testUnknownEventIdsMatchNothing(): void
     {
         $this->assertSame([], $this->names(new SearchCriteria(eventIds: [987654])));
+    }
+
+    // ---- Composite-key and cross-scope isolation regression coverage ----
+
+    public function testAnotherUsersAssignmentRowDoesNotFileTheEvent(): void
+    {
+        // The concert (created by admin) has no category of its own. bob
+        // writes a row at the same (cal_id, cat_id) the board meeting uses,
+        // under his own login.
+        $concertId = $this->idOf('u-concert');
+        $this->pdo->exec("INSERT INTO webcal_entry_categories (cal_id, cat_id, cat_order, cat_owner) VALUES ($concertId, 5, 0, 'bob')");
+
+        $this->assertSame(['Board Meeting'], $this->names(new SearchCriteria(categoryIds: [5])));
+
+        $alice = new User('alice', 'A', 'A', 'alice@example.com', false, true);
+        $forAlice = [];
+        foreach ($this->repository->searchByCriteria(new SearchCriteria(categoryIds: [5]), EventScope::forUser($alice)) as $event) {
+            $forAlice[] = $event->name();
+        }
+        $this->assertSame(['Board Meeting'], $forAlice);
+    }
+
+    public function testTheViewersOwnAssignmentRowFilesTheEventForThem(): void
+    {
+        $concertId = $this->idOf('u-concert');
+        $this->pdo->exec("INSERT INTO webcal_entry_categories (cal_id, cat_id, cat_order, cat_owner) VALUES ($concertId, 5, 0, 'bob')");
+
+        $bob = new User('bob', 'B', 'B', 'bob@example.com', false, true);
+        $forBob = [];
+        foreach ($this->repository->searchByCriteria(new SearchCriteria(categoryIds: [5]), EventScope::forUser($bob)) as $event) {
+            $forBob[] = $event->name();
+        }
+        $this->assertSame(['Board Meeting', 'Distant Concert'], $forBob);
     }
 }

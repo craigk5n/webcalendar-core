@@ -8,7 +8,6 @@ use WebCalendar\Core\Domain\Entity\User;
 use WebCalendar\Core\Domain\Entity\Event;
 use WebCalendar\Core\Domain\ValueObject\EventId;
 use WebCalendar\Core\Domain\ValueObject\DateRange;
-use WebCalendar\Core\Domain\ValueObject\EventScope;
 use WebCalendar\Core\Domain\ValueObject\EventType;
 use WebCalendar\Core\Domain\ValueObject\AccessLevel;
 use WebCalendar\Core\Domain\ValueObject\Recurrence;
@@ -82,9 +81,13 @@ final class BookingService
         $workEnd = $date->setTime($endHour, 0);
         $slotDuration = $slotMinutes;
 
-        // Get existing events for the date
+        // Only what makes $user busy blocks a slot: their own entries at
+        // every access level (a slot reveals busy/free, not what the entry
+        // is) and entries they attend. forUser() would also return every
+        // other user's PUBLIC entries, so one booking on someone else's
+        // calendar would wipe out this user's slots.
         $range = new DateRange($date->setTime(0, 0), $date->setTime(23, 59, 59));
-        $existingEvents = $this->eventService->getEventsInDateRange($range, EventScope::forUser($user));
+        $existingEvents = $this->eventService->getBusyEventsForUser($range, $user);
 
         $slots = [];
         $current = $workStart;

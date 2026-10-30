@@ -38,6 +38,10 @@ final class ImportService
         ?LoggerInterface $logger = null,
         // Appended so positional callers keep working (Epic 22 follow-up).
         private readonly ?\WebCalendar\Core\Domain\Repository\OrganizerRepositoryInterface $organizerRepository = null,
+        // Each CATEGORIES name can create a persistent category or a global
+        // tag, so names are capped like events are, before any write.
+        private readonly int $maxCategoriesPerEvent = 50,
+        private readonly int $maxCategoriesPerImport = 1000,
     ) {
         $this->parser = new Parser(Parser::LENIENT);
         $this->logger = $logger ?? new NullLogger();
@@ -77,13 +81,23 @@ final class ImportService
 
         $vcalendar = $this->parser->parse($icsContent);
 
-        // Count events first to check limit
+        // Count events and category names first to check limits
         $components = $vcalendar->getComponents();
         $eventCount = 0;
+        $categoryCount = 0;
         foreach ($components as $component) {
             if ($component instanceof VEvent) {
                 $eventCount++;
+                $categoryCount += $this->countCategoryNames($component);
             }
+        }
+
+        if ($categoryCount > $this->maxCategoriesPerImport) {
+            $this->logger->error('Import contains too many category names', [
+                'count' => $categoryCount,
+                'max_categories' => $this->maxCategoriesPerImport,
+            ]);
+            throw ImportLimitException::tooManyCategories($categoryCount, $this->maxCategoriesPerImport, 'in total');
         }
 
         if ($eventCount > $this->maxEvents) {
@@ -134,23 +148,10 @@ final class ImportService
                 );
                 $event = $event->with(uid: self::localUid($component));
 
-                // Update detection: check if an event with the same UID already exists
-                $existingEvent = $this->eventRepository->findByUid($event->uid());
-
-                // cal_uid is unique site-wide, so a match can belong to anyone.
-                // It is the importer's to update only if the importer owns it;
-                // otherwise this is a collision, reported and left alone.
-                if ($existingEvent !== null && $existingEvent->createdBy() !== $user->login()) {
-                    $this->logger->warning('Skipping event whose UID belongs to another calendar', [
-                        'uid' => $event->uid(),
-                    ]);
-                    $warnings[] = [
-                        'line' => 0,
-                        'message' => sprintf('Skipped event %s: its UID belongs to another calendar.', $event->uid()),
-                    ];
-                    $skipped++;
-                    continue;
-                }
+                // Update detection looks only at the importer's own copy.
+                // Another user holding the same UID (both imported one
+                // public feed, say) is neither updated nor a reason to skip.
+                $existingEvent = $this->findOwnedByUid($event->uid(), $user);
 
                 if ($existingEvent !== null) {
                     if (!$updateExisting) {
@@ -190,7 +191,7 @@ final class ImportService
                     // row by UID to obtain its generated id before assigning
                     // categories, otherwise they attach to cal_id 0.
                     $persisted = $event->uid() !== ''
-                        ? $this->eventRepository->findByUid($event->uid())
+                        ? $this->findOwnedByUid($event->uid(), $user)
                         : null;
                     if ($persisted !== null) {
                         $this->importCategories($component, $persisted, $user);
@@ -275,14 +276,15 @@ final class ImportService
     }
 
     /**
-     * The event stored under a UID, if the importer owns it.
+     * The importer's own event stored under a UID.
      *
-     * The UID lookup is site-wide. An override in a feed or file must not be
-     * able to EXDATE or delete another user's event just by naming its UID.
+     * UIDs are not unique across users. An import, update or override in a
+     * feed or file must never reach another user's event just by naming its
+     * UID, so the owner check is repeated here on top of the query.
      */
     private function findOwnedByUid(string $uid, User $user): ?Event
     {
-        $event = $this->eventRepository->findByUid($uid);
+        $event = $this->eventRepository->findByUidAndCreator($uid, $user->login());
 
         return $event !== null && $event->createdBy() === $user->login() ? $event : null;
     }
@@ -292,6 +294,27 @@ final class ImportService
     {
         $status = $vevent->getProperty('STATUS');
         return $status !== null && strtoupper(trim($status->getValue()->getRawValue())) === 'CANCELLED';
+    }
+
+    /**
+     * Number of CATEGORIES names on one VEVENT.
+     *
+     * @throws ImportLimitException if it exceeds the per-event limit
+     */
+    private function countCategoryNames(VEvent $vevent): int
+    {
+        $count = 0;
+        foreach ($vevent->getProperties() as $property) {
+            if (strtoupper($property->getName()) === 'CATEGORIES') {
+                $count += count($this->categoryNames($property->getValue()));
+            }
+        }
+
+        if ($count > $this->maxCategoriesPerEvent) {
+            throw ImportLimitException::tooManyCategories($count, $this->maxCategoriesPerEvent, 'on one event');
+        }
+
+        return $count;
     }
 
     /**

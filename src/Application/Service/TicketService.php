@@ -147,8 +147,13 @@ final class TicketService
             throw new \DomainException(sprintf('Order %d is not paid at the provider.', $orderId));
         }
 
+        // Overlapping confirmations (a retried webhook, a webhook racing the
+        // return URL) all pass the check above; only the one that moves the
+        // order out of PENDING may mint admissions.
         $paid = $order->withStatus(OrderStatus::PAID);
-        $this->tickets->updateOrder($paid);
+        if (!$this->tickets->transitionOrderStatus($orderId, OrderStatus::PENDING, OrderStatus::PAID)) {
+            throw new \DomainException(sprintf('Order %d is not awaiting payment.', $orderId));
+        }
         $attendees = $this->mintAttendees($paid);
         $this->audit($paid, 'Payment confirmed');
 
@@ -156,7 +161,11 @@ final class TicketService
     }
 
     /**
-     * Cancel a pending order (seats release immediately).
+     * Cancel a pending order (seats release immediately). Cancelling an
+     * already cancelled order is a no-op.
+     *
+     * @throws \DomainException When the order is unknown, or another
+     *         request changed its status meanwhile.
      */
     public function cancelOrder(int $orderId): TicketOrder
     {
@@ -164,9 +173,14 @@ final class TicketService
         if ($order === null) {
             throw new \DomainException(sprintf('Order %d not found.', $orderId));
         }
+        if ($order->status() === OrderStatus::CANCELLED) {
+            return $order;
+        }
 
         $cancelled = $order->withStatus(OrderStatus::CANCELLED);
-        $this->tickets->updateOrder($cancelled);
+        if (!$this->tickets->transitionOrderStatus($orderId, $order->status(), OrderStatus::CANCELLED)) {
+            throw new \DomainException(sprintf('Order %d changed while it was being cancelled.', $orderId));
+        }
         $this->audit($cancelled, 'Order cancelled');
 
         return $cancelled;
@@ -174,7 +188,8 @@ final class TicketService
 
     /**
      * Refund a paid order in full. The provider refunds first; if that
-     * throws, the order stays PAID.
+     * throws, the order stays PAID. The PAID to REFUNDED write is a
+     * compare-and-set, so of two overlapping refunds only one records it.
      */
     public function refundOrder(int $orderId): TicketOrder
     {
@@ -190,10 +205,15 @@ final class TicketService
             throw new \LogicException('Refunds need a configured payment provider.');
         }
 
+        $refunded = $order->withStatus(OrderStatus::REFUNDED);
         $this->payments->refund($ref, $order->amountMinor());
 
-        $refunded = $order->withStatus(OrderStatus::REFUNDED);
-        $this->tickets->updateOrder($refunded);
+        if (!$this->tickets->transitionOrderStatus($orderId, OrderStatus::PAID, OrderStatus::REFUNDED)) {
+            // The provider was asked twice; it is the one that can refuse a
+            // second full refund of the same payment.
+            $this->logger->error('Overlapping refund of one order', ['order' => $orderId]);
+            throw new \DomainException(sprintf('Order %d is not refundable.', $orderId));
+        }
         $this->audit($refunded, 'Order refunded');
 
         return $refunded;

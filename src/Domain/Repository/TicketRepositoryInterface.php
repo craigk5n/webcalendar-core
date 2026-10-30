@@ -7,6 +7,7 @@ namespace WebCalendar\Core\Domain\Repository;
 use WebCalendar\Core\Domain\Entity\Attendee;
 use WebCalendar\Core\Domain\Entity\TicketOrder;
 use WebCalendar\Core\Domain\Entity\TicketType;
+use WebCalendar\Core\Domain\ValueObject\OrderStatus;
 
 /**
  * Persistence for the ticketing domain (Epic 28): ticket types, orders
@@ -51,6 +52,16 @@ interface TicketRepositoryInterface
      * Persists an order's current state (status, external ref).
      */
     public function updateOrder(TicketOrder $order): void;
+
+    /**
+     * Moves an order from one status to another only if it is still in
+     * $from, atomically (compare-and-set). Returns false when the order is
+     * missing or another request already moved it, so exactly one of two
+     * overlapping transitions wins.
+     *
+     * @throws \InvalidArgumentException if $from and $to are the same
+     */
+    public function transitionOrderStatus(int $orderId, OrderStatus $from, OrderStatus $to): bool;
 
     /**
      * Inserts when id is 0 (claiming the next id), updates otherwise

@@ -55,6 +55,43 @@ final class EventService
     }
 
     /**
+     * Entries that make $user busy within a range: the ones on their own
+     * calendar at every access level, plus other users' entries they are a
+     * participant on and have not rejected or deleted.
+     *
+     * Meant for free/busy answers such as booking slots, which reveal only
+     * that the time is taken. Never return these events to a viewer as-is:
+     * they include private entries.
+     */
+    public function getBusyEventsForUser(DateRange $range, User $user): EventCollection
+    {
+        $login = $user->login();
+        $busy = [];
+        $invited = [];
+        foreach ($this->eventRepository->findByDateRange($range, EventScope::administrative()) as $event) {
+            if ($event->createdBy() === $login) {
+                $busy[] = $event;
+            } else {
+                $invited[$event->id()->value()] = $event;
+            }
+        }
+
+        $declined = [ParticipantStatus::REJECTED->value, ParticipantStatus::DELETED->value];
+        $ids = array_map(static fn (Event $e): EventId => $e->id(), array_values($invited));
+        foreach ($this->eventRepository->getParticipantsBatch($ids) as $id => $logins) {
+            if (!in_array($login, $logins, true) || !isset($invited[$id])) {
+                continue;
+            }
+            $status = $this->eventRepository->getParticipantsWithStatus(new EventId($id))[$login] ?? null;
+            if (!in_array($status, $declined, true)) {
+                $busy[] = $invited[$id];
+            }
+        }
+
+        return new EventCollection($busy);
+    }
+
+    /**
      * Finds a single event by ID.
      */
     public function getEventById(EventId $id): ?Event

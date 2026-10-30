@@ -60,6 +60,23 @@ final class PdoEventRepository implements EventRepositoryInterface
         return $this->mapRowToEvent($row);
     }
 
+    public function findByUidAndCreator(string $uid, string $login): ?Event
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT * FROM {$this->tablePrefix}webcal_entry
+              WHERE cal_uid = :uid AND cal_create_by = :login
+              ORDER BY cal_id"
+        );
+        $stmt->execute(['uid' => $uid, 'login' => $login]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!is_array($row)) {
+            return null;
+        }
+
+        return $this->mapRowToEvent($row);
+    }
+
     public function search(
         string $keyword,
         EventScope $scope,
@@ -192,8 +209,21 @@ final class PdoEventRepository implements EventRepositoryInterface
                 $placeholders[] = ":cat_$i";
                 $params["cat_$i"] = $categoryId;
             }
+            // Assignment rows are per user (cat_owner is whoever assigned
+            // the label), so only the creator's labels, and the viewer's
+            // own, decide what an event is filed under. Anyone else's row
+            // must not put the event into this viewer's results. Rows with
+            // no owner are legacy global assignments, which no non-admin
+            // can write.
+            $owner = "(ec.cat_owner = e.cal_create_by OR ec.cat_owner = '' OR ec.cat_owner IS NULL)";
+            $viewer = $scope->user();
+            if ($viewer !== null) {
+                $owner = "($owner OR ec.cat_owner = :cat_viewer)";
+                $params['cat_viewer'] = $viewer->login();
+            }
             $where[] = "EXISTS (SELECT 1 FROM {$this->tablePrefix}webcal_entry_categories ec"
-                . ' WHERE ec.cal_id = e.cal_id AND ec.cat_id IN (' . implode(', ', $placeholders) . '))';
+                . ' WHERE ec.cal_id = e.cal_id AND ' . $owner
+                . ' AND ec.cat_id IN (' . implode(', ', $placeholders) . '))';
         }
 
         if ($criteria->venueIds !== []) {
