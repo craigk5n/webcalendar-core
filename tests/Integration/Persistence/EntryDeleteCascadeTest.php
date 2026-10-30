@@ -210,6 +210,54 @@ final class EntryDeleteCascadeTest extends RepositoryTestCase
         }
     }
 
+    public function testDeleteSkipsDependentTablesTheSchemaLacks(): void
+    {
+        // The WordPress plugin installs no webcal_blob or webcal_entry_ext_user.
+        $victim = $this->saveEvent('alice', 'victim');
+        $other = $this->saveEvent('bob', 'other');
+        $this->seedDependents($victim, 'alice', 1);
+        $this->seedDependents($other, 'bob', 2);
+        $this->pdo->exec('DROP TABLE webcal_blob');
+        $this->pdo->exec('DROP TABLE webcal_entry_ext_user');
+        $present = array_diff(self::DEPENDENT_TABLES, ['webcal_blob', 'webcal_entry_ext_user']);
+
+        $this->events->delete(new EventId($victim));
+
+        $this->assertSame(0, $this->countFor('webcal_entry', $victim));
+        foreach ($present as $table) {
+            $this->assertSame(0, $this->countFor($table, $victim), "$table rows must go with the entry");
+            $this->assertGreaterThan(0, $this->countFor($table, $other), "$table rows of another entry must stay");
+        }
+    }
+
+    public function testDeleteWithoutTicketTablesSkipsTheOrderCheck(): void
+    {
+        $event = $this->saveEvent('alice', 'plain');
+        $this->pdo->exec('DROP TABLE webcal_attendee');
+        $this->pdo->exec('DROP TABLE webcal_ticket_order');
+        $this->pdo->exec('DROP TABLE webcal_ticket_type');
+
+        $this->events->delete(new EventId($event));
+
+        $this->assertSame(0, $this->countFor('webcal_entry', $event));
+    }
+
+    public function testMissingTablesAreSkippedUnderATablePrefix(): void
+    {
+        $this->pdo->exec('CREATE TABLE wp_webcal_entry AS SELECT * FROM webcal_entry WHERE 0');
+        $this->pdo->exec('CREATE TABLE wp_webcal_entry_user AS SELECT * FROM webcal_entry_user WHERE 0');
+        $this->pdo->exec("INSERT INTO wp_webcal_entry (cal_id, cal_create_by, cal_date, cal_time, cal_mod_date, cal_mod_time, cal_duration, cal_name)
+                          VALUES (7, 'alice', 20260401, 100000, 20260401, 0, 60, 'Prefixed')");
+        $this->pdo->exec("INSERT INTO wp_webcal_entry_user (cal_id, cal_login, cal_status) VALUES (7, 'alice', 'A')");
+        $this->pdo->exec("INSERT INTO webcal_entry_user (cal_id, cal_login, cal_status) VALUES (7, 'bob', 'A')");
+
+        (new PdoEventRepository($this->pdo, 'wp_'))->delete(new EventId(7));
+
+        $this->assertSame(0, $this->scalar('SELECT COUNT(*) FROM wp_webcal_entry WHERE cal_id = 7'));
+        $this->assertSame(0, $this->scalar('SELECT COUNT(*) FROM wp_webcal_entry_user WHERE cal_id = 7'));
+        $this->assertSame(1, $this->countFor('webcal_entry_user', 7), 'unprefixed tables are not the host\'s');
+    }
+
     // ---- user delete -------------------------------------------------------
 
     public function testUserDeleteRemovesOwnedEntriesCategoriesViewsAndSessions(): void
