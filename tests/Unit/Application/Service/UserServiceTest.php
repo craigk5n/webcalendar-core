@@ -103,9 +103,10 @@ final class UserServiceTest extends TestCase
     {
         $admin = $this->createUser('admin', isAdmin: true);
         
+        // Shared entries the deleted user created are handed to the admin.
         $this->userRepository->expects($this->once())
             ->method('delete')
-            ->with('target');
+            ->with('target', 'admin');
 
         $this->userService->deleteUser('target', $admin);
     }

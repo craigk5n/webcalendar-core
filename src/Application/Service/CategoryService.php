@@ -78,9 +78,31 @@ final class CategoryService
 
     /**
      * Creates a new category.
+     *
+     * Only the owner (or an admin) may create a personal category, and only
+     * an admin may create a global one. Create never overwrites: an existing
+     * `(cat_id, cat_owner)` row must be changed through updateCategory().
+     *
+     * @throws AuthorizationException if actor may not own the new category
+     * @throws \DomainException if the category already exists
      */
     public function createCategory(Category $category, User $actor): void
     {
+        $this->assertCanModify($category, $actor, 'create category');
+
+        $ownerKey = $category->owner() ?? '';
+        $existing = $this->categoryRepository->findByCompositeKey(
+            $category->id(),
+            $ownerKey
+        );
+        if ($existing !== null) {
+            throw new \DomainException(sprintf(
+                'Category with ID %d and owner "%s" already exists.',
+                $category->id(),
+                $ownerKey,
+            ));
+        }
+
         $this->logger->info('Category created', ['id' => $category->id(), 'name' => $category->name(), 'actor' => $actor->login()]);
         $this->categoryRepository->save($category);
     }

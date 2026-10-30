@@ -17,11 +17,34 @@ use WebCalendar\Core\Domain\ValueObject\EventCollection;
  */
 final class ReportService
 {
+    /** @var \Closure(string, string): string */
+    private readonly \Closure $valueEncoder;
+
+    /**
+     * @param (\Closure(string, string): string)|null $valueEncoder Encodes an
+     *   event field before it is substituted into a template. Receives the
+     *   value and the field name ('name', 'description', 'location'). The
+     *   default HTML-escapes every field, because report templates are HTML
+     *   and the values belong to the calendar owner, who may be a different,
+     *   lower-trust user than the one running the report. Pass a different
+     *   encoder for plain-text output, or to run descriptions through an
+     *   allow-list HTML sanitizer when rich descriptions are enabled.
+     */
     public function __construct(
         private readonly ReportRepositoryInterface $reportRepository,
         private readonly EventService $eventService,
-        private readonly ?CalendarAccessService $calendarAccess = null
+        private readonly ?CalendarAccessService $calendarAccess = null,
+        ?\Closure $valueEncoder = null
     ) {
+        $this->valueEncoder = $valueEncoder ?? self::escapeHtml(...);
+    }
+
+    /**
+     * Default value encoder: HTML-escapes every field the same way.
+     */
+    private static function escapeHtml(string $value): string
+    {
+        return htmlspecialchars($value, ENT_QUOTES | ENT_HTML5, 'UTF-8');
     }
 
     /**
@@ -29,17 +52,18 @@ final class ReportService
      */
     public function generateEventReport(Report $report, Event $event): string
     {
+        $encode = $this->valueEncoder;
         $template = $report->template('E');
         if ($template === null) {
-            return $event->name();
+            return $encode($event->name(), 'name');
         }
 
         $variables = [
-            '${name}' => $event->name(),
-            '${description}' => $event->description(),
+            '${name}' => $encode($event->name(), 'name'),
+            '${description}' => $encode($event->description(), 'description'),
             '${date}' => $event->start()->format('Y-m-d'),
             '${time}' => $event->start()->format('H:i'),
-            '${location}' => $event->location()
+            '${location}' => $encode($event->location(), 'location')
         ];
 
         return strtr($template, $variables);

@@ -22,6 +22,7 @@ final class PdoJournalRepository implements JournalRepositoryInterface
     use AppliesEventScope;
 
     use TransactionalTrait;
+    use DeletesEntryRowsTrait;
     public function __construct(
         private readonly PDO $pdo,
         private readonly string $tablePrefix = '',
@@ -136,10 +137,7 @@ final class PdoJournalRepository implements JournalRepositoryInterface
         $idValue = $id->value();
 
         $this->executeInTransaction(function () use ($idValue): void {
-            $this->pdo->prepare("DELETE FROM {$this->tablePrefix}webcal_entry_user WHERE cal_id = :id")
-                ->execute(['id' => $idValue]);
-            $this->pdo->prepare("DELETE FROM {$this->tablePrefix}webcal_entry WHERE cal_id = :id")
-                ->execute(['id' => $idValue]);
+            $this->deleteEntryRows($idValue);
         });
     }
 

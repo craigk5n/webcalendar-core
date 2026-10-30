@@ -103,6 +103,8 @@ final class EventService
      *
      * @throws EventNotFoundException if the event does not exist.
      * @throws AuthorizationException if the actor is not authorized.
+     * @throws \DomainException if the event still has PENDING or PAID ticket
+     *         orders; cancel or refund them first.
      */
     public function deleteEvent(EventId $id, User $actor): void
     {
@@ -262,6 +264,10 @@ final class EventService
     /**
      * Sets the status of a specific participant on an event.
      *
+     * Only the participant themself or an admin may change it, the same
+     * rule approveEvent() and rejectEvent() apply.
+     *
+     * @throws AuthorizationException if the actor is not the participant or admin.
      * @throws EventNotFoundException if the event does not exist.
      * @throws \InvalidArgumentException if the participant is not on the event.
      */
@@ -271,6 +277,9 @@ final class EventService
         ParticipantStatus $status,
         User $actor
     ): void {
+        // Checked first so the participant lookup below is not an oracle for
+        // callers who may not act for $login anyway.
+        $this->assertCanApproveForParticipant($login, $actor);
         $this->findEventOrFail($id);
 
         $existing = $this->eventRepository->getParticipantsWithStatus($id);

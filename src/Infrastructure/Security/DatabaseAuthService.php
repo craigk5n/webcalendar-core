@@ -41,8 +41,8 @@ final class DatabaseAuthService implements AuthServiceInterface
             return false;
         }
 
-        $hash = $this->userRepository->getPasswordHash($username);
-        
+        $hash = $this->getActiveAccountHash($username);
+
         if ($hash === null) {
             $this->recordFailedAttempt($identifier);
             return false;
@@ -71,8 +71,8 @@ final class DatabaseAuthService implements AuthServiceInterface
             return false;
         }
 
-        $storedHash = $this->userRepository->getPasswordHash($username);
-        
+        $storedHash = $this->getActiveAccountHash($username);
+
         if ($storedHash === null) {
             $this->recordFailedAttempt($identifier);
             return false;
@@ -113,6 +113,28 @@ final class DatabaseAuthService implements AuthServiceInterface
 
         $identifier = $this->getIdentifier($username);
         return $this->rateLimiter->getResetTime($identifier, 'login', $this->lockoutWindow);
+    }
+
+    /**
+     * Returns the stored password hash only for an existing, enabled account.
+     * Disabled accounts (cal_enabled = 'N') cannot authenticate.
+     */
+    private function getActiveAccountHash(string $username): ?string
+    {
+        $hash = $this->userRepository->getPasswordHash($username);
+        if ($hash === null) {
+            return null;
+        }
+
+        $user = $this->userRepository->findByLogin($username);
+        if ($user === null || !$user->isEnabled()) {
+            $this->logger->warning('Login refused for disabled or missing account', [
+                'username' => $username
+            ]);
+            return null;
+        }
+
+        return $hash;
     }
 
     private function getIdentifier(string $username): string
