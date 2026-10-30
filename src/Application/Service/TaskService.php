@@ -44,21 +44,58 @@ final class TaskService
 
     /**
      * Creates a new task.
+     *
+     * @throws \InvalidArgumentException if the task already has an id
+     * @throws AuthorizationException if a non-admin creates a task for
+     *   another user
      */
     public function createTask(Task $task, User $actor): void
     {
+        if ($task->id()->value() !== 0) {
+            throw new \InvalidArgumentException(
+                'createTask requires a new task (id 0); use updateTask'
+            );
+        }
+        if (!$actor->isAdmin() && $task->createdBy() !== $actor->login()) {
+            throw AuthorizationException::notSelf(
+                'create task',
+                $task->createdBy(),
+                $actor->login()
+            );
+        }
+
         $this->logger->info('Task created', ['id' => $task->id()->value(), 'actor' => $actor->login()]);
         $this->taskRepository->save($task);
     }
 
     /**
      * Updates an existing task.
-     * 
-     * @throws AuthorizationException if actor is not the owner or admin
+     *
+     * Authorization is checked against the stored task, not the incoming one.
+     *
+     * @throws EventNotFoundException if no task exists with that id
+     * @throws AuthorizationException if actor is not the owner or admin, or a
+     *   non-admin tries to change the owner
      */
     public function updateTask(Task $task, User $actor): void
     {
-        $this->assertCanModify($task, $actor, 'update task');
+        $existing = $this->taskRepository->findById($task->id());
+        if ($existing === null) {
+            throw EventNotFoundException::forId($task->id());
+        }
+
+        $this->assertCanModify($existing, $actor, 'update task');
+        if (
+            !$actor->isAdmin()
+            && $task->createdBy() !== $existing->createdBy()
+        ) {
+            throw AuthorizationException::notOwner(
+                'reassign task',
+                $task->id()->value(),
+                $actor->login()
+            );
+        }
+
         $this->logger->info('Task updated', ['id' => $task->id()->value(), 'actor' => $actor->login()]);
         $this->taskRepository->save($task);
     }
