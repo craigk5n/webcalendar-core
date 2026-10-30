@@ -137,19 +137,23 @@ final class EntryDeleteCascadeTest extends RepositoryTestCase
     }
 
     /**
-     * @return array<string, array{string}>
+     * @return array<string, array{string, int}>
      */
-    public static function liveOrderStatuses(): array
+    public static function liveOrders(): array
     {
-        return ['pending' => ['P'], 'paid' => ['A']];
+        return [
+            'pending, free' => ['P', 0],
+            'pending, priced' => ['P', 500],
+            'paid' => ['A', 500],
+        ];
     }
 
-    #[DataProvider('liveOrderStatuses')]
-    public function testDeleteIsRefusedWhileEntryHasLiveTicketOrders(string $status): void
+    #[DataProvider('liveOrders')]
+    public function testDeleteIsRefusedWhileEntryHasLiveTicketOrders(string $status, int $amount): void
     {
         $event = $this->saveEvent('alice', 'sold');
         $this->seedDependents($event, 'alice', 1);
-        $this->pdo->exec("UPDATE webcal_ticket_order SET order_status = '$status' WHERE cal_id = $event");
+        $this->pdo->exec("UPDATE webcal_ticket_order SET order_status = '$status', order_amount = $amount WHERE cal_id = $event");
 
         try {
             $this->events->delete(new EventId($event));
@@ -175,6 +179,23 @@ final class EntryDeleteCascadeTest extends RepositoryTestCase
 
         $this->assertSame(0, $this->countFor('webcal_ticket_order', $event));
         $this->assertSame(0, $this->countFor('webcal_entry', $event));
+    }
+
+    public function testAFreeRsvpDoesNotBlockDeleteAndGoesWithTheEntry(): void
+    {
+        // A free RSVP is stored PAID with amount 0: no money to refund.
+        $event = $this->saveEvent('alice', 'meetup');
+        $other = $this->saveEvent('bob', 'other meetup');
+        $this->seedDependents($event, 'alice', 1);
+        $this->seedDependents($other, 'bob', 2);
+        $this->pdo->exec("UPDATE webcal_ticket_order SET order_status = 'A', order_amount = 0 WHERE cal_id IN ($event, $other)");
+
+        $this->events->delete(new EventId($event));
+
+        $this->assertSame(0, $this->countFor('webcal_entry', $event));
+        $this->assertSame(0, $this->countFor('webcal_ticket_order', $event));
+        $this->assertSame(0, $this->countFor('webcal_attendee', $event));
+        $this->assertSame(1, $this->countFor('webcal_ticket_order', $other), "another entry's RSVP stays");
     }
 
     public function testDeleteOfUnknownIdIsNoOp(): void
@@ -265,7 +286,7 @@ final class EntryDeleteCascadeTest extends RepositoryTestCase
     {
         $sold = $this->saveEvent('alice', 'alice-sold');
         $this->seedDependents($sold, 'alice', 1);
-        $this->pdo->exec("UPDATE webcal_ticket_order SET order_status = 'A' WHERE cal_id = $sold");
+        $this->pdo->exec("UPDATE webcal_ticket_order SET order_status = 'A', order_amount = 500 WHERE cal_id = $sold");
         $users = new PdoUserRepository($this->pdo);
 
         try {

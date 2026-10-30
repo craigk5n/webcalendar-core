@@ -43,8 +43,9 @@ interface UserRepositoryInterface
      * may stay owned by the bare login, or a later account created with the
      * same login would inherit it.
      *
-     * @throws \DomainException if an entry to be deleted has PENDING or PAID
-     *         ticket orders; nothing is deleted in that case.
+     * @throws \DomainException if an entry to be deleted has a PENDING order
+     *         or a PAID order that took money; nothing is deleted in that
+     *         case. Free RSVPs do not block.
      */
     public function delete(string $login, ?string $successor = null): void;
 
