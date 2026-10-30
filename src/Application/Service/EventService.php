@@ -170,8 +170,9 @@ final class EventService
      *
      * @throws EventNotFoundException if the event does not exist.
      * @throws AuthorizationException if the actor is not authorized.
-     * @throws \DomainException if the event still has PENDING or PAID ticket
-     *         orders; cancel or refund them first.
+     * @throws \DomainException if the event still has a PENDING order or a
+     *         PAID order that took money; cancel or refund it first. Free
+     *         RSVPs do not block and are deleted with the event.
      */
     public function deleteEvent(EventId $id, User $actor): void
     {

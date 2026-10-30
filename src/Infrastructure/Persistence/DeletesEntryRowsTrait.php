@@ -15,8 +15,9 @@ use WebCalendar\Core\Domain\ValueObject\OrderStatus;
  * expose the previous owner's attachments, extras, reminders or ticket
  * buyers to whoever created it.
  *
- * Ticket orders are money records, so an entry with PENDING or PAID orders
- * is not deleted: they must be cancelled or refunded first.
+ * Ticket orders are money records, so an entry with a PENDING order, or a
+ * PAID order that took money, is not deleted: cancel or refund first. A
+ * free PAID order (an RSVP) holds no money and goes with the entry.
  *
  * Requires the using class to have `PDO $pdo` and `string $tablePrefix`
  * properties. Callers run it inside their own transaction.
@@ -48,20 +49,17 @@ trait DeletesEntryRowsTrait
     }
 
     /**
-     * @throws \DomainException if the entry still has PENDING or PAID orders
+     * @throws \DomainException if the entry still has a PENDING order or a
+     *         PAID order with a non-zero amount
      */
     private function deleteEntryRows(int $calId): void
     {
-        $live = array_map(
-            static fn (OrderStatus $status): string => $status->value,
-            OrderStatus::capacityHolding()
-        );
-        $placeholders = implode(', ', array_fill(0, count($live), '?'));
         $stmt = $this->pdo->prepare(
             "SELECT COUNT(*) FROM {$this->tablePrefix}webcal_ticket_order
-              WHERE cal_id = ? AND order_status IN ($placeholders)"
+              WHERE cal_id = ?
+                AND (order_status = ? OR (order_status = ? AND order_amount > 0))"
         );
-        $stmt->execute([$calId, ...$live]);
+        $stmt->execute([$calId, OrderStatus::PENDING->value, OrderStatus::PAID->value]);
         if ((int) $stmt->fetchColumn() > 0) {
             throw new \DomainException(sprintf(
                 'Entry %d has active ticket orders; cancel or refund them before deleting it.',
