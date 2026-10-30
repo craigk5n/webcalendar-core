@@ -44,21 +44,59 @@ final class JournalService
 
     /**
      * Creates a new journal.
+     *
+     * @throws \InvalidArgumentException if the journal already has an id
+     * @throws AuthorizationException if a non-admin creates a journal for
+     *   another user
      */
     public function createJournal(Journal $journal, User $actor): void
     {
+        if ($journal->id()->value() !== 0) {
+            throw new \InvalidArgumentException(
+                'createJournal requires a new journal (id 0); use updateJournal'
+            );
+        }
+        if (!$actor->isAdmin() && $journal->createdBy() !== $actor->login()) {
+            throw AuthorizationException::notSelf(
+                'create journal',
+                $journal->createdBy(),
+                $actor->login()
+            );
+        }
+
         $this->logger->info('Journal created', ['id' => $journal->id()->value(), 'actor' => $actor->login()]);
         $this->journalRepository->save($journal);
     }
 
     /**
      * Updates an existing journal.
-     * 
-     * @throws AuthorizationException if actor is not the owner or admin
+     *
+     * Authorization is checked against the stored journal, not the
+     * incoming one.
+     *
+     * @throws EventNotFoundException if no journal exists with that id
+     * @throws AuthorizationException if actor is not the owner or admin, or a
+     *   non-admin tries to change the owner
      */
     public function updateJournal(Journal $journal, User $actor): void
     {
-        $this->assertCanModify($journal, $actor, 'update journal');
+        $existing = $this->journalRepository->findById($journal->id());
+        if ($existing === null) {
+            throw EventNotFoundException::forId($journal->id());
+        }
+
+        $this->assertCanModify($existing, $actor, 'update journal');
+        if (
+            !$actor->isAdmin()
+            && $journal->createdBy() !== $existing->createdBy()
+        ) {
+            throw AuthorizationException::notOwner(
+                'reassign journal',
+                $journal->id()->value(),
+                $actor->login()
+            );
+        }
+
         $this->logger->info('Journal updated', ['id' => $journal->id()->value(), 'actor' => $actor->login()]);
         $this->journalRepository->save($journal);
     }

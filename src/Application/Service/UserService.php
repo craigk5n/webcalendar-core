@@ -49,15 +49,32 @@ final class UserService
     /**
      * Updates an existing user.
      *
-     * @throws AuthorizationException if actor is not admin or the user being updated
+     * Non-admins may only update their own existing record and cannot change
+     * the admin or enabled flags.
+     *
+     * @throws AuthorizationException if actor is not admin or the user being
+     *   updated, or a non-admin tries to change admin/enabled status
      * @throws SelfOperationException if actor tries to disable their own account
      */
     public function updateUser(User $user, User $actor): void
     {
         $this->assertAdminOrSelf($actor, $user->login(), 'update user');
 
+        $existing = $this->userRepository->findByLogin($user->login());
+
+        if (!$actor->isAdmin()) {
+            if (
+                $existing === null
+                || $existing->isAdmin() !== $user->isAdmin()
+                || $existing->isEnabled() !== $user->isEnabled()
+            ) {
+                throw AuthorizationException::adminRequired(
+                    'change admin or enabled status'
+                );
+            }
+        }
+
         if ($user->login() === $actor->login() && !$user->isEnabled()) {
-            $existing = $this->userRepository->findByLogin($user->login());
             if ($existing !== null && $existing->isEnabled()) {
                 throw SelfOperationException::cannotDisableSelf();
             }

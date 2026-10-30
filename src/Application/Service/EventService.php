@@ -101,9 +101,29 @@ final class EventService
 
     /**
      * Persists a new event.
+     *
+     * The event must be new (id 0); changes to an existing event go through
+     * updateEvent(). Non-admins may only create events they own.
+     *
+     * @throws \InvalidArgumentException if the event already has an id.
+     * @throws AuthorizationException if a non-admin creates an event for
+     *   another user.
      */
     public function createEvent(Event $event, User $actor): void
     {
+        if ($event->id()->value() !== 0) {
+            throw new \InvalidArgumentException(
+                'createEvent requires a new event (id 0); use updateEvent'
+            );
+        }
+        if (!$actor->isAdmin() && $event->createdBy() !== $actor->login()) {
+            throw AuthorizationException::notSelf(
+                'create event',
+                $event->createdBy(),
+                $actor->login()
+            );
+        }
+
         $this->logger->info('Creating new event', [
             'uid' => $event->uid(),
             'name' => $event->name(),
@@ -126,6 +146,16 @@ final class EventService
         }
 
         $this->assertCanModify($existing, $actor, 'update event');
+        if (
+            !$actor->isAdmin()
+            && $event->createdBy() !== $existing->createdBy()
+        ) {
+            throw AuthorizationException::notOwner(
+                'reassign event',
+                $event->id()->value(),
+                $actor->login()
+            );
+        }
 
         $this->logger->info('Updating event', [
             'id' => $event->id()->value(),

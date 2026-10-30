@@ -78,13 +78,84 @@ final class EventServiceTest extends TestCase
     public function testCreateEvent(): void
     {
         $actor = $this->createUser('admin');
-        $event = $this->createEvent(1, 'admin');
+        $event = $this->createEvent(0, 'admin');
 
         $this->eventRepository->expects($this->once())
             ->method('save')
             ->with($event);
 
         $this->eventService->createEvent($event, $actor);
+    }
+
+    public function testCreateEventRejectsExistingId(): void
+    {
+        $actor = $this->createUser('bob');
+        $event = $this->createEvent(1, 'bob');
+
+        $this->eventRepository->expects($this->never())->method('save');
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->eventService->createEvent($event, $actor);
+    }
+
+    public function testCreateEventRejectsExistingIdEvenForAdmin(): void
+    {
+        $admin = $this->createUser('admin', true);
+        $event = $this->createEvent(1, 'admin');
+
+        $this->eventRepository->expects($this->never())->method('save');
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->eventService->createEvent($event, $admin);
+    }
+
+    public function testNonAdminCannotCreateEventOwnedByAnotherUser(): void
+    {
+        $actor = $this->createUser('bob');
+        $event = $this->createEvent(0, 'alice');
+
+        $this->eventRepository->expects($this->never())->method('save');
+
+        $this->expectException(AuthorizationException::class);
+        $this->eventService->createEvent($event, $actor);
+    }
+
+    public function testAdminCanCreateEventOwnedByAnotherUser(): void
+    {
+        $admin = $this->createUser('admin', true);
+        $event = $this->createEvent(0, 'alice');
+
+        $this->eventRepository->expects($this->once())
+            ->method('save')
+            ->with($event);
+
+        $this->eventService->createEvent($event, $admin);
+    }
+
+    public function testOwnerCannotReassignEventToAnotherUser(): void
+    {
+        $actor = $this->createUser('bob');
+
+        $this->eventRepository->method('findById')
+            ->willReturn($this->createEvent(1, 'bob'));
+        $this->eventRepository->expects($this->never())->method('save');
+
+        $this->expectException(AuthorizationException::class);
+        $this->eventService->updateEvent($this->createEvent(1, 'alice'), $actor);
+    }
+
+    public function testAdminCanReassignEventOwner(): void
+    {
+        $admin = $this->createUser('admin', true);
+        $reassigned = $this->createEvent(1, 'alice');
+
+        $this->eventRepository->method('findById')
+            ->willReturn($this->createEvent(1, 'bob'));
+        $this->eventRepository->expects($this->once())
+            ->method('save')
+            ->with($reassigned);
+
+        $this->eventService->updateEvent($reassigned, $admin);
     }
 
     public function testDeleteEventThrowsExceptionIfNotFound(): void
