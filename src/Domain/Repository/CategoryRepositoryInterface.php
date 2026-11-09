@@ -131,6 +131,19 @@ interface CategoryRepositoryInterface
     public function getTagsForEventsBatch(array $eventIds, string $userLogin): array;
 
     /**
+     * Gets every category (not tag) of multiple events in a batch query.
+     *
+     * In assignment order, so the first entry is the primary category that
+     * {@see getForEventsBatch()} returns. Where a personal and a global
+     * category share a cat_id, the personal one is returned, once. Events
+     * with no categories are absent from the map; callers use `?? []`.
+     *
+     * @param EventId[] $eventIds
+     * @return array<int, list<array{id: int, name: string, color: string|null}>> Map of event_id => categories.
+     */
+    public function getCategoriesForEventsBatch(array $eventIds, string $userLogin): array;
+
+    /**
      * Gets the number of events assigned to a category.
      *
      * @deprecated Inflates counts when a `cat_id` is shared by a global

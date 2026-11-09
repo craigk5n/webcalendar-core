@@ -399,6 +399,59 @@ final class PdoCategoryRepository implements CategoryRepositoryInterface
         return $map;
     }
 
+    /**
+     * @param EventId[] $eventIds
+     * @return array<int, list<array{id: int, name: string, color: string|null}>>
+     */
+    public function getCategoriesForEventsBatch(array $eventIds, string $userLogin): array
+    {
+        if (empty($eventIds)) {
+            return [];
+        }
+
+        $ids = array_map(fn (EventId $id) => $id->value(), $eventIds);
+        $map = [];
+        // One entry per (event, cat_id): the global/personal join can return
+        // a cat_id twice, and the personal row sorts first (see below).
+        $seen = [];
+
+        // Chunked like getForEventsBatch(); each event id lands in exactly
+        // one chunk, so the per-event dedup is unaffected.
+        foreach ($this->chunkForInClause($ids) as $chunk) {
+            $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+            $params = array_merge($chunk, [$userLogin]);
+
+            $stmt = $this->pdo->prepare(
+                "SELECT ec.cal_id, c.cat_id, c.cat_name, c.cat_color
+                 FROM {$this->tablePrefix}webcal_entry_categories ec
+                 JOIN {$this->tablePrefix}webcal_categories c
+                   ON c.cat_id = ec.cat_id
+                  AND c.cat_owner IN (ec.cat_owner, '')
+                 WHERE ec.cal_id IN ($placeholders) AND ec.cat_owner = ?
+                   AND {$this->notATag('c')}
+                 ORDER BY ec.cal_id, ec.cat_order ASC,
+                          CASE WHEN c.cat_owner = ec.cat_owner THEN 0 ELSE 1 END"
+            );
+            $stmt->execute($params);
+
+            foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $eid = (int) $row['cal_id'];
+                $catId = (int) $row['cat_id'];
+                if (isset($seen[$eid][$catId])) {
+                    continue;
+                }
+                $seen[$eid][$catId] = true;
+                $map[$eid][] = [
+                    'id' => $catId,
+                    'name' => (string) $row['cat_name'],
+                    'color' => is_string($row['cat_color']) && $row['cat_color'] !== '' ? $row['cat_color'] : null,
+                ];
+            }
+        }
+
+        return $map;
+    }
+
     public function getForEventsBatch(array $eventIds, string $userLogin): array
     {
         if (empty($eventIds)) {

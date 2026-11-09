@@ -262,6 +262,70 @@ final class PdoCategoryRepositoryTest extends RepositoryTestCase
         $this->assertSame(1, $jdoeMap[100]['id']);
     }
 
+    public function testGetCategoriesForEventsBatchReturnsEveryCategoryInAssignmentOrder(): void
+    {
+        // An event can sit in several categories (the WordPress plugin's
+        // "one event on several calendars"). Tags share the junction table
+        // and must not come back as categories.
+        $this->repository->save(new Category(1, null, 'Meetinghouse', '#111111'));
+        $this->repository->save(new Category(2, null, 'Youth', '#222222'));
+        $this->repository->save(new Category(3, null, 'outdoors', null, true, true));
+        $this->insertEntry(100);
+        $this->insertEntry(101);
+        $this->insertEntry(102);
+        $this->repository->assignToEvent(new EventId(100), 'admin', [2, 3, 1]);
+        $this->repository->assignToEvent(new EventId(101), 'admin', [1]);
+
+        $map = $this->repository->getCategoriesForEventsBatch(
+            [new EventId(100), new EventId(101), new EventId(102)],
+            'admin',
+        );
+
+        $this->assertSame(
+            [
+                ['id' => 2, 'name' => 'Youth', 'color' => '#222222'],
+                ['id' => 1, 'name' => 'Meetinghouse', 'color' => '#111111'],
+            ],
+            $map[100],
+            'assignment order, primary first, tag left out'
+        );
+        $this->assertSame([['id' => 1, 'name' => 'Meetinghouse', 'color' => '#111111']], $map[101]);
+        $this->assertArrayNotHasKey(102, $map, 'events with no categories are absent');
+    }
+
+    public function testGetCategoriesForEventsBatchPrefersPersonalOverGlobalWhenSameCatId(): void
+    {
+        $this->repository->save(new Category(1, null, 'Global Work', '#000000'));
+        $this->repository->save(new Category(1, 'admin', 'Personal Work', '#ffffff'));
+        $this->insertEntry(100);
+        $this->repository->assignToEvent(new EventId(100), 'admin', [1]);
+
+        $map = $this->repository->getCategoriesForEventsBatch([new EventId(100)], 'admin');
+
+        $this->assertSame(
+            [['id' => 1, 'name' => 'Personal Work', 'color' => '#ffffff']],
+            $map[100],
+            'one entry per cat_id, the personal version'
+        );
+    }
+
+    public function testGetCategoriesForEventsBatchDoesNotLeakOtherUsersAssignments(): void
+    {
+        $this->repository->save(new Category(1, null, 'Shared', '#cccccc'));
+        $this->repository->save(new Category(2, null, 'Other', '#dddddd'));
+        $this->insertEntry(100);
+        $this->repository->assignToEvent(new EventId(100), 'admin', [1]);
+        $this->repository->assignToEvent(new EventId(100), 'jdoe', [2]);
+
+        $this->assertSame([1], array_column($this->repository->getCategoriesForEventsBatch([new EventId(100)], 'admin')[100], 'id'));
+        $this->assertSame([2], array_column($this->repository->getCategoriesForEventsBatch([new EventId(100)], 'jdoe')[100], 'id'));
+    }
+
+    public function testGetCategoriesForEventsBatchWithNoEventsIsEmpty(): void
+    {
+        $this->assertSame([], $this->repository->getCategoriesForEventsBatch([], 'admin'));
+    }
+
     // -- Composite-key regression coverage ---------------------------------
     //
     // `webcal_categories` has PRIMARY KEY (cat_id, cat_owner), so a single
